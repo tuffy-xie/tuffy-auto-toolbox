@@ -1,0 +1,24 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+
+# Private credentials and device runtime data
+keystore/
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+.env
+.env.*
+**/shared_prefs/
+**/logs/
+**/faults/
+**/evidence/
+*.log

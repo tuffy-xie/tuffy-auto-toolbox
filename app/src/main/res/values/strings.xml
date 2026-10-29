@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Tuffy的自动百宝箱</string>
+    <string name="accessibility_label">Tuffy的自动百宝箱</string>
+    <string name="accessibility_desc">自动执行 ANA Pocket 的每日任务与广告观看流程。仅在你手动开启后生效，所有操作都会记录在运行日志中。</string>
+</resources>

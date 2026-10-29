@@ -1,0 +1,6 @@
+<resources>
+<color name="bg">#FFFCF8</color><color name="card">#FFFFFF</color><color name="card2">#EDF1F8</color>
+<color name="text">#132759</color><color name="muted">#63718B</color><color name="brand">#2959ED</color><color name="brand_dark">#183CA9</color>
+<color name="accent">#17836B</color><color name="danger">#C54661</color><color name="warn">#AC7418</color>
+<color name="line">#E1E7F0</color><color name="brand_soft">#EBF0FF</color><color name="hero_text">#D6E0FF</color>
+</resources>

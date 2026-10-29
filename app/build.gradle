@@ -1,0 +1,85 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Private signing material is supplied locally; never commit credentials or the keystore.
+def tuffySigningProperties = new Properties()
+def tuffySigningPropertiesFile = rootProject.file("keystore.properties")
+if (tuffySigningPropertiesFile.exists()) {
+    tuffySigningPropertiesFile.withInputStream { tuffySigningProperties.load(it) }
+}
+def tuffySigningValue = { propertyName, environmentName ->
+    System.getenv(environmentName) ?: tuffySigningProperties.getProperty(propertyName)
+}
+def tuffyPrivateSigning = [
+    storeFile: tuffySigningValue("storeFile", "TUFFY_KEYSTORE_FILE"),
+    storePassword: tuffySigningValue("storePassword", "TUFFY_STORE_PASSWORD"),
+    keyAlias: tuffySigningValue("keyAlias", "TUFFY_KEY_ALIAS"),
+    keyPassword: tuffySigningValue("keyPassword", "TUFFY_KEY_PASSWORD")
+]
+def tuffyHasPrivateSigner = tuffyPrivateSigning.values().every { it } &&
+    rootProject.file(tuffyPrivateSigning.storeFile).exists()
+
+android {
+    namespace 'com.anapocket.auto'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.anapocket.auto"
+        minSdk 24
+        targetSdk 34
+        testInstrumentationRunner "com.anapocket.auto.AdTestInstrumentation"
+        versionCode 19
+        versionName "19.0.0-R44"
+    }
+
+    signingConfigs {
+        release {
+            if (tuffyHasPrivateSigner) {
+                storeFile rootProject.file(tuffyPrivateSigning.storeFile)
+                storePassword tuffyPrivateSigning.storePassword
+                keyAlias tuffyPrivateSigning.keyAlias
+                keyPassword tuffyPrivateSigning.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (tuffyHasPrivateSigner) signingConfig signingConfigs.release
+            minifyEnabled false
+            // 仅 debug 变体包含外部调试入口（DebugReceiver 位于 src/debug）
+        }
+        release {
+            minifyEnabled false
+            if (tuffyHasPrivateSigner) signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    testBuildType 'release'
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.work:work-runtime-ktx:2.9.1'
+    implementation 'androidx.datastore:datastore-preferences:1.1.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    testImplementation 'junit:junit:4.13.2'
+    // Match the production-resolved architecture runtime in the isolated test variant.
+    androidTestImplementation 'androidx.arch.core:core-runtime:2.2.0'
+}

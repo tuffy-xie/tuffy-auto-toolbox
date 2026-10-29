@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      仅 debug 变体：本机调试通道。
+      token 在首次启动时随机生成（32 位十六进制），存储在应用私有 DataStore 中，
+      并在 App 主界面「调试」区域显示，不再使用固定口令。
+      release 变体不合并此清单，因此正式 APK 没有任何外部触发入口。
+    -->
+    <application>
+        <receiver
+            android:name=".DebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.anapocket.auto.DEBUG" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
