@@ -1,13 +1,20 @@
 name: Android Build
 
 on:
+  pull_request:
+    branches: [ main ]
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Android JVM tests and Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,12 +39,57 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Verify CI has no private signing inputs
+        shell: bash
+        run: |
+          if [[ -f keystore.properties || -f signing.properties || -d keystore ]]; then
+            echo 'Private signing inputs must stay outside this repository and CI.' >&2
+            exit 1
+          fi
+
       - name: Test and build debug APK
-        run: gradle testDebugUnitTest assembleDebug --no-daemon
+        run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --no-build-cache --rerun-tasks --stacktrace
+
+      - name: Summarize executed JVM tests
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob, os, sys, xml.etree.ElementTree as ET
+          reports = glob.glob('app/build/test-results/testDebugUnitTest/TEST-*.xml')
+          if not reports:
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+                  output.write('No JUnit XML produced; test execution is NOT_VERIFIED.\n')
+              sys.exit('No JUnit XML produced')
+          totals = {name: 0 for name in ('tests', 'failures', 'errors', 'skipped')}
+          for path in reports:
+              root = ET.parse(path).getroot()
+              for name in totals:
+                  totals[name] += int(root.get(name, '0'))
+          summary = 'Executed JVM tests: ' + ', '.join(f'{name}={value}' for name, value in totals.items())
+          print(summary)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write(summary + '\nBuild task output cache disabled; tasks forced to execute.\n')
+          if totals['tests'] == 0 or totals['failures'] or totals['errors']:
+              sys.exit('JUnit results failed validation')
+          PY
+
+      - name: Upload JVM test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-test-reports
+          path: |
+            app/build/test-results/testDebugUnitTest/TEST-*.xml
+            app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ana-pocket-auto-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 14
