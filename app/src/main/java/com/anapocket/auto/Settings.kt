@@ -141,15 +141,34 @@ object Prefs {
     private val KEY = stringPreferencesKey("json")
 
     suspend fun load(ctx: Context): AppSettings {
-        val p = ctx.settingStore.data.first()
-        return AppSettings.fromJson(p[KEY])
+        return loadFromStore(ctx.settingStore)
     }
 
     suspend fun save(ctx: Context, s: AppSettings) {
-        ctx.settingStore.edit { it[KEY] = s.toJson() }
+        TravelSelection.mutex.lock();try{ctx.settingStore.edit { it[KEY] = s.toJson() }}finally{TravelSelection.mutex.unlock()}
         Evidence.write(ctx, "settings_snapshot.json", s.toJson())
     }
 
+    internal suspend fun loadFromStore(store:DataStore<Preferences>)=AppSettings.fromJson(store.data.first()[KEY])
+    suspend fun setCategory(ctx:Context,cat:Cat,on:Boolean):AppSettings {
+        val result=setCategoryInStore(ctx.settingStore,cat,on)
+        Evidence.write(ctx,"settings_snapshot.json",result.toJson())
+        Logger.i("SELECTION","cat=$cat selected=$on km="+result.kmOf(cat))
+        return result
+    }
+    suspend fun toggleCategory(ctx:Context,cat:Cat):AppSettings {
+        val result=toggleCategoryInStore(ctx.settingStore,cat)
+        Evidence.write(ctx,"settings_snapshot.json",result.toJson())
+        Logger.i("SELECTION","cat=$cat selected="+result.catOn(cat)+" km="+result.kmOf(cat))
+        return result
+    }
+    internal suspend fun toggleCategoryInStore(store:DataStore<Preferences>,cat:Cat)=updateCategoryInStore(store,cat,null)
+    internal suspend fun setCategoryInStore(store:DataStore<Preferences>,cat:Cat,on:Boolean)=updateCategoryInStore(store,cat,on)
+    private suspend fun updateCategoryInStore(store:DataStore<Preferences>,cat:Cat,on:Boolean?):AppSettings {
+        var result=AppSettings()
+        TravelSelection.mutex.lock();try{store.edit { p->result=AppSettings.fromJson(p[KEY]).let{it.copy(catEnabled=it.catEnabled+(cat.name to (on?:!it.catOn(cat))))};p[KEY]=result.toJson() }}finally{TravelSelection.mutex.unlock()}
+        return result
+    }
     /** 供无障碍服务/闹钟接收器等非协程上下文使用。 */
     fun loadBlocking(ctx: Context): AppSettings = runBlocking { load(ctx) }
 

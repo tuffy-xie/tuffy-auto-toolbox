@@ -4,7 +4,7 @@ package com.anapocket.auto
 object ChallengeDetailReceipt {
     fun maxMatches(expectedTitle: String, expectedDate: String, title: String?, deadline: String?,
         attendance: String?, boost: String?, reward: Int?): Boolean =
-        title == expectedTitle && deadline == expectedDate.replace('-', '/') &&
-            attendance == "参加日：" + expectedDate.replace('-', '/') &&
+        title == expectedTitle && AnaCalendarDate.same(deadline, expectedDate) &&
+            attendance?.startsWith("参加日：") == true && AnaCalendarDate.same(attendance?.removePrefix("参加日："), expectedDate) &&
             boost == "ブースト5回" && reward != null && reward > 0
 }

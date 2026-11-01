@@ -14,6 +14,12 @@ object StartupPolicy {
         reserved && observedAd && officialFreshReceipt && sameDate
     fun canReserveLogin(date: String, recordedDate: String?, recordedState: String?): Boolean =
         recordedDate != date || recordedState !in setOf("AD_OPENING", "AD_PLAYING", "UNCONFIRMED", "REWARD_CONFIRMED", "FAILED")
+    /** A terminal unknown reward stays unknown; only its recognized native offer may be dismissed. */
+    fun mayLeaveUnconfirmedOffer(date:String,recordedDate:String?,state:String?,finishedAt:Long,knownLogin:Boolean,sdkActivity:Boolean)=
+        recordedDate==date&&state in setOf("UNCONFIRMED","FAILED")&&finishedAt>0&&knownLogin&&!sdkActivity
+    fun nativeBrowser(pkg:String?,activity:String,ids:Set<String>)=pkg==ANA&&activity==ANA+".views.common.WebViewActivity"&&
+        ids.containsAll(setOf("toolbar","close","back","forward"))&&
+        ("web_view" in ids||"webView_container" in ids)
 }
 
 object RoutinePolicy {

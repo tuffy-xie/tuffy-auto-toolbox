@@ -1,0 +1,151 @@
+{
+  "release": "22.0.10-R47",
+  "versionCode": 32,
+  "newRelease": false,
+  "investigation": "2026-11-01 natural00:03 original login resume",
+  "businessDate": "2026-11-01",
+  "result": "BLOCKED_NEEDS_USER_ACTION",
+  "resumeActuallyAttempted": true,
+  "continuedRun": "RT92d0e0b7-3db5-4022-ab57-e32405874548",
+  "originalLoginRun": "RTacf24d6e-9b90-4167-b68e-a69f7a4d42a3",
+  "originalLoginStartedAt": 1793458986170,
+  "originalLoginUnchanged": true,
+  "originalLoginState": "UNCONFIRMED",
+  "blankGoogleBackRequested": true,
+  "extraBackAttempts": 0,
+  "newViewingAttempts": 0,
+  "officialToday": null,
+  "dailyStartedToday": 0,
+  "currentOfficialChallengeCount": null,
+  "currentLocalChallengeRows": 0,
+  "installedBaseSha256": "e01c96b51b715967ff51ae33f137753dc52e1af6e21aab67d064f76afd8cbe22",
+  "installedHashVerified": true,
+  "signingCertificateSha256": "ab39397d23fca7803fa7cd3e33125874d010874d5641e6ffd044a2a3b55f484c",
+  "codeChanges": 0,
+  "fixesApplied": [],
+  "reinstalled": false,
+  "instrumentationExecuted": false,
+  "unit": {
+    "baselineTests": 474,
+    "baselineSuites": 68,
+    "baselineFailures": 0,
+    "baselineErrors": 0,
+    "baselineSkipped": 0,
+    "status": "H10_ARCHIVE_VERIFIED_NOT_RERUN"
+  },
+  "isolation": {
+    "baselineCases": 123,
+    "status": "H10_ARCHIVE_VERIFIED_NOT_RERUN"
+  },
+  "sourceFiles": 273,
+  "sourceZipOriginalWorkingDifferences": [],
+  "compiledSourceDifferencesFromFrozenH10": [],
+  "knownPrivateLiteralHits": 0,
+  "accessibility": "ONLY_TUFFY_ENABLED_BOUND_CRASHED_EMPTY",
+  "settingsAtRealFault": {
+    "enabled": true,
+    "hour": 0,
+    "minute": 3,
+    "adEnabled": true,
+    "adTarget": 25,
+    "adNotify": true,
+    "dayToday": true,
+    "dayTomorrow": false,
+    "notifySummary": true,
+    "allowPositionalFallback": false,
+    "catEnabled": {
+      "MOV_ANY": true,
+      "WALK": true,
+      "BIKE": true,
+      "CAR": true,
+      "SHINKANSEN": false,
+      "FLIGHT": false
+    },
+    "catKm": {
+      "MOV_ANY": 50,
+      "WALK": 5,
+      "BIKE": 5,
+      "CAR": 50,
+      "SHINKANSEN": 0,
+      "FLIGHT": 0
+    }
+  },
+  "p1Config": {
+    "RAKUTEN": {
+      "enabled": true,
+      "hour": 9,
+      "minute": 15,
+      "generation": 7
+    },
+    "STEAK": {
+      "enabled": true,
+      "hour": 9,
+      "minute": 30,
+      "generation": 9
+    }
+  },
+  "configWritten": false,
+  "androidSchedulesChanged": false,
+  "oldBusinessDateOperations": false,
+  "old8HourWatchRecreated": false,
+  "sessionMonitorStoppedAtHardBlock": true,
+  "cleanupLock": "NOT_PERFORMED_UNTERMINATED_SDK_PRESERVED",
+  "requiredUserAction": "Normally close original Google ad to ANA home without starting another ad; re-read actual page and ledger before continuation",
+  "artifacts": [
+    {
+      "path": "Tuffy_Auto_Toolbox_R47_hotfix10.apk",
+      "bytes": 50190168,
+      "sha256": "e01c96b51b715967ff51ae33f137753dc52e1af6e21aab67d064f76afd8cbe22"
+    },
+    {
+      "path": "Tuffy_Auto_Toolbox_R47_hotfix10_1101_resume_source.zip",
+      "bytes": 3026928,
+      "sha256": "f468a9883de8f67e74fd13da04f4cbf4c13eb4cb70447effd3426a058f6659cb"
+    },
+    {
+      "path": "R47_hotfix10_JUnit_Results.zip",
+      "bytes": 43687,
+      "sha256": "35e84f07433ef4ce40257d8b31b586415cd59c132f935751eef3174e845658f7"
+    },
+    {
+      "path": "R47_hotfix10_Android_Isolation.zip",
+      "bytes": 2843,
+      "sha256": "2cce2b7ee76812101939e43c6e953caa8c88a6dcbc4001e553eb8046d0523a82"
+    },
+    {
+      "path": "R47_H10_2026-11-01_RESUME_REPORT.md",
+      "bytes": 6742,
+      "sha256": "1343ed2bd3b297bc2ed07e4ad22add42b342f4d22d817a8e0507667ca63263db"
+    },
+    {
+      "path": "R47_H10_2026-11-01_RESUME_TEST_REPORT.md",
+      "bytes": 1625,
+      "sha256": "be594dc1502e636555e56d1b54cd52fdd9f7937690bc703d2e3f7f5662631074"
+    },
+    {
+      "path": "DEVELOPMENT_STATE.md",
+      "bytes": 18192,
+      "sha256": "1e31c22c2bb388263b675a5b212b2e6edf2ca3c7c560010057adc240c6e5b58d"
+    },
+    {
+      "path": "TEST_RESULTS.md",
+      "bytes": 18186,
+      "sha256": "07f2e0d08d273f1acd64f8bfb3b9b7b2c5993b64b166847f3c68c3e64b9efc93"
+    },
+    {
+      "path": "BUG_BACKLOG.md",
+      "bytes": 19066,
+      "sha256": "10e9fa1b0f9c5adf9dfcf4d7d88ec166f57ac4a1ad157959923f8b999a37f454"
+    },
+    {
+      "path": "NEXT_ACTION.md",
+      "bytes": 18492,
+      "sha256": "3e6bb1bf48612b1f965bbfd13dedd3ed7d9530a2c6d095e7ecd2ae5d9359a8ea"
+    },
+    {
+      "path": "evidence/R47_h10_resume_1101/timeline.json",
+      "bytes": 8231,
+      "sha256": "a53c40c45a97965693d8a67030a1b4a9adc49e0110ad61793d7d9cfb9945c313"
+    }
+  ]
+}

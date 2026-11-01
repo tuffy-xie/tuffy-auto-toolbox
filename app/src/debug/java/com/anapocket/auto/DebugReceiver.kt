@@ -41,6 +41,33 @@ class DebugReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.Default).launch {
             try {
             when (cmd) {
+                "r47-selection-test" -> {R47SelectionProbe.run(context)}
+                "r47-selection-status" -> {val s=Prefs.loadBlocking(context);val a=org.json.JSONArray();Cat.values().forEach{cat->a.put(org.json.JSONObject().put("cat",cat.name).put("selected",s.catOn(cat)).put("km",s.kmOf(cat)))};Evidence.write(context,"r47_selection_status.json",org.json.JSONObject().put("settings",org.json.JSONObject(s.toJson())).put("categories",a).put("queue",org.json.JSONArray(TravelSelectionPolicy.queue(TravelSelectionPolicy.categoryOrder,s).map{it.name})).toString(2))}
+                "r47-stale-alarm" -> {val app=CheckinApp.from(request.getStringExtra("app"))?:error("app_required");context.sendBroadcast(Intent(context,CheckinAlarmReceiver::class.java).putExtra("app",app.name).putExtra("generation",request.getLongExtra("generation",-1)).putExtra("scheduledAt",System.currentTimeMillis()))}
+                "r46-checkin-store-test" -> {CheckinStoreProbe.run(context)}
+                "r46-ocr-file" -> {
+                    val name=request.getStringExtra("file")?:error("file_required");check(Regex("r46_input_[a-z0-9_]+\\.png").matches(name))
+                    val bytes=File(context.getExternalFilesDir(null),"evidence/"+name).readBytes()
+                    val lines=CheckinOcr.normalizeGreenStatus(bytes,CheckinOcr.read(context.applicationContext,bytes))
+                    val dart=CheckinOcr.dartPull(bytes,lines)
+                    Evidence.write(context,"r46_ocr_"+name+".json",org.json.JSONObject().put("source","on_device_japanese_ocr_of_real_saved_capture").put("dartPull",dart?.let{org.json.JSONObject().put("x",it.arrow.x).put("y",it.arrow.y).put("endY",it.endY)}).put("lines",org.json.JSONArray().also{a->lines.forEach{l->a.put(org.json.JSONObject().put("text",l.text).put("left",l.left).put("top",l.top).put("right",l.right).put("bottom",l.bottom))}}).toString(2))
+                }
+                "r46-checkin-run" -> {CheckinRuntime.request(context,CheckinApp.from(request.getStringExtra("app"))?:error("app_required"))}
+                "r46-checkin-stop" -> {CheckinRuntime.stop()}
+                "r46-checkin-isolation" -> {CheckinNativeProbe.run(context)}
+                "r47-schedule-status" -> {
+                    val wm=androidx.work.WorkManager.getInstance(context)
+                    val out=org.json.JSONObject().put("capturedAt",System.currentTimeMillis()).put("anaTime",Prefs.loadBlocking(context).let{String.format("%02d:%02d",it.hour,it.minute)})
+                    listOf("ana_backup_daily","checkin_backup_RAKUTEN","checkin_backup_STEAK").forEach{name->out.put(name,org.json.JSONArray().also{a->wm.getWorkInfosForUniqueWork(name).get(3,java.util.concurrent.TimeUnit.SECONDS).forEach{w->a.put(org.json.JSONObject().put("id",w.id.toString()).put("state",w.state.name).put("nextScheduleTimeMillis",w.nextScheduleTimeMillis))}})}
+                    out.put("ordinarySchedules",org.json.JSONObject(context.getSharedPreferences("checkin_schedules",0).all))
+                    Evidence.write(context,"r47_schedule_status.json",out.toString(2))
+                }
+                "r46-checkin-status" -> {
+                    val c=Prefs.loadBlocking(context)
+                    val body=org.json.JSONObject().put("phoneTime",TokyoDate.time()).put("businessDate",TokyoDate.of()).put("anaTime",String.format("%02d:%02d",c.hour,c.minute)).put("anaRunning",AutoAccessibilityService.isRunning).put("uiOwner",CheckinRuntime.ownership.owner()?.app).put("protected",CheckinRuntime.protected(context))
+                    CheckinApp.entries.forEach{app->val s=CheckinStore(context,app);body.put(app.name,org.json.JSONObject().put("enabled",s.config().enabled).put("hour",s.config().hour).put("minute",s.config().minute).put("tasks",org.json.JSONArray().also{a->s.all().forEach{a.put(it)}}).put("hold",s.hold()))}
+                    Evidence.write(context,"r46_status_"+System.currentTimeMillis()+".json",body.toString(2))
+                }
                 "r43-fault-capture" -> {check(!AutoAccessibilityService.isRunning);FaultStore.capture(svc,"CAP"+System.currentTimeMillis(),"manual_native_diagnostic","read_only_native_capture_no_ad")}
                 "r43-export" -> {check(!AutoAccessibilityService.isRunning);FaultStore.export(context)}
                 "r44-resume-existing" -> {svc.resumeExistingChallengeCheck()}

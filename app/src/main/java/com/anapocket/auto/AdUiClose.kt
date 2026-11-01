@@ -11,7 +11,12 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
     var observedTapOnly = false
     private var seenStoreSheet = false
     private var storeBacks = 0
+    private var playbackContinueRequests=0
     private var pangleReplay = PangleStoreReplayPolicy()
+    private var chromeReturn=PangleChromeReturnPolicy()
+    private var flowOwner:UiOwnership.Token?=null
+    private var flowRun=""
+    private var flowDate=""
     val returnedViaPangleLauncher: Boolean get() = pangleReplay.returnedViaLauncher
     private var opaqueSince = 0L
     private var revealCount = 0
@@ -23,8 +28,10 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
     private var canvasControlProof = ""
     val recentlyRevealed: Boolean get() = android.os.SystemClock.elapsedRealtime() - lastReveal < 5000L
     fun beginFlow(knownStoreSheet: Boolean = false) {
-        seenStoreSheet = knownStoreSheet; storeBacks = 0; opaqueSince = 0; revealCount = 0
+        seenStoreSheet = knownStoreSheet; storeBacks = 0; opaqueSince = 0; revealCount = 0; playbackContinueRequests=0
         pangleReplay = PangleStoreReplayPolicy()
+        chromeReturn=PangleChromeReturnPolicy();flowOwner=CheckinRuntime.ownership.owner()
+        flowRun=AutoAccessibilityService.currentRunId;flowDate=TokyoDate.of()
         lastReveal = -100_000L; revealedPng = null; canvasControlBounds = null; canvasControlProof = ""
     }
     fun isOpaquePlayable(): Boolean {
@@ -101,7 +108,36 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         return canvas
     }
     suspend fun restoreAdAfterStore() {
+        ui.refreshCache()
+        val now=android.os.SystemClock.elapsedRealtime()
+        val token=flowOwner
+        fun live()=token!=null&&token.app=="ANA"&&token.run==flowRun&&
+            CheckinRuntime.ownership.valid(token,android.os.SystemClock.elapsedRealtime())&&
+            AutoAccessibilityService.currentRunId==flowRun&&AutoAccessibilityService.isRunning&&
+            !AutoAccessibilityService.stopRequested&&TokyoDate.of()==flowDate
+        val activity=AutoAccessibilityService.foregroundActivity
+        val nativePangle=ui.currentPackage()==pkg&&AdSdkWindows.contains(activity)&&
+            activity.startsWith("com.bytedance.sdk.openadsdk.activity.")
+        val chromePage=ui.currentPackage()=="com.android.chrome"&&
+            activity=="org.chromium.chrome.browser.ChromeTabbedActivity"
+        if(chromeReturn.shouldBack(now,nativePangle,chromePage,live())){
+            Evidence.write(svc,"ad_"+flowRun+"_chrome_return_"+System.currentTimeMillis()+".txt",
+                "Same observed Pangle ad -> ChromeTabbedActivity; one bounded Back. No new ad or reward inferred.")
+            var returned=false
+            if(token!=null)CheckinRuntime.ownership.action(token,android.os.SystemClock.elapsedRealtime(),false){
+                if(live()&&ui.currentPackage()=="com.android.chrome"&&
+                    AutoAccessibilityService.foregroundActivity=="org.chromium.chrome.browser.ChromeTabbedActivity")returned=ui.back()
+            }
+            Logger.i("ADBROWSER","bound Pangle Chrome return Back attempts=1 dispatched="+returned)
+            kotlinx.coroutines.delay(900);ui.refreshCache();return
+        }
         val l = ui.foregroundNodes().filter { it.isVisibleToUser }.map { ui.label(it) }
+        if(PlayStoreReturnPolicy.mayBackFromIntro(ui.currentPackage(),l,seenStoreSheet,storeBacks)){
+            Evidence.write(svc,"ad_"+AutoAccessibilityService.currentRunId+"_play_notification_intro_"+System.currentTimeMillis()+".txt","Observed Play notification introduction after this ad store sheet; normal Back only; no permission or install action.")
+            storeBacks++
+            Logger.i("ADSTORE","dismiss observed Play notification introduction with Back; bound sheet=true back="+storeBacks)
+            ui.back();kotlinx.coroutines.delay(900);ui.refreshCache();return
+        }
         val home = seenStoreSheet && !AdSignals.playSheet(ui.currentPackage(), l) && AdSignals.playHome(ui.currentPackage(), l)
         if (pangleReplay.shouldReturn(home)) {
             Evidence.write(svc, "ad_" + AutoAccessibilityService.currentRunId + "_pangle_store_replay.txt", pangleReplay.description())
@@ -135,18 +171,38 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         AutoAccessibilityService.foregroundActivity.startsWith("com.mbridge.msdk.") ||
         ui.foregroundNodes().any { it.isVisibleToUser && it.viewIdResourceName?.startsWith("$pkg:id/mbridge_") == true })
     private fun ogurySurface():Boolean {val n=ui.foregroundNodes().filter{it.isVisibleToUser};return OguryClosePolicy.surface(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,n.mapNotNull{it.viewIdResourceName}.toSet(),n.map{ui.label(it)})}
-    fun isAdSurface(): Boolean = ui.currentPackage() == pkg && (
+    fun isNativeChallengeReceipt():Boolean {val n=ui.foregroundNodes().filter{it.isVisibleToUser};return NativeChallengeReceiptPolicy.panel(ui.currentPackage(),n.mapNotNull{it.viewIdResourceName}.toSet(),n.map{ui.label(it)})}
+    fun isAdSurface(): Boolean = ui.currentPackage() == pkg && !isNativeChallengeReceipt() && (
         AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity) || pangleSurface() || fyberSurface() || unitySurface() || mbridgeSurface() || ogurySurface() || isOpaquePlayable())
     fun isRecoverableSurface(): Boolean = isAdSurface() || AdSignals.playSheet(ui.currentPackage(),
         ui.foregroundNodes().filter { it.isVisibleToUser }.map { ui.label(it) }) ||
-        seenStoreSheet && AdSignals.playHome(ui.currentPackage(), ui.foregroundNodes().map { ui.label(it) })
+        seenStoreSheet && (AdSignals.playHome(ui.currentPackage(), ui.foregroundNodes().map { ui.label(it) }) ||
+            PlayStoreReturnPolicy.notificationIntro(ui.currentPackage(),ui.foregroundNodes().filter{it.isVisibleToUser}.map{ui.label(it)}))
     fun isNativePangleRender(): Boolean = pangleSurface() && ui.foregroundNodes().any {
         it.isVisibleToUser && it.className?.toString() == "android.view.ViewGroup" && ui.label(it) == "virtualNode"
     }
+    var observedAdvanceControl=false
+        private set
     suspend fun identifyClose(): android.view.accessibility.AccessibilityNodeInfo? {
+        observedAdvanceControl=false
         canvasControlBounds = null
+        if(isNativeChallengeReceipt())return null
         val activeNodes = ui.foregroundNodes()
         val activeLabels = activeNodes.filter { it.isVisibleToUser }.map { ui.label(it) }
+        if(mbridgeSurface()&&MBridgePlaybackPolicy.mustWait(activeLabels)){
+            if(!AutoAccessibilityService.stopRequested&&MBridgePlaybackPolicy.mayContinue(activeLabels,playbackContinueRequests)){
+                val resume=activeNodes.filter{it.isVisibleToUser&&it.isEnabled&&it.isClickable&&
+                    it.className?.toString()=="android.widget.TextView"&&ui.label(it)=="Continue"}.singleOrNull()
+                if(resume!=null&&AccountSafety.authorize(svc,"mbridge_same_ad_continue")){
+                    playbackContinueRequests++
+                    Evidence.write(svc,"ad_"+AutoAccessibilityService.currentRunId+"_mbridge_continue_"+System.currentTimeMillis()+".txt",
+                        "Same ad warning: Confirm to close? / You will not be rewarded after closing the window. Continue only; no new ad or reward inferred. requests="+playbackContinueRequests)
+                    Logger.i("ADPLAYBACK","sdk=mbridge resume_same_ad_Continue request="+playbackContinueRequests)
+                    ui.click(resume);kotlinx.coroutines.delay(800);ui.refreshCache()
+                }
+            }
+            return null // A visible X is not permission to forfeit a still-counting reward.
+        }
         observedStoreOverlay = AdSignals.playSheet(ui.currentPackage(), activeLabels)
         pangleReplay.observeSheet(observedStoreOverlay)
         if (observedStoreOverlay) seenStoreSheet = true
@@ -157,6 +213,10 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                 ?: activeNodes.filter { it.isVisibleToUser && it.isEnabled && ui.label(it).trim() in setOf("关闭工作表", "Close sheet", "シートを閉じる") }.singleOrNull()
         }
         if (ui.currentPackage() != pkg) return null
+        activeNodes.singleOrNull{GoogleNativeClosePolicy.matches(AutoAccessibilityService.foregroundActivity,
+            it.className?.toString().orEmpty(),ui.label(it),it.isVisibleToUser,it.isEnabled,it.isClickable)}?.let{
+            observedTapOnly=true;Logger.i("ADCLOSE","sdk=google observedNativeInterstitialCloseButton=true");return it
+        }
         if (pangleSurface()) pangleReplay.observeDocument(activeNodes.filter { it.isVisibleToUser }.mapNotNull { it.viewIdResourceName })
         val google = AutoAccessibilityService.foregroundActivity == "com.google.android.gms.ads.AdActivity" &&
             activeNodes.any { it.viewIdResourceName == "app-interstitial-slot" }
@@ -176,7 +236,9 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         fun unitySafe(n:android.view.accessibility.AccessibilityNodeInfo):Boolean{
             if(!unity)return true
             val b=android.graphics.Rect();n.getBoundsInScreen(b);val m=svc.resources.displayMetrics
-            return UnityClosePolicy.endControl(b.left,b.top,b.width(),b.height(),m.widthPixels,m.heightPixels,m.density)
+            return UnityClosePolicy.endControl(b.left,b.top,b.width(),b.height(),m.widthPixels,m.heightPixels,m.density) ||
+                UnityClosePolicy.labelledEndControl(ui.label(n),n.className.toString(),n.isClickable,activeLabels,
+                    b.left,b.top,b.width(),b.height(),m.widthPixels,m.heightPixels,m.density)
         }
         activeNodes.firstOrNull{it.isVisibleToUser&&it.isEnabled&&AdSignals.closeLabel(ui.label(it))&&unitySafe(it)}?.let{return it}
         activeNodes.firstOrNull { it.isVisibleToUser && it.isEnabled &&
@@ -187,11 +249,22 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         }
         // Observed Google next-stage control; this action never confirms completion.
         if (google) {
+            val ids=activeNodes.filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet()
+            activeNodes.filter{n->n.isVisibleToUser&&n.isEnabled&&GoogleDismissPolicy.noThanks(ui.currentPackage(),
+                AutoAccessibilityService.foregroundActivity,ids,n.viewIdResourceName,n.className.toString(),n.isClickable,
+                (0 until n.childCount).mapNotNull{i->n.getChild(i)?.takeIf{it.isVisibleToUser}?.let{ui.label(it)}})}
+                .singleOrNull()?.let{observedTapOnly=true;Logger.i("ADCLOSE","sdk=google observedDismissButton=NO_THANKS");return it}
             activeNodes.filter { it.isVisibleToUser && it.isEnabled && it.isClickable &&
-                it.className?.toString() == "android.widget.Button" && ui.label(it).trim() == "Skip" }
-                .singleOrNull()?.let { observedTapOnly = true; Logger.i("ADCLOSE", "sdk=google observedSkipButton=true"); return it }
+                GoogleDismissPolicy.advanceControl(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,
+                    ids,it.className.toString(),it.isClickable,ui.label(it)) }
+                .singleOrNull()?.let { observedTapOnly = true; observedAdvanceControl=true; Logger.i("ADCLOSE", "sdk=google observedSkipButton=true"); return it }
         }
         if (mbridgeSurface()) {
+            val m=svc.resources.displayMetrics
+            activeNodes.filter{n->val r=android.graphics.Rect();n.getBoundsInScreen(r)
+                n.isVisibleToUser&&n.isEnabled&&MBridgePlaybackPolicy.playableControl(n.viewIdResourceName,n.className.toString(),
+                    n.isClickable,r.left,r.top,r.width(),r.height(),m.widthPixels,m.heightPixels,m.density,activeLabels)}
+                .singleOrNull()?.let{observedTapOnly=true;Logger.i("ADCLOSE","sdk=mbridge observedPlayableControl="+it.viewIdResourceName);return it}
             val endCloseIds = setOf("mbridge_full_iv_close", "mbridge_full_rl_close", "mbridge_interstitial_iv_close",
                 "mbridge_iv_close", "mbridge_iv_vastclose", "mbridge_order_view_iv_close", "mbridge_vec_iv_close", "mbridge_windwv_close")
             val matches = activeNodes.filter { n ->

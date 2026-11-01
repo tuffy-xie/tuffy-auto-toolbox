@@ -1,0 +1,164 @@
+{
+  "release": "22.0.10-R47",
+  "versionCode": 32,
+  "package": "com.anapocket.auto",
+  "installed": true,
+  "installedAtPhoneSystemPackageTime": "2026-11-01 00:17:13 JST",
+  "installedBaseApkSha256": "e01c96b51b715967ff51ae33f137753dc52e1af6e21aab67d064f76afd8cbe22",
+  "signingCertificateSha256": "ab39397d23fca7803fa7cd3e33125874d010874d5641e6ffd044a2a3b55f484c",
+  "finalBuild": "BUILD_SUCCESSFUL_6m58_FINAL_DEVICE_SOURCE",
+  "buildLog": "work/build-r47-hotfix10-device-final.log",
+  "sourceFiles": 271,
+  "zipFiles": 271,
+  "sourceZipDifferences": 0,
+  "originalProjectDifferences": 0,
+  "old462TestSourceFilesModified": 0,
+  "old462TestSourceFileCount": 66,
+  "privateLiteralHits": 0,
+  "unit": {
+    "suites": 68,
+    "tests": 474,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "androidIsolation": {
+    "total": 123,
+    "originalR46": 70,
+    "originalR47": 40,
+    "newH10": 13,
+    "allPassed": true,
+    "officialRewardTest": false
+  },
+  "realDeviceVerification": {
+    "originalCardUnavailableFiniteBlock": true,
+    "cardLocateAssisted": true,
+    "blankGoogleAutomaticSingleBack": true,
+    "loginRewardConfirmed": false,
+    "oldDailySevenSdkRecovery": "NOT_TESTED",
+    "uiLoopStartedWhileDisconnected": false
+  },
+  "accessibilityFinal": "ONLY_TUFFY_ENABLED_AND_BOUND_AFTER_NORMAL_SYSTEM_CONFIRMATION",
+  "settingsUnchanged": true,
+  "oldDayRecordsUnchanged": true,
+  "issues": {
+    "rakuten": "Notification fences FIXED / UNIT_PASS_ONLY + Android isolation; actual historical launch timeout cause UNKNOWN, no live timeout reenactment",
+    "resume": "ALREADY_DONE and missing SDK read-only review FIXED / UNIT_PASS_ONLY + fixture; actual11/1 bounded blocked behavior PASS; hidden recent card assisted, not automatic success",
+    "daily": "10/31 official5/25; started7 completed5 reward5 failed1 unknown1; old7 real SDK return NOT_TESTED",
+    "loginNewDay": "11/1 empty Google single Back REAL_DEVICE_PASS_EXIT_ONLY; original UNCONFIRMED, no fresh receipt",
+    "monthly": "ANA mileage preference saved; actual selection popup not captured; APK rule not implemented"
+  },
+  "wholeDay": "INCOMPLETE_BLOCKED",
+  "wallet": "UNCONFIRMED",
+  "finalCompletionNotificationCleanupLock": "NOT_TESTED_BUSINESS_BLOCKED",
+  "externalWatch": {
+    "recreated": false,
+    "stopRequestPreserved": true,
+    "androidAlarmCancelled": false,
+    "originalDeadline": "2026-10-31T00:39:15.8844892Z",
+    "historicalCollectorEnd": "2026-10-31T01:02:27.5757690Z",
+    "historicalOverrunAcknowledged": true
+  },
+  "artifacts": [
+    {
+      "path": "Tuffy_Auto_Toolbox_R47_hotfix10.apk",
+      "bytes": 50190168,
+      "sha256": "e01c96b51b715967ff51ae33f137753dc52e1af6e21aab67d064f76afd8cbe22"
+    },
+    {
+      "path": "Tuffy_Auto_Toolbox_R47_hotfix10_source.zip",
+      "bytes": 3017817,
+      "sha256": "4e84b0d2edf8094563fc076a4ffae2b35dd1d405bb9698814ae104d49bd41642"
+    },
+    {
+      "path": "R47_hotfix10_JUnit_Results.zip",
+      "bytes": 43687,
+      "sha256": "35e84f07433ef4ce40257d8b31b586415cd59c132f935751eef3174e845658f7"
+    },
+    {
+      "path": "R47_hotfix10_Android_Isolation.zip",
+      "bytes": 2843,
+      "sha256": "2cce2b7ee76812101939e43c6e953caa8c88a6dcbc4001e553eb8046d0523a82"
+    },
+    {
+      "path": "R47_HOTFIX10_INVESTIGATION_REPORT.md",
+      "bytes": 14018,
+      "sha256": "c8857267a456ae00e6f31b824f946d42844abe640bed5aca4212e7e80dc442ef"
+    },
+    {
+      "path": "R47_HOTFIX10_TEST_REPORT.md",
+      "bytes": 7010,
+      "sha256": "10b83583cb09207ff4e9a2e100153c6aa0e6e0339876f142021d591d39d6f241"
+    },
+    {
+      "path": "DEVELOPMENT_STATE.md",
+      "bytes": 16101,
+      "sha256": "61e4cd744f15008f0543b4601d5e5d0afb52704c44717fcf0e90802dfee94d6a"
+    },
+    {
+      "path": "TEST_RESULTS.md",
+      "bytes": 16095,
+      "sha256": "0d365e0f97ba2b27cd8b6326ee3b2cb6d77363873240a91dd1d61d8e8a596fa1"
+    },
+    {
+      "path": "BUG_BACKLOG.md",
+      "bytes": 16764,
+      "sha256": "403d4e3040088e71c8a6cb3a2256baa11266251829cfa7eb776c9b9078d7e9af"
+    },
+    {
+      "path": "NEXT_ACTION.md",
+      "bytes": 16073,
+      "sha256": "ea4f1a748dbdc21738ee83fc0d174b8d2c64303e4c37a09c3f6fa20898bda59c"
+    },
+    {
+      "path": "USER_PREFERENCES.md",
+      "bytes": 820,
+      "sha256": "15358d441b8d5e8a4d50069f6b3882994369703e6a8a47791d5af436039ef63b"
+    },
+    {
+      "path": "R47_2026-10-31_NATURAL_RUN.md",
+      "bytes": 15034,
+      "sha256": "34ef40938bf678e761a5bb968228fbbb9da5f9d23e5c0c301f5ca5de9f6bb2d7"
+    },
+    {
+      "path": "evidence/R47_hotfix10/final_device_verification.json",
+      "bytes": 2994,
+      "sha256": "6576e6896e9efe5a29d589c9d105ca69db452a421ef5b5e7aea1c6fcb94285f5"
+    },
+    {
+      "path": "evidence/R47_hotfix10/investigation_timeline.json",
+      "bytes": 4718,
+      "sha256": "faa80c7b0d396d046a63ce24d0cdcf505ae94dedf5f218379a247f5644e71be9"
+    },
+    {
+      "path": "evidence/R47_hotfix10/login_black_1101.json",
+      "bytes": 701,
+      "sha256": "1cb2a7057eb63b6455154a83e235f7824020cdd4484e321cec60799ef8fd2e78"
+    },
+    {
+      "path": "evidence/R47_hotfix10/monthly_reward_preference.json",
+      "bytes": 481,
+      "sha256": "071efd179ec52617123ea023f23eda8f7d71d2930032b74ba7af53a9e8a95cfc"
+    },
+    {
+      "path": "evidence/R47_hotfix10/isolation/h10_isolated_1793460158010.json",
+      "bytes": 1208,
+      "sha256": "bcd6fa57b69d53660d75259d42bd01443e4fc301471cf414a482499c3cde7101"
+    },
+    {
+      "path": "evidence/R47_hotfix10/isolation/r46_store_controlled_1793460157120.json",
+      "bytes": 6652,
+      "sha256": "eb389b92e12ea138bf367e4e37da35808f2ba9568aa28b3db72a9a3d997977d9"
+    },
+    {
+      "path": "evidence/R47_hotfix10/isolation/r47_selection_fixture_1793460157952.json",
+      "bytes": 3378,
+      "sha256": "c7d5319147f55870049dd7798edf8efba6767da2ceb3d789587c10e2ccb5f63f"
+    },
+    {
+      "path": "evidence/R47_hotfix10/delivery_validation.json",
+      "bytes": 250,
+      "sha256": "89009e4af82dd45382f114b2a9723b5d7ebe77fa5b108dbc81f56c8ae9d3901b"
+    }
+  ]
+}

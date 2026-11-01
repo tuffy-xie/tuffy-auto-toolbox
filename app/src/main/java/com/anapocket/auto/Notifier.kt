@@ -62,6 +62,13 @@ object Notifier {
         TelegramNotifier.enqueue(ctx,"READINESS_"+run,(if(ok)"🔓 锁屏启动自检通过\n" else "⚠ 锁屏启动自检未通过\n")+text)
     }
 
+    fun finishIssue(ctx:Context,run:String){
+        val text="ANA任务结果已保存，已退出前台；自动锁屏未确认，请检查手机。"
+        ensureChannel(ctx)
+        if(canNotify(ctx))runCatching{NotificationManagerCompat.from(ctx).notify(9005,base(ctx,"任务收尾需要检查",text).build())}
+        TelegramNotifier.enqueue(ctx,"EXIT_"+run,text)
+    }
+
     fun safetyPause(ctx:Context,row:org.json.JSONObject){
         val text="⚠ ANA任务已暂停\n"+row.optString("title")+"\n请手动处理后回Tuffy复核；已保留执行记录"
         TelegramNotifier.enqueue(ctx,"SAFETY_"+row.optString("id"),text)

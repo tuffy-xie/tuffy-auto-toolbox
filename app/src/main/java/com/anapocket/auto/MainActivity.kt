@@ -32,7 +32,8 @@ class MainActivity:AppCompatActivity(){
  private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
  private var refreshJob:Job?=null;private var current=AppSettings();private var page=0;private var applying=true;private var showResultsOnly=false
  private data class CatRow(val cat:Cat,val input:EditText,val status:TextView,val toggle:SwitchCompat)
- private data class Tile(val cat:Cat,val range:TextView,val status:TextView)
+ private data class Tile(val cat:Cat,val range:TextView,val status:TextView,val card:View)
+ private var checkinPanel:CheckinPanel?=null
  private val rows=mutableListOf<CatRow>();private val tiles=mutableListOf<Tile>()
  private val modes=listOf(Cat.WALK,Cat.BIKE,Cat.CAR,Cat.MOV_ANY,Cat.SHINKANSEN,Cat.FLIGHT)
  private fun tv(id:Int)=findViewById<TextView>(id);private fun btn(id:Int)=findViewById<Button>(id);private fun sw(id:Int)=findViewById<SwitchCompat>(id)
@@ -40,7 +41,7 @@ class MainActivity:AppCompatActivity(){
  override fun onCreate(savedInstanceState:Bundle?){
   super.onCreate(savedInstanceState);setContentView(R.layout.activity_main);Logger.init(this);Notifier.ensureChannel(this)
   tv(R.id.tvVersion).text="Tuffy的自动百宝箱 · "+BuildConfig.VERSION_NAME+(if(BuildConfig.DEBUG)" debug" else "")
-  TelegramSettingsPanel(this,scope).bind();buildCats();buildHome()
+  TelegramSettingsPanel(this,scope).bind();buildCats();buildHome();checkinPanel=CheckinPanel(this).also{it.bind()}
   listOf(R.id.navToday,R.id.navRecords,R.id.navSettings).forEachIndexed{i,id->btn(id).setOnClickListener{showPage(i)}}
   btn(R.id.btnHomeSettings).setOnClickListener{showPage(2)};btn(R.id.btnAdjustRange).setOnClickListener{showPage(2)}
   findViewById<View>(R.id.homeAdsRow).setOnClickListener{showAdHistory()}
@@ -48,12 +49,14 @@ class MainActivity:AppCompatActivity(){
   btn(R.id.btnStartRoutine).setOnClickListener{
    if(AutoAccessibilityService.isRunning){AutoAccessibilityService.instance?.requestStop();toast("正在停止，已保存的观看不会重复启动");return@setOnClickListener}
    if(AccountSafetyStore.pending(this)!=null){showSafety();return@setOnClickListener}
-   if(showResultsOnly){showPage(1);return@setOnClickListener}
    val svc=AutoAccessibilityService.instance
    if(svc==null){toast("请在设置中开启无障碍服务");showPage(2);return@setOnClickListener}
    if(AutoAccessibilityService.isRunning){toast("任务已在运行，请通过通知停止");return@setOnClickListener}
    if(saveSettings(true))svc.startDailyRoutine("manual")
   }
+  btn(R.id.btnRescanChallenges).setOnClickListener{requestChallengeScan(false)}
+  btn(R.id.btnTodayResults).setOnClickListener{showPage(1)}
+  btn(R.id.btnResetChallengeScan).setOnClickListener{requestChallengeScan(true)}
   btn(R.id.btnRun).setOnClickListener{if(!AutoAccessibilityService.isConnected())toast("请先开启无障碍服务") else if(!AutoAccessibilityService.isRunning&&saveSettings(true))AutoAccessibilityService.triggerDailyAds("manual",manualNew=true)}
   btn(R.id.btnChallenges).setOnClickListener{showChallenges()};tv(R.id.tvChalSummary).setOnClickListener{showChallenges()};btn(R.id.btnAdHistory).setOnClickListener{showAdHistory()}
   btn(R.id.btnSave).setOnClickListener{saveSettings()}
@@ -81,11 +84,11 @@ class MainActivity:AppCompatActivity(){
  private fun rounded(fill:Int)=android.graphics.drawable.GradientDrawable().apply{setColor(fill);cornerRadius=dp(12).toFloat();setStroke(dp(1),android.graphics.Color.argb(20,100,100,140))}
  private fun buildHome(){val host=findViewById<LinearLayout>(R.id.homeCategories)
   for(group in modes.chunked(3)){val line=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;layoutParams=LinearLayout.LayoutParams(-1,-2)}
-   for(cat in group){val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;background=rounded(tint(cat));layoutParams=LinearLayout.LayoutParams(0,dp(88),1f).apply{setMargins(dp(3),dp(3),dp(3),dp(3))};isClickable=true;isFocusable=true;contentDescription=cat.title+"任务设置";setOnClickListener{showPage(2)}}
+   for(cat in group){val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;background=rounded(tint(cat));layoutParams=LinearLayout.LayoutParams(0,dp(88),1f).apply{setMargins(dp(3),dp(3),dp(3),dp(3))};isClickable=true;isFocusable=true;contentDescription=cat.jp;setOnClickListener{scope.launch{current=Prefs.toggleCategory(this@MainActivity,cat);applySettings();refresh();if(current.catOn(cat)&&current.kmOf(cat)==0)toast("已选中，请设置"+cat.title+"公里上限")}}}
     card.addView(ImageView(this).apply{setImageResource(icon(cat));layoutParams=LinearLayout.LayoutParams(dp(26),dp(26))})
     card.addView(TextView(this).apply{text=cat.title;gravity=Gravity.CENTER;textSize=13f;setTextColor(color(R.color.text));setTypeface(null,Typeface.BOLD);setPadding(0,dp(3),0,0)})
     val range=TextView(this).apply{gravity=Gravity.CENTER;textSize=10f;setTextColor(color(R.color.muted));setPadding(0,dp(3),0,0)};card.addView(range)
-    val status=TextView(this).apply{textSize=10f;gravity=Gravity.CENTER;setPadding(dp(6),dp(2),dp(6),dp(2));layoutParams=LinearLayout.LayoutParams(-2,-2).apply{topMargin=dp(3)}};card.addView(status);tiles.add(Tile(cat,range,status));line.addView(card)
+    val status=TextView(this).apply{textSize=10f;gravity=Gravity.CENTER;setPadding(dp(6),dp(2),dp(6),dp(2));layoutParams=LinearLayout.LayoutParams(-2,-2).apply{topMargin=dp(3)}};card.addView(status);tiles.add(Tile(cat,range,status,card));line.addView(card)
    };host.addView(line)
   }
  }
@@ -105,8 +108,30 @@ class MainActivity:AppCompatActivity(){
   if(bad!=null){bad.input.error="请输入1至"+bad.cat.maxKm+"的整数公里";toast("请先设置"+bad.cat.title+"公里上限");return false}
   current=current.copy(enabled=sw(R.id.swRoutineSchedule).isChecked,adEnabled=sw(R.id.swAd).isChecked,adTarget=DAILY_AD_LIMIT,dayToday=true,dayTomorrow=false,
    catEnabled=rows.associate{it.cat.name to it.toggle.isChecked},catKm=rows.associate{it.cat.name to (CategoryDistancePolicy.parse(it.cat,it.input.text.toString())?:if(it.cat.longDistance)0 else it.cat.defaultKm)})
-  Prefs.saveBlocking(this,current);Scheduler.schedule(this,current.hour,current.minute);if(!quiet)toast("设置已保存");refresh();return true
+  Prefs.saveBlocking(this,current);Scheduler.schedule(this,current.hour,current.minute);CheckinRuntime.updateAnaWindow(this);CheckinScheduler.protection(this);if(!quiet)toast("设置已保存");refresh();return true
  }
+
+ private fun requestChallengeScan(resetOnly:Boolean){
+  val reason=ChallengeScanStore.resetBlock(this)
+  if(reason!=null){toast(reason);return}
+  if(!AutoAccessibilityService.isConnected()){toast("请先开启无障碍服务，扫描状态未改变");return}
+  AlertDialog.Builder(this).setTitle(if(resetOnly)"修复／重置出行扫描状态" else "重新扫描出行任务")
+   .setMessage(if(resetOnly)"只重置当天所选分类的扫描缓存及派生完成状态，保留历史、广告回执、签到和所有已提交记录。重置后可重新扫描。" else "读取当前所选分类和公里上限，重新核对官方参加中及参加可能任务，仅接取真正遗漏的项目。已完成的每日广告不会重看。")
+   .setPositiveButton(if(resetOnly)"重置扫描状态" else "重新扫描并继续"){_,_->
+    val blocked=ChallengeScanStore.resetBlock(this)
+    if(blocked!=null){toast(blocked);return@setPositiveButton}
+    val svc=AutoAccessibilityService.instance
+    if(svc==null){toast("无障碍未连接，未重置");return@setPositiveButton}
+    val audit="SCANRESET"+java.util.UUID.randomUUID().toString()
+    scope.launch{
+     FaultStore.capture(svc,audit,"challenge_scan_reset","manual_reset_only="+resetOnly)
+     if(ChallengeScanStore.resetBlock(this@MainActivity)!=null){toast("任务状态已变化，请稍后重试");return@launch}
+     ChallengeScanStore.reset(this@MainActivity,TokyoDate.of(),audit);refresh()
+     if(resetOnly)toast("扫描状态已重置，历史记录全部保留") else svc.startDailyRoutine("manual-challenge-rescan")
+    }
+   }.setNegativeButton("取消",null).show()
+ }
+
  private fun showSafety(){
   val row=AccountSafetyStore.pending(this)
   if(row==null){AlertDialog.Builder(this).setTitle("账号保护正常").setMessage("遇到可信账号风险提示或验证码时，会暂停任务并保留记录。人工处理后需复核；重启不会自动解除。\n\n无密码锁屏可在到点后唤醒并解锁；设置了密码则需本人解锁。").setPositiveButton("关闭",null).show();return}
@@ -120,27 +145,35 @@ class MainActivity:AppCompatActivity(){
   val body="官方观看次数："+(official?.let{it.toString()+"/25"}?:"尚未核对")+"\n\n"+DailyAdStore.history(this,date,60).joinToString("\n\n"){"#"+it.index+" · "+f.format(Date(it.startedAt))+"\n"+(if(it.completed)"完成已确认" else "完成待核对")+" · "+(if(it.rewardConfirmed)"奖励回执已确认" else "奖励待核对")+(if(it.failureReason.isNotBlank())"\n"+TelegramText.reason(it.failureReason) else "")}
   AlertDialog.Builder(this).setTitle("今日广告记录").setMessage(body).setPositiveButton("关闭",null).show()
  }
- private fun refresh(){if(isFinishing)return;val date=TokyoDate.of();val running=AutoAccessibilityService.isRunning;val connected=AutoAccessibilityService.isConnected()
+ private fun refresh(){if(isFinishing)return;checkinPanel?.refresh();val date=TokyoDate.of();val running=AutoAccessibilityService.isRunning;val connected=AutoAccessibilityService.isConnected()
   val c=runCatching{DailyAdStore.counters(this,date)}.getOrElse{return};val official=OfficialAdStore.counter(this,date)
   val a=ChallengeStore.rows(this,date);val items=(0 until a.length()).map{a.getJSONObject(it)};val routine=RoutineStore.read(this,date);val login=LoginBonusStore.read(this,date)?.optString("state").orEmpty()
   tv(R.id.tvPhoneDate).text=date.replace('-','/');tv(R.id.tvHomeTitle).text=if(routine?.has("finishedAt")==true)"今日结果" else "今日任务"
   for(t in tiles){val enabled=current.catOn(t.cat);val km=current.kmOf(t.cat);val catRows=items.filter{it.optString("cat")==t.cat.name};val unknown=catRows.any{it.optString("state") !in setOf("BOOST_MAX_CONFIRMED","BOOST_MAX_OBSERVED")}
-   val covered=enabled&&km>0&&CategoryCompletionPolicy.covers(ChallengeStore.coverage(this,date,t.cat),km)&&!unknown
+   val covered=enabled&&km>0&&ChallengeScanStore.complete(this,date,t.cat,km)&&!unknown
+   t.card.isSelected=enabled;t.card.alpha=if(enabled)1f else .5f
+   t.card.background=rounded(tint(t.cat)).apply{setStroke(dp(if(enabled)2 else 1),if(enabled)color(R.color.brand) else android.graphics.Color.argb(20,100,100,140))}
+   t.card.contentDescription=t.cat.jp+if(enabled)"，已选中，再点取消" else "，未选中，点击选择"
+   if(Build.VERSION.SDK_INT>=30)t.card.stateDescription=if(enabled)"已选中" else "未选中"
+   androidx.core.view.ViewCompat.setAccessibilityDelegate(t.card,object:androidx.core.view.AccessibilityDelegateCompat(){override fun onInitializeAccessibilityNodeInfo(v:View,n:androidx.core.view.accessibility.AccessibilityNodeInfoCompat){super.onInitializeAccessibilityNodeInfo(v,n);n.isCheckable=true;n.isChecked=v.isSelected}})
    t.range.text=if(km>0)"≤"+km+"km" else "未设置"
-   t.status.text=when{!enabled->"未开启";covered&&catRows.isEmpty()->"无可接任务";covered->"✓ 已完成";unknown->"需核对";catRows.isNotEmpty()->"待完成";else->"待执行"}
+   t.status.text=when{!enabled->"未选中";km==0->"需设公里";covered&&catRows.isEmpty()->"官方暂无符合项";covered->"✓ 已完成";unknown->"需核对";catRows.isNotEmpty()->"待完成";else->ChallengeScanPolicy.label(ChallengeScanStore.status(this,date,t.cat,km))}
    t.status.setTextColor(color(if(covered)R.color.accent else if(unknown)R.color.warn else R.color.muted));t.status.background=rounded(android.graphics.Color.parseColor(if(covered)"#DFF8ED" else if(unknown)"#FFF0CE" else "#EEF0F6"))
   }
   tv(R.id.tvHomeLogin).text=when(login){"REWARD_CONFIRMED"->"✓ 已领取";"UNCONFIRMED","FAILED"->"需核对";"NOT_PRESENT"->"未出现弹窗";else->"待检查"}
   tv(R.id.tvHomeAds).text=when{!current.adEnabled->"未开启";official!=null->"官方 "+official+"/25"+(if(c.unconfirmed>0)" · 待核对 "+c.unconfirmed else "");c.started>0->"本机确认 "+c.completed+"次 · 待核对官方";else->"最多25次"}
-  val finished=routine?.has("finishedAt")==true;val failed=finished&&routine?.optString("state") in setOf("BLOCKED","STOPPED")
+  val finished=routine?.has("finishedAt")==true;val hasTodayWork=routine!=null||items.isNotEmpty()||c.started>0||login in setOf("UNCONFIRMED","FAILED","REWARD_CONFIRMED")
+  val failed=!running&&routine?.optString("state") in setOf("BLOCKED","STOPPED")
   val safety=AccountSafetyStore.pending(this)
    btn(R.id.btnSafety).text=if(safety==null)"账号保护：正常" else "账号保护：需要人工处理"
-   val incomplete=finished&&(modes.filter{current.catOn(it)}.any{!CategoryCompletionPolicy.covers(ChallengeStore.coverage(this,date,it),current.kmOf(it))}||(current.adEnabled&&official!=25))
+   val incomplete=hasTodayWork&&(modes.filter{current.catOn(it)}.any{!ChallengeScanStore.complete(this,date,it,current.kmOf(it))}||(current.adEnabled&&official!=25)||login in setOf("UNCONFIRMED","FAILED"))
   findViewById<View>(R.id.homeNotice).visibility=if(!running&&(safety!=null||failed||incomplete))View.VISIBLE else View.GONE
   tv(R.id.tvHomeResult).text=if(safety!=null)"账号保护已暂停任务" else if(failed)"本次执行已停止" else "部分任务未完成"
   tv(R.id.tvHomeReason).text=if(safety!=null)safety.optString("title") else if(failed)TaskFailureText.short(routine?.optString("detail").orEmpty()) else if(official!=25&&current.adEnabled)"每日广告尚未完成官方核对" else "未完成项目保留，可继续处理"
   showResultsOnly=finished&&!failed&&!incomplete&&!running&&safety==null
-  btn(R.id.btnStartRoutine).isEnabled=!applying;btn(R.id.btnStartRoutine).text=if(running)"■  停止任务" else if(safety!=null)"查看并处理账号保护" else if(showResultsOnly)"查看今日执行结果" else if(finished)"▶  继续未完成任务" else "▶  开始今日任务"
+  btn(R.id.btnStartRoutine).isEnabled=!applying;btn(R.id.btnStartRoutine).text=if(running)"■  停止任务" else if(safety!=null)"查看并处理账号保护" else if(hasTodayWork)"▶  继续未完成任务" else "▶  开始今日任务"
+  btn(R.id.btnRescanChallenges).isEnabled=!running&&!applying
+  btn(R.id.btnResetChallengeScan).isEnabled=!running&&!applying
   btn(R.id.btnTime).text=String.format(Locale.US,"每日 %02d:%02d（手机JST）",current.hour,current.minute)
   tv(R.id.tvA11yStatus).text=if(connected)"已开启" else "未开启";tv(R.id.tvNotifyStatus).text=if(Build.VERSION.SDK_INT<33||checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED)"已授权" else "未授权"
   tv(R.id.tvAlarmStatus).text=if(Build.VERSION.SDK_INT<31||(getSystemService(ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms())"已授权" else "需授权";tv(R.id.tvOverlayStatus).text=if(Settings.canDrawOverlays(this))"已授权" else "需授权"
@@ -165,7 +198,7 @@ class MainActivity:AppCompatActivity(){
     }
 
     private fun exportLog() {
-        if(AutoAccessibilityService.isRunning){toast("请先停止任务，再导出故障包");return}
+        if(AutoAccessibilityService.isRunning||CheckinRuntime.activeApp!=null){toast("请先停止任务，再导出故障包");return}
         scope.launch {
             try {
                 val dst=withContext(Dispatchers.IO){FaultStore.export(this@MainActivity)}

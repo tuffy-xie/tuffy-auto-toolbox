@@ -58,7 +58,8 @@ data class AdFrame(
     val part: AdPart? = null,
     val storeOverlay: Boolean = false,
     val nativePangleRender: Boolean = false,
-    val manualRequired:Boolean=false
+    val manualRequired:Boolean=false,
+    val advanceControl:Boolean=false
 )
 
 data class AdReceipt(
@@ -82,16 +83,17 @@ interface AdInteractionPort {
 }
 
 class AdInteraction(private val port: AdInteractionPort) {
-    suspend fun awaitReceipt(before: Int): AdReceipt {
+    suspend fun awaitReceipt(before: Int, previousDepartureObserved:Boolean=false): AdReceipt {
         val start = port.now()
         val diagnostic = DiagnosticCapturePolicy()
-        var leftEntry = false
+        var leftEntry = previousDepartureObserved
         var reward = false
         var returnedAt: Long? = null
         var completed = false
         var after = -1
         var lastState = AdState.AD_OPENING
         var closeTries = 0
+        var advanceTries = 0
         var storeCloseTries = 0
         var partStartedAt = start
         var observedPart: AdPart? = null
@@ -109,7 +111,7 @@ class AdInteraction(private val port: AdInteractionPort) {
             if (f.anaForeground && f.adSurface && progress != null && progress != observedPart) {
                 val previous = observedPart
                 if (previous == null || progress.total == previous.total && progress.current > previous.current) {
-                    if (previous != null) { partStartedAt = port.now(); closeTries = 0; storeCloseTries = 0 }
+                    if (previous != null) { partStartedAt = port.now(); closeTries = 0; advanceTries = 0; storeCloseTries = 0 }
                     observedPart = progress
                     port.progress(progress)
                 }
@@ -153,11 +155,11 @@ class AdInteraction(private val port: AdInteractionPort) {
             }
             if (f.anaForeground && f.limit && !leftEntry) return AdReceipt(AdState.LIMIT_REACHED, reason = "official_limit")
             // A timer never creates a close button. Only a visible enabled labelled node can be tapped.
-            val closeBudget = if (f.storeOverlay) storeCloseTries < 2 else closeTries < 3
+            val closeBudget = if (f.storeOverlay) storeCloseTries < 2 else if(f.advanceControl) advanceTries < 3 else closeTries < 3
             if ((leftEntry || f.storeOverlay) && !f.entry && !f.receipt && f.closeAvailable && closeBudget && port.now() - lastClose >= 2000L) {
                 emit(AdState.AD_CLOSE_AVAILABLE)
                 lastClose = port.now()
-                if (f.storeOverlay) storeCloseTries++ else closeTries++
+                if (f.storeOverlay) storeCloseTries++ else if(f.advanceControl) advanceTries++ else closeTries++
                 port.close()
             }
             port.pause(800L)

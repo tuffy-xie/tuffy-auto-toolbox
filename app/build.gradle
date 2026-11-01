@@ -30,8 +30,8 @@ android {
         minSdk 24
         targetSdk 34
         testInstrumentationRunner "com.anapocket.auto.AdTestInstrumentation"
-        versionCode 19
-        versionName "19.0.0-R44"
+        versionCode 34
+        versionName "22.0.12-R47"
     }
 
     signingConfigs {
@@ -74,6 +74,7 @@ android {
 }
 
 dependencies {
+    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.work:work-runtime-ktx:2.9.1'
@@ -82,4 +83,9 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     // Match the production-resolved architecture runtime in the isolated test variant.
     androidTestImplementation 'androidx.arch.core:core-runtime:2.2.0'
+}
+
+// A formal artifact must never silently use a debug or missing signer.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst { if (!tuffyHasPrivateSigner) throw new GradleException("Formal signer required: local keystore.properties or TUFFY_* environment variables") }
 }
