@@ -1,6 +1,11 @@
 package com.anapocket.auto
 object TaskFailureText {
  fun short(raw:String):String=when{
+  raw.contains("login_blank_or_original_scene_unconfirmed_no_replay")||raw.contains("startup_ad_timeout_300s") -> "签到广告黑屏或原现场未确认，记录已保留，未重复观看"
+  raw.contains("existing_login_task_unavailable_no_replay") -> "原签到任务未能恢复，记录已保留，未重复观看"
+  raw.contains("原广告界面") -> raw.substringAfterLast("；").let{if(it.contains("原广告界面"))it else raw}.take(150)
+  raw.contains("无障碍服务已断开")||raw.contains("accessibility_disconnected") -> "无障碍服务已断开，进度已保存，请正常开启服务后核对"
+  raw.contains("original_ad_") -> TelegramText.reason(raw)
   raw.contains("account_safety")||raw.contains("人工")->"账号保护已暂停任务，请手动处理后复核"
   raw.contains("secure_lock_requires_owner")->"手机设置了安全锁屏，请由本人解锁"
   raw.contains("nonsecure_unlock_timeout")->"请允许HyperOS锁屏显示、后台弹出界面后重试"

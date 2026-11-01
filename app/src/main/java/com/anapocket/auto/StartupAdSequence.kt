@@ -2,7 +2,7 @@ package com.anapocket.auto
 import kotlinx.coroutines.delay
 
 data class StartupAdFrame(val ad:Boolean=false,val receipt:Boolean=false,val normal:Boolean=false,val login:Boolean=false,
-    val close:Boolean=false,val store:Boolean=false,val part:AdPart?=null,val error:Boolean=false,val popup:Boolean=false,val manualRequired:Boolean=false)
+    val close:Boolean=false,val store:Boolean=false,val part:AdPart?=null,val error:Boolean=false,val popup:Boolean=false,val manualRequired:Boolean=false,val advanceControl:Boolean=false)
 data class StartupAdOutcome(val state:String,val reason:String="")
 interface StartupAdPort {
     fun now():Long
@@ -19,7 +19,7 @@ interface StartupAdPort {
 class StartupAdSequence(private val p:StartupAdPort){
     suspend fun run(requireReward:Boolean):StartupAdOutcome{
         val diagnostic=DiagnosticCapturePolicy()
-        val start=p.now();var departed=false;var nativeClosed=0;var storeClosed=0;var lastClose=-100_000L
+        val start=p.now();var departed=false;var nativeClosed=0;var advanceClosed=0;var storeClosed=0;var lastClose=-100_000L
         var part:AdPart?=null;var returned:Long?=null;var stable=0;var popupCloses=0
         while(p.now()-start<300_000L){
             if(p.stopped())return StartupAdOutcome("UNCONFIRMED","user_stopped")
@@ -37,16 +37,16 @@ class StartupAdSequence(private val p:StartupAdPort){
             if(!requireReward&&!f.ad&&!f.store&&(f.normal||f.login)){
                 if(++stable>=3)return StartupAdOutcome("DISMISSED")
             }else stable=0
-            if(requireReward&&departed&&!f.ad&&f.normal&&!f.receipt){
+            if(requireReward&&departed&&!f.ad&&(f.normal||f.login)&&!f.receipt){
                 if(returned==null)returned=p.now()
-                if(p.now()-returned!!>=12_000L)return StartupAdOutcome("UNCONFIRMED","login_reward_not_confirmed")
+                if(p.now()-returned!!>=12_000L)return StartupAdOutcome("UNCONFIRMED",if(f.login)"login_reward_not_confirmed_after_offer_return" else "login_reward_not_confirmed")
             }
             val next=f.part
             if(next!=null&&(part==null||next.total==part!!.total&&next.current>part!!.current)){
-                part=next;nativeClosed=0;storeClosed=0
+                part=next;nativeClosed=0;advanceClosed=0;storeClosed=0
             }
-            if(f.close&&!f.login&&!f.receipt&&p.now()-lastClose>=2000L&&(if(f.store)storeClosed<2 else nativeClosed<3)){
-                if(f.store)storeClosed++ else nativeClosed++
+            if(f.close&&!f.login&&!f.receipt&&p.now()-lastClose>=2000L&&(if(f.store)storeClosed<2 else if(f.advanceControl)advanceClosed<3 else nativeClosed<3)){
+                if(f.store)storeClosed++ else if(f.advanceControl)advanceClosed++ else nativeClosed++
                 lastClose=p.now();p.close()
             }
             p.pause(750)

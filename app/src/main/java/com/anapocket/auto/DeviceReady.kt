@@ -35,6 +35,7 @@ object DeviceReady {
             return DeviceReadyResult(ok,why)
         }
         while(true){
+            if(!AutoAccessibilityService.isConnected())return result(false,"accessibility_disconnected")
             if(AutoAccessibilityService.stopRequested)return result(false,"user_stopped")
             if(!forReview&&AccountSafetyStore.pending(svc)!=null)return result(false,"account_safety_human_required")
             when(DeviceReadyPolicy.action(pm.isInteractive,km.isKeyguardLocked,km.isDeviceSecure||km.isKeyguardSecure,tries)){

@@ -15,6 +15,9 @@
 
     <queries>
         <package android:name="us.ana_pocket.ANAPocket" />
+        <package android:name="jp.co.rakuten.pointclub.android" />
+        <package android:name="jp.co.pepperfs.android" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
     </queries>
 
     <application
@@ -35,6 +38,21 @@
         </activity>
 
         <activity android:name=".UnlockActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" />
+        <activity android:name=".CheckinUnlockActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" />
+        <service android:name=".CheckinOcrService" android:exported="false" android:process=":checkin_ocr" />
+        <service android:name=".CheckinForeground" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="independently_scheduled_free_daily_checkin" />
+        </service>
+        <receiver android:name=".CheckinAlarmReceiver" android:exported="false" />
+        <receiver android:name=".CheckinBootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".AutoAccessibilityService"

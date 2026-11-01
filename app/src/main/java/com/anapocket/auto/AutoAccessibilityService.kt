@@ -29,7 +29,10 @@ class AutoAccessibilityService : AccessibilityService() {
 
         @Volatile
         var isRunning: Boolean = false
-            private set
+            private set(value) {
+                field=value
+                instance?.let{if(value)CheckinRuntime.onAnaStarted(it) else CheckinRuntime.onAnaFinished(it)}
+            }
 
         @Volatile var foregroundActivity: String = ""
             private set
@@ -64,8 +67,10 @@ class AutoAccessibilityService : AccessibilityService() {
             .onFailure { Logger.e("ADTASK", "ledger recovery blocked", it) }
         Logger.init(this)
         Notifier.ensureChannel(this)
+        val interruptedRoutine=RoutineStore.read(this)
         runCatching { RoutineStore.reconcile(this) }
         Logger.i("A11Y", "service connected")
+        CheckinRuntime.serviceConnected(this)
         Notifier.serviceRestored(this)
         try {
             Scheduler.schedule(this)
@@ -78,11 +83,15 @@ class AutoAccessibilityService : AccessibilityService() {
             Logger.i("A11Y", "resume pending trigger: $pending")
             RunStore.clearPendingTrigger(this)
             Scheduler.dispatchDaily(this, "$pending-resumed")
+        } else {
+            runCatching { AnaProcessRecovery.schedule(this,scope,interruptedRoutine) }
+                .onFailure { Logger.e("PROCESS_RECOVERY","safe recovery unavailable",it) }
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            CheckinRuntime.windowEvent(event.packageName?.toString().orEmpty())
             val component = event.className?.toString().orEmpty()
             // Generic FrameLayout/View announcements must not erase the actual SDK Activity.
             if (component.contains("Activity") || component.endsWith("Dialog") ||
@@ -105,7 +114,8 @@ class AutoAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        requestStop()
+        CheckinRuntime.serviceLost()
+        requestStop("service_destroyed")
         scope.cancel()
         instance = null
         Notifier.needService(this)
@@ -115,6 +125,7 @@ class AutoAccessibilityService : AccessibilityService() {
 
     fun requestStop(reason:String="user") {
         stopRequested = true
+        if(reason=="user")AnaProcessRecovery.markUserStop(this,currentRunId)
         Logger.w("RUN", "stop requested: "+reason)
     }
 
@@ -145,7 +156,7 @@ class AutoAccessibilityService : AccessibilityService() {
         Logger.i("READY_TEST","run="+run+" ready="+ready.ready+" nativeAna="+ana+" journalsUnchanged="+unchanged)
         val ok=ready.ready&&ana&&unchanged&&!stopRequested&&AccountSafety.authorize(this,"readiness_finish")
         Notifier.readinessResult(this,run,ok,if(!ready.ready)ready.reason else if(!ana)"ANA页面未稳定，任务未启动" else if(!unchanged)"记录发生变化，请检查" else AccountSafety.message(this))
-        if(ok)TaskExit.finish(this,run,true)
+        if(ok)TaskExit.finish(this,run,true,lockAfter=false)
     }
     fun resumeExistingChallengeCheck(){
         check(BuildConfig.DEBUG)
@@ -226,7 +237,7 @@ class AutoAccessibilityService : AccessibilityService() {
             try{
                 RunForegroundService.start(this@AutoAccessibilityService,"每日流程执行中")
                 Logger.i("ROUTINE","START run=$run reason=$reason")
-                val (outcome,summary)=DailyRoutineController(this@AutoAccessibilityService).run(run,reason.contains("manual"))
+                val (outcome,summary)=DailyRoutineController(this@AutoAccessibilityService).run(run,reason.contains("manual"),reason=="manual-challenge-rescan")
                 lastSummary=summary
                 RunStore.appendHistory(this@AutoAccessibilityService,run,summary)
                 Notifier.routineSummary(this@AutoAccessibilityService,run,summary)

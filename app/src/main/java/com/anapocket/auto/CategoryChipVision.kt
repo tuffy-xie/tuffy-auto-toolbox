@@ -22,6 +22,11 @@ object CategoryChipVision {
     }
     fun selectedBackground(cat: Cat, pixels: IntArray): Boolean = pixels.isNotEmpty() &&
         pixels.count { near(it, color(cat)) } > pixels.size * .55
+    /** Darkened tiles behind an observed popup are not actionable icon evidence. */
+    fun unobscured(pixels:IntArray):Boolean=pixels.isNotEmpty()&&(pixels.count{p->
+        val r=p shr 16 and 255;val g=p shr 8 and 255;val b=p and 255
+        minOf(r,g,b)>=220&&maxOf(r,g,b)-minOf(r,g,b)<=20
+    }>pixels.size*.5||Cat.values().any{selectedBackground(it,pixels)})
 }
 
 object CategoryRunSelection {

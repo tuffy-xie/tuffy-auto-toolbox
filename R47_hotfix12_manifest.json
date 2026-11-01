@@ -1,0 +1,269 @@
+{
+  "release": "H12",
+  "versionName": "22.0.12-R47",
+  "versionCode": 34,
+  "packageName": "com.anapocket.auto",
+  "status": "CLOSED_SELECTED_CHALLENGES_COMPLETE_WITH_UNCONFIRMED_LOGIN",
+  "apk": {
+    "file": "Tuffy_Auto_Toolbox_R47_hotfix12.apk",
+    "sha256": "bc37d89472f2aa154e394401c769ce400a8ec017175d46647ec000e158da663a",
+    "installedJst": "2026-11-01 11:31:29",
+    "installedBaseShaVerified": true,
+    "certificateSha256": "ab39397d23fca7803fa7cd3e33125874d010874d5641e6ffd044a2a3b55f484c"
+  },
+  "jvm": {
+    "suites": 72,
+    "tests": 504,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "build-r47-hotfix12-home-recovery-final.log",
+    "duration": "7m5s",
+    "oldH11TestFilesChanged": 0,
+    "previous496TestFilesChanged": 0
+  },
+  "android": {
+    "uniqueCases": 10,
+    "passed": 10,
+    "fixtureRun": "DEVICE-FIXTURE-1793500305966",
+    "controlledOnly": true,
+    "realRewardsNotInferred": true,
+    "historical110Rerun": false
+  },
+  "source": {
+    "curatedFileCount": 285,
+    "compiledAppSrcFiles": 257,
+    "archivePending": false,
+    "knownPrivateLiteralHits": 0,
+    "archive": "Tuffy_Auto_Toolbox_R47_hotfix12_source.zip",
+    "manifest": "R47_hotfix12_source_manifest.json"
+  },
+  "businessDate": "2026-11-01",
+  "businessTimezone": "Asia/Tokyo",
+  "configuration": {
+    "travel": {
+      "MOV_ANY": true,
+      "WALK": true,
+      "BIKE": true,
+      "CAR": true,
+      "SHINKANSEN": false,
+      "FLIGHT": false
+    },
+    "km": {
+      "MOV_ANY": 40,
+      "WALK": 5,
+      "BIKE": 5,
+      "CAR": 40,
+      "SHINKANSEN": 0,
+      "FLIGHT": 0
+    },
+    "anaTime": "00:03",
+    "checkins": {
+      "RAKUTEN": {
+        "enabled": true,
+        "hour": 9,
+        "minute": 15,
+        "generation": 7,
+        "dispatch": {
+          "businessDate": "2026-11-01",
+          "scheduledAt": 1793492100000,
+          "actualTriggerAt": 1793492100128,
+          "triggerSource": "alarm"
+        }
+      },
+      "STEAK": {
+        "enabled": true,
+        "hour": 9,
+        "minute": 30,
+        "generation": 9,
+        "dispatch": {
+          "businessDate": "2026-11-01",
+          "scheduledAt": 1793493000000,
+          "actualTriggerAt": 1793493000094,
+          "triggerSource": "alarm"
+        }
+      }
+    }
+  },
+  "progress": {
+    "phoneObserved": "2026-11-01 18:02:16",
+    "runId": "RTe346a9c7-d32d-412b-8c6e-cf1890e4d9f0",
+    "challengeRunId": "CHd0ae3aa3-9fec-4e2d-996e-01ea1808c819",
+    "categories": [
+      {
+        "cat": "WALK",
+        "joined": 7,
+        "boost5": 7
+      },
+      {
+        "cat": "BIKE",
+        "joined": 6,
+        "boost5": 6
+      },
+      {
+        "cat": "CAR",
+        "joined": 6,
+        "boost5": 6
+      },
+      {
+        "cat": "MOV_ANY",
+        "joined": 5,
+        "boost5": 5
+      }
+    ],
+    "dailyOfficialLastConfirmed": 25,
+    "dailyLocalStarted": 25,
+    "dailyLocalCompleted": 25,
+    "dailyLocalRewardConfirmed": 25,
+    "finalOfficialRecheckPending": false,
+    "loginState": "UNCONFIRMED",
+    "loginOriginalRun": "RTacf24d6e-9b90-4167-b68e-a69f7a4d42a3",
+    "loginOriginalStartedAt": 1793458986170,
+    "finalFormalExportPending": false,
+    "challengeFailed": 3,
+    "challengeUnconfirmed": 0,
+    "challenges": {
+      "tasks": 24,
+      "boost5": 24,
+      "started": 147,
+      "confirmed": 144,
+      "failed": 3,
+      "unknown": 0
+    },
+    "officialObservation": {
+      "date": "2026-11-01",
+      "watched": 25,
+      "runId": "AD3499b3db-f8c5-4005-bc88-8333a6df7a12",
+      "checkedAt": 1793504317522,
+      "source": "fresh_native_reopened_entry_stable_4samples_3seconds"
+    },
+    "selectedEligibleChallengesComplete": true,
+    "wholeDayAllEnabledOfficiallyConfirmed": false
+  },
+  "verification": {
+    "homeRecovery": "DEVICE_PASS",
+    "manualScanReset": "DEVICE_PASS",
+    "missingChallengeJoinAndBoost": "REAL_TASK_PASS",
+    "crossBikeToCar": "REAL_TASK_PASS",
+    "boundInitialReceiptRecovery": "REAL_TASK_PASS",
+    "naturalLowMemorySameAdRecovery": "REAL_DEVICE_PASS_ONCE",
+    "repeatedLowMemoryQueuedCallback": "UNCONFIRMED_NOT_FIXED",
+    "automaticSystemAppRestart": "APPINFO_ROUTE_NOT_PASSED",
+    "wholeDayComplete": false,
+    "recentExactAnaTaskRecovery": "REAL_TASK_PASS_ONCE",
+    "finalFormalPreservation": {
+      "settings": true,
+      "checkinConfig": true,
+      "dailyAttempts": true,
+      "login": true,
+      "preUpgradeNineRowsPreserved": true,
+      "p1State": true
+    },
+    "notification": "POSTED_SAVED",
+    "exitHome": true,
+    "lockConfirmed": true,
+    "humanAssistance": true,
+    "postCompletionExtraResetAndRescan": "NOT_TESTED"
+  },
+  "monitor": {
+    "type": "current_chat_bounded_read_only",
+    "lastSegment": "live-05",
+    "pid": 10732,
+    "status": "ENDED",
+    "ended": {
+      "samples": 217,
+      "elapsedSeconds": 3600.1410000000615,
+      "requestedStop": false,
+      "androidStateChanged": false
+    },
+    "newScheduledAutomationCreated": false,
+    "oldEightHourMonitorRestarted": false,
+    "androidAlarmOrLedgerMutatedByCollector": false
+  },
+  "privacy": {
+    "rawDeviceEvidenceLocation": "work/R47-H12-challenge-rescan",
+    "tokensOrPrivateKeysInOutputs": false,
+    "finalOutputScanPending": false,
+    "check": {
+      "scope": "H12 delivered source, reports, APK, test archives; private known literals and PEM private-key headers",
+      "files": 9,
+      "zipEntries": 361,
+      "knownPrivateLiteralHits": 0,
+      "privateKeyHeaders": 0
+    }
+  },
+  "git": {
+    "repository": false,
+    "commit": null,
+    "remotePush": false,
+    "method": "direct in-place file edits in original project; tested build; mirror and curated source ZIP"
+  },
+  "handoff": "WORKBUDDY_H12_HANDOFF.md",
+  "artifacts": [
+    {
+      "file": "R47_hotfix12_Android_Isolation.zip",
+      "bytes": 43091,
+      "sha256": "b14518f127bd58ef0470167ec1e33521ccc1e2b96fb74909cf6b53974f4a8f2d"
+    },
+    {
+      "file": "R47_HOTFIX12_INVESTIGATION_REPORT.md",
+      "bytes": 10548,
+      "sha256": "4034e9b49f48b24c0cac928f0fbb7e1252bb31d702004bbce18cfa721a76cbd5"
+    },
+    {
+      "file": "R47_hotfix12_JUnit_Results.zip",
+      "bytes": 50486,
+      "sha256": "df00e43ab6719fc7e1793c9f8c8ab6c8a938acca25b3874a124bd513c4498b16"
+    },
+    {
+      "file": "R47_HOTFIX12_REAL_DEVICE_REPORT.md",
+      "bytes": 3133,
+      "sha256": "1ab7ec5386bbaad5e2241d95d3769e14bafdf17bcf3e81c30b29fb02aa266d06"
+    },
+    {
+      "file": "R47_hotfix12_source_manifest.json",
+      "bytes": 53024,
+      "sha256": "20aec39d59d496008ae72bd52b9e5b10d7a4c96e63f50f1b8fc91d5aaf9feeba"
+    },
+    {
+      "file": "R47_HOTFIX12_TEST_REPORT.md",
+      "bytes": 3921,
+      "sha256": "94f5b1047cea8c6ceae4d796030c1377108fbefa58e8cc0046ded47d163dcaf3"
+    },
+    {
+      "file": "Tuffy_Auto_Toolbox_R47_hotfix12.apk",
+      "bytes": 50206824,
+      "sha256": "bc37d89472f2aa154e394401c769ce400a8ec017175d46647ec000e158da663a"
+    },
+    {
+      "file": "Tuffy_Auto_Toolbox_R47_hotfix12_source.zip",
+      "bytes": 3055543,
+      "sha256": "3882e40b6339943cee57de09e4fa414b220ea7f898bfdcabca17675fe763a989"
+    },
+    {
+      "file": "WORKBUDDY_H12_HANDOFF.md",
+      "bytes": 8439,
+      "sha256": "ee408831f9b61483bb56e8fcd6e53a3b10c10caa72c77689b4d34ce177d95394"
+    },
+    {
+      "file": "DEVELOPMENT_STATE.md",
+      "bytes": 20510,
+      "sha256": "4d1f81703f6897335ef0b40cdd928dbb08e76f29cd9aaaeceb20a41af8918d7e"
+    },
+    {
+      "file": "TEST_RESULTS.md",
+      "bytes": 20504,
+      "sha256": "697b9e64bdd8a269ac35806a3e53f5dc42b09789a5f73cc45e52bddb5691aa76"
+    },
+    {
+      "file": "BUG_BACKLOG.md",
+      "bytes": 21384,
+      "sha256": "eb6e70e826e6e3bfa8edf605d3cbec001b992721f8063d14b618f4d37dd5efa0"
+    },
+    {
+      "file": "NEXT_ACTION.md",
+      "bytes": 20810,
+      "sha256": "d075500e716b84efa24a1a05705db9daa827c9c7ccd58f9d152dbecff18b5f25"
+    }
+  ]
+}

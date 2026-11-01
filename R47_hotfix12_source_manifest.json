@@ -1,0 +1,1434 @@
+{
+  "version": "22.0.12-R47",
+  "versionCode": 34,
+  "apkSha256": "bc37d89472f2aa154e394401c769ce400a8ec017175d46647ec000e158da663a",
+  "originalProject": "C:/Users/xiejiatao/WorkBuddy AI/2026-10-25-19-33-44/ANA_Pocket_Auto",
+  "fileCount": 285,
+  "files": [
+    {
+      "path": ".gitignore",
+      "size": 284,
+      "sha256": "ea76e6f14c6b123a0ba4fe82ccda031bc313bf0b38bd3242526f1032229ffdb5"
+    },
+    {
+      "path": "BUG_BACKLOG.md",
+      "size": 21384,
+      "sha256": "eb6e70e826e6e3bfa8edf605d3cbec001b992721f8063d14b618f4d37dd5efa0"
+    },
+    {
+      "path": "DEVELOPMENT_STATE.md",
+      "size": 20510,
+      "sha256": "4d1f81703f6897335ef0b40cdd928dbb08e76f29cd9aaaeceb20a41af8918d7e"
+    },
+    {
+      "path": "NEXT_ACTION.md",
+      "size": 20810,
+      "sha256": "d075500e716b84efa24a1a05705db9daa827c9c7ccd58f9d152dbecff18b5f25"
+    },
+    {
+      "path": "R46_TEST_REPORT.md",
+      "size": 11323,
+      "sha256": "e966c56f81705e3853b5fe7dcac1113a52b1f607cd108ff55832a2112971d8f6"
+    },
+    {
+      "path": "R47_HOTFIX10_INVESTIGATION_REPORT.md",
+      "size": 14018,
+      "sha256": "c8857267a456ae00e6f31b824f946d42844abe640bed5aca4212e7e80dc442ef"
+    },
+    {
+      "path": "R47_HOTFIX10_TEST_REPORT.md",
+      "size": 7010,
+      "sha256": "10b83583cb09207ff4e9a2e100153c6aa0e6e0339876f142021d591d39d6f241"
+    },
+    {
+      "path": "R47_HOTFIX12_INVESTIGATION_REPORT.md",
+      "size": 10548,
+      "sha256": "4034e9b49f48b24c0cac928f0fbb7e1252bb31d702004bbce18cfa721a76cbd5"
+    },
+    {
+      "path": "R47_HOTFIX12_TEST_REPORT.md",
+      "size": 3921,
+      "sha256": "94f5b1047cea8c6ceae4d796030c1377108fbefa58e8cc0046ded47d163dcaf3"
+    },
+    {
+      "path": "R47_HOTFIX4_TEST_REPORT.md",
+      "size": 3949,
+      "sha256": "02060a9f862a70e6857ef973ecddf61914eba0bf2e2a61e16c443330b10391ad"
+    },
+    {
+      "path": "R47_HOTFIX5_TEST_REPORT.md",
+      "size": 3722,
+      "sha256": "92a5225b9c67ea722323aab57890a0b2bb49222daf2672c1b84b9ca5278bafec"
+    },
+    {
+      "path": "R47_HOTFIX6_TEST_REPORT.md",
+      "size": 2484,
+      "sha256": "c82f33752a89e8d4c9d963c063385e1ae80cc5e2d9691dac1e907ff5019d7d9a"
+    },
+    {
+      "path": "R47_HOTFIX7_TEST_REPORT.md",
+      "size": 1511,
+      "sha256": "7b9af04bd95d5dcc3e1f369263f02aa060f17103579ba2a7bce84b99a5e519d0"
+    },
+    {
+      "path": "R47_HOTFIX8_TEST_REPORT.md",
+      "size": 3267,
+      "sha256": "97afe900a1808523d6ea861d06c64ac7920acc45969e48ec021b1add27b2714f"
+    },
+    {
+      "path": "R47_HOTFIX9_TEST_REPORT.md",
+      "size": 4611,
+      "sha256": "08adfb642b811973b5f546b0d3fac8d9f4100838f6ad751d5dcdc4cd40429299"
+    },
+    {
+      "path": "R47_HOTFIX_TEST_REPORT.md",
+      "size": 1991,
+      "sha256": "d1108da92a0bec2e9c15e0db1e99e8dd2c6c01cd1e343538d13e6289c7005fe3"
+    },
+    {
+      "path": "R47_TEST_REPORT.md",
+      "size": 13441,
+      "sha256": "2758553e9f03f104d43d4be2c0f0ba745112cf0bf83a6d63c8a18365faea7dc3"
+    },
+    {
+      "path": "README.md",
+      "size": 2428,
+      "sha256": "b7ab1b44ee3bf31cdfce692a9cbdc92f347f81e62cac4db5b0649fce71dbc9a7"
+    },
+    {
+      "path": "README_R46.md",
+      "size": 2428,
+      "sha256": "b7ab1b44ee3bf31cdfce692a9cbdc92f347f81e62cac4db5b0649fce71dbc9a7"
+    },
+    {
+      "path": "README_R46_CANDIDATE.md",
+      "size": 159,
+      "sha256": "e38b91173711e1908fd91177540fc6bfc269456fb0842faef07ff17e671af788"
+    },
+    {
+      "path": "README_R47.md",
+      "size": 819,
+      "sha256": "41ee9aa30b4ab0385184e7d117f06bffe6e7c836b4c85846fe39cb2a2ff23e70"
+    },
+    {
+      "path": "TEST_RESULTS.md",
+      "size": 20504,
+      "sha256": "697b9e64bdd8a269ac35806a3e53f5dc42b09789a5f73cc45e52bddb5691aa76"
+    },
+    {
+      "path": "USER_PREFERENCES.md",
+      "size": 1676,
+      "sha256": "6860d7a454f574fe638474a53a6499cbe4e7296d2008bcd2842c0987f337000c"
+    },
+    {
+      "path": "app/build.gradle",
+      "size": 3389,
+      "sha256": "6e2973e6f7e304154c85adc0a4bf591bb5b7210b418459ebf31fb69a5c36a81e"
+    },
+    {
+      "path": "app/proguard-rules.pro",
+      "size": 55,
+      "sha256": "cde9ff01bc288d5ad27746d97e6d482811c7b91d089347911024bd1554c0801b"
+    },
+    {
+      "path": "app/src/androidTest/AndroidManifest.xml",
+      "size": 280,
+      "sha256": "73c468b4ebae2b7803e59d0fdd9f5437584a1adbaf8d10a24e618dcf58d8e96d"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/AdFixtureActivity.java",
+      "size": 1853,
+      "sha256": "4912798778dab5184f96aea5d8f23f08967cc07a8e2db7fb11e4e2267328ad5c"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/AdTestInstrumentation.kt",
+      "size": 16712,
+      "sha256": "5c633ac3d181fd898c352d74430ae06d3ba7ca39a5f60e601425e8a1ed5ad2ff"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/CheckinStoreProbe.kt",
+      "size": 16531,
+      "sha256": "b3903566ce46e395fd8b851de762db447cc3bcec77cf721e66b3a798fa69cf25"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/FixtureUi.kt",
+      "size": 1829,
+      "sha256": "85d340e829fc20261a03b187fd9bf21626a2459dbaa43ef4b0a368266e504dde"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/H10DeviceChecks.kt",
+      "size": 4579,
+      "sha256": "e065eaf98c1864fc06b46ed3363ddf844b5d9471e1bec169e023d49b5f5a91ba"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/H12DeviceChecks.kt",
+      "size": 3306,
+      "sha256": "07364273423ca8875068a69078e7e047d0b30c194c0e9e28c715529ba88fbea5"
+    },
+    {
+      "path": "app/src/androidTest/java/com/anapocket/auto/R47SelectionProbe.kt",
+      "size": 4169,
+      "sha256": "5e4d04ddfbdc7436a24eb163d0195864d52de1d203d45aeb781ba5c1e4e2f834"
+    },
+    {
+      "path": "app/src/debug/AndroidManifest.xml",
+      "size": 745,
+      "sha256": "e0cb9c49b5d541b1682ceb5cb6f501a08e0f921bbe944eec5d472207459a168c"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/CheckinNativeProbe.kt",
+      "size": 2578,
+      "sha256": "7fbd6acfe4720bd018883b786f24e700f79169f266a35d8bd6e7227e884a320e"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/CheckinStoreProbe.kt",
+      "size": 16531,
+      "sha256": "b3903566ce46e395fd8b851de762db447cc3bcec77cf721e66b3a798fa69cf25"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/DebugAdProbe.kt",
+      "size": 2956,
+      "sha256": "a3369f62c9f0cf96579821b334a135e7c7b956a29187a35690281ade2d3d8b81"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/DebugReceiver.kt",
+      "size": 16432,
+      "sha256": "d4baef2a589ced8c57f16cc5fc6d7159d9b105c324d5727d8b681c794801a4b1"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/R47SelectionProbe.kt",
+      "size": 4169,
+      "sha256": "5e4d04ddfbdc7436a24eb163d0195864d52de1d203d45aeb781ba5c1e4e2f834"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/RoutineSelfTest.kt",
+      "size": 4677,
+      "sha256": "1e33d45a9d16951c210a3ffe613deac2cc53dca07b522f4d86757fa5912e52db"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/SafetySelfTest.kt",
+      "size": 2597,
+      "sha256": "92ca72307ed80de6d766a6f059767dda83f99b274b4cfd5afd13b8ad4aa75f70"
+    },
+    {
+      "path": "app/src/debug/java/com/anapocket/auto/TelegramSelfTest.kt",
+      "size": 4766,
+      "sha256": "82e9e805ee1360451b86731e336a325973b0ccbbd4c05ae9370fc83d47e419cd"
+    },
+    {
+      "path": "app/src/main/AndroidManifest.xml",
+      "size": 5607,
+      "sha256": "acc1341af55a49ac736aa25103108bbfe5c24db54f3a875a77f5fa84649a824f"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AccountRiskPolicy.kt",
+      "size": 2857,
+      "sha256": "11d46fb42a5f251370fc902e514ae2107db19d42cadd3dbf4d95c90a38c42d47"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AccountSafety.kt",
+      "size": 5005,
+      "sha256": "683e47eedff6bc28080f8b887e0cc795c0efb99912e0862b756026e084665bf4"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AdCloseIcon.kt",
+      "size": 4421,
+      "sha256": "ae4d2c5c546acfa75cc1fb400f78e4aae3b24b8ef142358352c1f2f70ceeae0e"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AdInteraction.kt",
+      "size": 9399,
+      "sha256": "48ccabe6fbbd9d8a1e72146931b8fad355a12aaa352a5c0ec80334ad193e4796"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AdSdkWindows.kt",
+      "size": 2544,
+      "sha256": "26c75552c1ed328e96c7cb3f1023aa01e03679ce47520a8a5e898677cd565ba3"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AdTaskReturn.kt",
+      "size": 4359,
+      "sha256": "3a72f97abf54bdf08262becc5c9014d7ae6f40335fc0229dda25db1075705f1f"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AdUiClose.kt",
+      "size": 24869,
+      "sha256": "8e97cddf977981e2a22cc6ea12ee51d0b2ea232fd224b527f827a5463f4274cd"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AlarmReceiver.kt",
+      "size": 1539,
+      "sha256": "78f729246ea448b62452a5664c4df42eb863087ba532b39e2768f84666a1fae7"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AnaProcessRecovery.kt",
+      "size": 2704,
+      "sha256": "a4407746774e95284f7e743c39f25a34cbe50248c0f65ff5fb8389cbfb62024a"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AppTaskPolicy.kt",
+      "size": 9572,
+      "sha256": "c18e9bae950de9e6b4e5d1686802a6bc5bf0e88e18aa09af7ac8cb58b2ef522b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AutoAccessibilityService.kt",
+      "size": 26511,
+      "sha256": "2dda8bba0597c83f6d436342483bd304d087c03621abdffeb22216fec02159ab"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/AutomationEngine.kt",
+      "size": 109502,
+      "sha256": "8b30fd406df0a76bc31176969131f0b7118a70d3258375a4b02c63809960882c"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/BlankGoogleAdPolicy.kt",
+      "size": 715,
+      "sha256": "1b04157d7c9272c4fa48405aa2637022e102ee8f042b3e0985c75ece5f87bdd6"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/BootReceiver.kt",
+      "size": 364,
+      "sha256": "abd0bef4c8dd8eed3bd7d424ea020bc5323fcb98ef44254f010a3db290d751be"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/BoundAdReviewPolicy.kt",
+      "size": 932,
+      "sha256": "008aadd257e3b58ca2a6379c444b44852894aaf90bad7cd2381414d33b65fbbf"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/BoundLateBoostReceiptPolicy.kt",
+      "size": 817,
+      "sha256": "ebf168346212e0f98d52e26a8ee2cfb1387dc28b38ae45678156b65bdb89a8f2"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CanvasAdControl.kt",
+      "size": 4442,
+      "sha256": "8b3482a5c3ac665e79f12a8ba51173e7d0f3de286ac0d800417120f3b5d0d3f0"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CategoryChipVision.kt",
+      "size": 2855,
+      "sha256": "00c28acfd8f908f6843aafb46640227463ff45924738370a3555e46d9d894e91"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CategoryDragPlan.kt",
+      "size": 273,
+      "sha256": "a31cdc7fa2ce8676282e22fc12770a2dcf638c88cb1968f1bb0b9d23f63a8de2"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CategoryViewportPolicy.kt",
+      "size": 544,
+      "sha256": "9021ea5f4a282e2fbd25860be7c4f73ba01f780c16699d86a1755cce82eddcd5"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ChallengeBoost.kt",
+      "size": 67222,
+      "sha256": "df3b2bfbec8c2bfec7394c92adb1b746fcacaed67c6213f26da22800e8beb815"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ChallengeCard.kt",
+      "size": 4622,
+      "sha256": "0cd507d2e43a37cd3c3eb8c6857d1f40486a0e3f7d3852c4e561bdfa0c8ede45"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ChallengeDetailReceipt.kt",
+      "size": 625,
+      "sha256": "546cdb62e436fa215475298b0ace0908199371147b3e0598a67204658fde9cec"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ChallengeRecoveryPolicy.kt",
+      "size": 1953,
+      "sha256": "dba18483fdc5c72b25be5e3c90c540199bf66c76e6c1fb237616a476e6a1360e"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ChallengeScanPolicy.kt",
+      "size": 1884,
+      "sha256": "f577137abc28b594d864f8e53fb6d92dc85c7e88afa5f52f96809a0d92de3f9b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ChallengeScanStore.kt",
+      "size": 3315,
+      "sha256": "567f70e1d395fe82afa94199cd766d80e9ffb7c78aebf5479dd846f54d8757cd"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinBonusPolicy.kt",
+      "size": 1092,
+      "sha256": "39a19e6a1efe6613157d2df0ff039bc6c1ff346703c5034527928a231e20ccab"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinController.kt",
+      "size": 32954,
+      "sha256": "0847113a184eb31185d0050e979dbc53cab7382919852a7ff790276cbe6aedaa"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinDiagnostics.kt",
+      "size": 1723,
+      "sha256": "cb5c44df72e5dde915b313c47f5ad2e3789c11be89507b07a2bacabf63be46b2"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinDispatchPolicy.kt",
+      "size": 225,
+      "sha256": "6ada2ea543320151961265299fb8b6681cc40d0c73605f366b488be0ddb5acd1"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinExitPolicy.kt",
+      "size": 314,
+      "sha256": "351054583dd092ce1e85f2ef10ed558866033e261889fd7f3078f5d0dff8715b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinLotteryReview.kt",
+      "size": 1132,
+      "sha256": "15a3eabbf114bf3bc547404f1fe48f0955a7ec212ada2a83de183e0a954bb0c3"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinNoticePolicy.kt",
+      "size": 996,
+      "sha256": "8efb1b1583d306be733474b7f100f86d41f0937893ade377f1ef03b0543eb3e8"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinPanel.kt",
+      "size": 5543,
+      "sha256": "03b026b283ecaece11f17a44d905d003df1fc503de4d84d94867901bd86efc7d"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinRuntime.kt",
+      "size": 33099,
+      "sha256": "2c8c4c0b17c536bed16b3a9e3f9b463941b48214a2c44c93785b7ff378b79071"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinScheduler.kt",
+      "size": 6051,
+      "sha256": "42da6fabd7713bcb6501394fc4faae6ecbcb7e1aa91a98d86ac3b26eb252f3b2"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinStore.kt",
+      "size": 17094,
+      "sha256": "936fd96103bac0a082eee735dd11dd77fe92f6297c10719b12bab6bc5b4bc3ab"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/CheckinVision.kt",
+      "size": 10472,
+      "sha256": "95226aa2b8d36b54d7e5a6adbe235224e243e1cef717f7057668df6dffa7fb9e"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ControlRevealPolicy.kt",
+      "size": 351,
+      "sha256": "2fc75502cfa1690a057a10870d0498bad48c54d04a332a56d9063c5cf834788a"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ControlRevealTarget.kt",
+      "size": 345,
+      "sha256": "c3600d806388273158e9c213a7e3fd31e1b27c66bccfc0a925439837e3d29031"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DailyAdBaseline.kt",
+      "size": 1742,
+      "sha256": "d2aec87d768b7e0dae8507b03e365ff5be4f3e50b20983bab873ba860ef0c695"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DailyAdTask.kt",
+      "size": 38606,
+      "sha256": "f6ac80e0451338c0c37825637877e435c16ee5c2189b7fcdc2e3d594d9c56a1b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DailyCardDeadline.kt",
+      "size": 1095,
+      "sha256": "be86adad98f7d10ef75019ba16f978ea684386a3cc5515202c650bc7574a1d74"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DailyRoutine.kt",
+      "size": 9429,
+      "sha256": "468091097a68fca279693b26f5d895097ad7021c97af4647c097e0b32f149402"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DailySchedulePolicy.kt",
+      "size": 877,
+      "sha256": "15898b25daf5d137d693aed28b5bcb5502c579f1c7a49451026312e6544370be"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DailyWorker.kt",
+      "size": 502,
+      "sha256": "156282d2974461f104f0d83d6df64bdc59a2e2d761e925f8e44b2df97ba28e72"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DetailStateMachine.kt",
+      "size": 10626,
+      "sha256": "dfc3430c58e9cf5b6591646a7c4d82ebea56a3156ef99b5d5834ae2e356681a9"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DeviceReady.kt",
+      "size": 6740,
+      "sha256": "de954e9c8df025597daa209934e681265f960885adfb04b54197c4ed12ebb2a0"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/DiagnosticPolicy.kt",
+      "size": 1951,
+      "sha256": "57c5bb30180246fb3c9f5303498b21fc137d4be6a7de2f5d48714935e2af0246"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Dist.kt",
+      "size": 2515,
+      "sha256": "11cdf4538faab772703aa9703cc0ee864595f90d6b125540371d722d20dbf6a0"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Evidence.kt",
+      "size": 1042,
+      "sha256": "6c7a0f96bdc097014c8eb6ba051d9cd9b2b49cc289625d55f05fae237928f9ec"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/FaultStore.kt",
+      "size": 10730,
+      "sha256": "bb84a6b353f6920a67f8693d0c2a0f13a3bd6047365f836089d409947b4930d9"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/GoogleDismissPolicy.kt",
+      "size": 987,
+      "sha256": "43892f25615bdc9997a0aea1087be8c9550d7f7060d17a216797082657b06595"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/GoogleNativeClosePolicy.kt",
+      "size": 437,
+      "sha256": "040c75ce9896a3c5941439d6127a0e2d165c56934affc975e765267f349487bf"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/HomeNavigationPolicy.kt",
+      "size": 519,
+      "sha256": "964b246881b8a066ed6750f6fa5bf5ddf227660a631e257ac9f4c8b54c71e059"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/JoinedChallengeResumePolicy.kt",
+      "size": 754,
+      "sha256": "e350490843b5c8d76e7140c8526da2ff89618f44a82bc67bafdf91ebd05e533b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Logger.kt",
+      "size": 2103,
+      "sha256": "aad8c2263fbc07d9e87fee21b93fbd8d90b49b25551b86466afc830d2aaf1eb0"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/MBridgePlaybackPolicy.kt",
+      "size": 1247,
+      "sha256": "01319786eea2fab7f6e9d35a131376ee826c1c8708e5a233ce583e9017fd3033"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/MainActivity.kt",
+      "size": 24238,
+      "sha256": "d835981d8567ac48a47c3a7bcf8e92c7c92514dbb79aa67e4712e23886fb4aeb"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ManagedAppCleanup.kt",
+      "size": 4865,
+      "sha256": "f14009ccef66fe21b21e048f825e73c14c70157883713539280d413d1007d98d"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/NativeChallengeReceiptPolicy.kt",
+      "size": 2370,
+      "sha256": "80dfb6ab83d33370fe78d22bc096d33ab8302402c74c6bf32efd1baf8b5dda0a"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/NavigationWindowPolicy.kt",
+      "size": 382,
+      "sha256": "d2c815a8560b7d4e7a1ffa1cd8d6688423f4d969dafe9e677eb5101628a46799"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Notifier.kt",
+      "size": 7927,
+      "sha256": "e2f27d893d41b5efbfbde47bced889ab7bfe69bf0fd9339177229b0ac51ea1ae"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/OfficialAdQuota.kt",
+      "size": 8534,
+      "sha256": "f5d8d2c881a8af423c36e36b5418b97951284d061c2154e8fd9700275aed47da"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/OfficialAdRecoveryPolicy.kt",
+      "size": 981,
+      "sha256": "217cce4115bff6485235317afff5bda069a25b8a848c133131c9c2223c279380"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/OfficialLoadFailurePolicy.kt",
+      "size": 2137,
+      "sha256": "003872700bddf476acaf2b475cece42986a899890548a68ba1bec7ad02c39eff"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/OguryClosePolicy.kt",
+      "size": 685,
+      "sha256": "5f9b6666bf8cae81f6cdf531166fc4e2d50b5fb6953ade49ca7daa38157b82dd"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/OpaqueRecoveryPolicy.kt",
+      "size": 1793,
+      "sha256": "98c2e6a0c5e40345ab50234985cd2069b254cda33754de99928feda8f430678d"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Outcome.kt",
+      "size": 716,
+      "sha256": "c7d43404eccf4cddaafcb9023b75522120875d019363fe182227739bcdfb23fa"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/OverlayKeeper.kt",
+      "size": 2703,
+      "sha256": "1d9cd8faebad6ebf43c39c86b590afec58a5f6fcc60f2ca4fede78b6fdfe0780"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/PangleChromeReturnPolicy.kt",
+      "size": 914,
+      "sha256": "02097f343c9a32c6271b0a44e07e0d4ce8e0dc6e1ab2f0f2cfb3b7206062ac6f"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/PangleStoreReplayPolicy.kt",
+      "size": 2084,
+      "sha256": "7a2f20950e0faae43acb157654ab0c04c611ffe1b1b631f2a0ae93912ee7e4a5"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/PlayStoreReturnPolicy.kt",
+      "size": 659,
+      "sha256": "5a85a227b750922511d8273b316f8bd5a25647f1f8d38eba60db5fdb568ee468"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/ReviewedAdRecoveryPolicy.kt",
+      "size": 770,
+      "sha256": "1482ea9ad5020dcc2b994b3763fc14b2783a36523ab85dc8855c0f5a8f0dbc6d"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/RewardVerificationPolicy.kt",
+      "size": 400,
+      "sha256": "56afbc47963cc610ab8e2ab20efa168f8369e68e9c509ecff39b0c152aab1d65"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/RoutineRecoveryPolicy.kt",
+      "size": 689,
+      "sha256": "754bcdfdc4cf7aa6418c81a865d41ba902aee6195a3d7f87f5ce1283a87eabcd"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/RoutineSequence.kt",
+      "size": 2185,
+      "sha256": "c5c8c7f33789c208185a7ebebe0f25c149da5c72c84f1da9addfc971a9d46ea3"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/RoutineSummary.kt",
+      "size": 3159,
+      "sha256": "e537517f7f9814512457707b4b6f6babcca56aa3659ac40b3778cf3c4df49ede"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/RunForegroundService.kt",
+      "size": 3489,
+      "sha256": "615cf0f3d3d8fe147a9f1b67e14637367dc01630c214be9321edfa47d4803c17"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/RunStore.kt",
+      "size": 3466,
+      "sha256": "fa6b8604068fbecbf5925f7c770e87c0e9a42216d27c2f6a5ef08c5923e99b16"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Scheduler.kt",
+      "size": 6581,
+      "sha256": "7520ddc30e361c55e9a046505466f0de24db5d9eac2f6208276854a01e6ea25a"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Sel.kt",
+      "size": 1442,
+      "sha256": "be572df46b8587794683cf564cc302c2eb87c7c1e05e019aa5c3e534bfc95c0b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Settings.kt",
+      "size": 7329,
+      "sha256": "ea4f76345702be7b4bb4f3c821e0382a02d1db19c0b1adff659464d0a84938d2"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/StalledAdRestart.kt",
+      "size": 8626,
+      "sha256": "b2bdcfd45c19da7b8d5a9b4c283b91456d4b01b1fac9c85723aa410daf50d046"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/StalledAdRestartPolicy.kt",
+      "size": 1509,
+      "sha256": "8da337f15ede4665574bf88e3d20c72200a320eeb498e5f312553bd6396e783b"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/StartupAdSequence.kt",
+      "size": 3385,
+      "sha256": "0cae619cad49b3016c195c9e87dcb91d1093bfdeeda60e706dab55bd958804c5"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/StartupFlow.kt",
+      "size": 19690,
+      "sha256": "a33809b687f854649ac79135ff9d6a728af8342e8283b55e0032d3a1cdbb979c"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/StartupPolicy.kt",
+      "size": 2473,
+      "sha256": "7e5b06335af333802889508254272b61a582b190cdac218737d61268a8751ed9"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/TaskFailureText.kt",
+      "size": 2820,
+      "sha256": "e5158dacaca893078227c444c55538a5f3b562f08f45664c9342f3efc6fc3a28"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/TaskQueue.kt",
+      "size": 5076,
+      "sha256": "1c810e9af1dfe10930df443e4589ddca63e28e72b07361c4417702811b53c3cc"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/TelegramNotify.kt",
+      "size": 12977,
+      "sha256": "3718c2b5e1b3dae42f4e25ac30d58fc2ed887318719d1788b71cd043e9d7a809"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/TelegramPolicy.kt",
+      "size": 5103,
+      "sha256": "29538c1687c5edc06d8d1ebde82213d71cbb45b552c45e5ad5a6ccc4c69fc37d"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/TelegramSettingsPanel.kt",
+      "size": 5539,
+      "sha256": "09374704fdee2cde5f7965564c0332aadfda75f4ba18b5fe8e61b31037467d59"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/TravelSelection.kt",
+      "size": 2060,
+      "sha256": "858cef95eec720b392a75d4a1ed1ccd6c725f199c0ece4bfe12c5e1bdada5e54"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/Ui.kt",
+      "size": 27829,
+      "sha256": "32b15fc3971600ebf492029c8014fb3595984a25f909ba0c96d981ed21b3d0c3"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/UnityClosePolicy.kt",
+      "size": 1296,
+      "sha256": "dc4ec5258697c5a7af2a2b8af72724036fcba39fda1d4983010a9d0316262103"
+    },
+    {
+      "path": "app/src/main/java/com/anapocket/auto/VerifiedLoadFailurePolicy.kt",
+      "size": 815,
+      "sha256": "e4e67ab44f43f119b24d4388400e8206da5dc06cb8177a4e5ff2733213e3f99e"
+    },
+    {
+      "path": "app/src/main/res/drawable-nodpi/tuffy_hero.png",
+      "size": 1981511,
+      "sha256": "e34466c8dcac6962b730f60bde3e0f840304841f1c21fd1543dcf80367669d88"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_card.xml",
+      "size": 199,
+      "sha256": "fcec01741a73a7fd3573e2c175c94a209e8d8b5b79d573a2cb6e26efd04eebc9"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_danger.xml",
+      "size": 138,
+      "sha256": "82ce6b24cd7c0b4afe0b1cb25f46562f8ed1668b8ba311bdb3ac9277711a6711"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_hero.xml",
+      "size": 223,
+      "sha256": "b55a9ba2d524c04f5d64eae8efa1103efee27535143e31bbedb2ee4e59f0cd3e"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_hero_badge.xml",
+      "size": 140,
+      "sha256": "5369a08caf3afed087256c921bc61b9eb2779d2a186ae7ed29ccac2878564555"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_input.xml",
+      "size": 140,
+      "sha256": "3327e54a6555dcb72d29c5450d9b1a30a50ed249c0ae980a96c58b452efc5c8b"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_nav.xml",
+      "size": 306,
+      "sha256": "4904edce561ed748575191e57c813da3473e124b01be5db3a8b595f2880ff038"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_notice.xml",
+      "size": 138,
+      "sha256": "16a1e2781d13ac0b3b4b6a88a4459ff25f57cb96d201b721796369bfd81582b4"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_primary.xml",
+      "size": 420,
+      "sha256": "bfcdc9f18019469aa978cb5ac269d2601f0f81c3fba300f9776f1198bb4bc718"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_secondary.xml",
+      "size": 148,
+      "sha256": "e49f40c6f7ccf395b0ae64ca704f3ec77d6362820c63ca85f7de0446fb13c496"
+    },
+    {
+      "path": "app/src/main/res/drawable/bg_step.xml",
+      "size": 148,
+      "sha256": "7fb7228437b987f964ef7f314b16f97aa9be693677ca18a008e8921b3bb36e89"
+    },
+    {
+      "path": "app/src/main/res/drawable/flow_progress.xml",
+      "size": 351,
+      "sha256": "4c7c2ccaa59cf9af3977545ff10870f320c2eff0f785183c19941421db95f190"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_flow.xml",
+      "size": 566,
+      "sha256": "3e2e03cd00d01623ede6e310e7c7eaa1f61c6e0b46c03ce9240ed7e1c13f4080"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_launcher.xml",
+      "size": 573,
+      "sha256": "de06d72f924435ede5bda1d2607b1c101cb9641e886d572c24a11b031e9c431d"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_mode_any.xml",
+      "size": 495,
+      "sha256": "35fb0447e0b44db9e0539ba36d555fbe0bb944e709deac393a7e899e09ec8bc4"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_mode_bike.xml",
+      "size": 504,
+      "sha256": "164839b9ae92877aa36a0a223a60949b97face06645353df00bd7ee62fbc6b89"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_mode_car.xml",
+      "size": 467,
+      "sha256": "da1d7cd047272a9fcd327b5600719656bc6511758220ea1373bd076820e23b88"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_mode_flight.xml",
+      "size": 472,
+      "sha256": "1e41ebd0ea19b3394fb7aebc5301b7f40cf62bc11e67976f8ac626e8e7d2d0c1"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_mode_shinkansen.xml",
+      "size": 458,
+      "sha256": "c0e841bfac27b5cc04a6d2cb2b03c939f707e1d002ead898663a81b55cb95f38"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_mode_walk.xml",
+      "size": 480,
+      "sha256": "258b9b72574d6b2cd896a7d05dec0ef86d2fd298109cdd2292e9b6ba9894ab05"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_stat_ana.xml",
+      "size": 443,
+      "sha256": "4e0f4675d20a4ee71a249d9a8a50d5c144ebdb923cb84039c08d478f53325ee6"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_tuffy.xml",
+      "size": 776,
+      "sha256": "e59fad1eff31b2f0f49a3c117a272bdd0c86712e5d667392bae10da32a5a660e"
+    },
+    {
+      "path": "app/src/main/res/layout/activity_main.xml",
+      "size": 26712,
+      "sha256": "d4b8781e231879bfeefb621b47f02c596e72add98bf316eeab68fd9005f7b07e"
+    },
+    {
+      "path": "app/src/main/res/values/colors.xml",
+      "size": 492,
+      "sha256": "73d88701f2fd71153079e7a2bede9c57513e1b475843ed555e51dfaf36cd533d"
+    },
+    {
+      "path": "app/src/main/res/values/strings.xml",
+      "size": 386,
+      "sha256": "e775a79bd3dfc0fce706d8eb15eb3a9ad82ff5878dea85f334a40ae9c603ca50"
+    },
+    {
+      "path": "app/src/main/res/values/themes.xml",
+      "size": 1923,
+      "sha256": "0b67244c3e93e3548742b54c71159b98bac4b171bc5446fd474310b3a765bb40"
+    },
+    {
+      "path": "app/src/main/res/xml/accessibility_service_config.xml",
+      "size": 655,
+      "sha256": "466d3f246f445c29851e2bd272d6b685792acd8bd3b743d2f07801f66cd03b5a"
+    },
+    {
+      "path": "app/src/main/res/xml/export_paths.xml",
+      "size": 241,
+      "sha256": "f13a454a30f20b2aa1447794c2831081bbef8a8e3f7efb9c7985f5e4758c8b19"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/AdCloseIconTest.kt",
+      "size": 3587,
+      "sha256": "b82e9f12f756862d5bd506d666cbafac92a611d7523e3dc03a95d6d460367887"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/AdInteractionRecoveryTest.kt",
+      "size": 1339,
+      "sha256": "2e1d4de5a169d2d3b3762c7573493a03c7600d90263b412b96aa1b675e199156"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/AdInteractionTest.kt",
+      "size": 8039,
+      "sha256": "36f0a515beabc0927800015b170ae88b5fd4ba47ee56ac2511b995dcbb09f3da"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/AdMultiPartTest.kt",
+      "size": 6326,
+      "sha256": "98279bce1475f96df4aad0dc9f92f3fb0c5a18585f1d2ce966ccb038ae9d2038"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/AdSdkWindowsTest.kt",
+      "size": 1231,
+      "sha256": "872954cbef99eac68ce5cc05a0d47ee39ba72d2acf98571a8acefcf74ef405ac"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/AppTaskPolicyTest.kt",
+      "size": 12573,
+      "sha256": "c8e3b33aaff240879033b680a758263acf2576405d3ff6517ba4aab486a3a3a7"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/BlankGoogleAdPolicyTest.kt",
+      "size": 1256,
+      "sha256": "a1e947e2e50e5a9d73c3b53a1e9e99b389dfac858ca7d00c12d927c6f3c78c6f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/BoundLateBoostReceiptPolicyTest.kt",
+      "size": 1778,
+      "sha256": "f6757724119a70101f75356e81e892084f0c0a6cca91c4ba7dceecafca2374f0"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CanvasAdControlTest.kt",
+      "size": 2115,
+      "sha256": "63a1f71239af62907d77811954e5928c63e2f2dc7f82adb66b52204ffd3f59db"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CardFilterTest.kt",
+      "size": 4135,
+      "sha256": "b7e32453b5e6573dd443de576f1896797fb6c2cf7b7c399cc1427a57f9d7ee74"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CategoryChipVisionTest.kt",
+      "size": 2290,
+      "sha256": "c4d5fca6bf2378b490edba5be5f74abfbb1230e9e5b4e0bbf381f104269da219"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CategoryCompletionPolicyTest.kt",
+      "size": 859,
+      "sha256": "e6501f7622777e9ac6d8b231cacca149bf9a570a47a10a7e4a156fcc0d11a9b6"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CategoryDragPlanTest.kt",
+      "size": 1004,
+      "sha256": "aa560a6cab69b3666bbc218912e037c797bd3bd866a66cd5ba05b441eff7018f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CategoryRunSelectionTest.kt",
+      "size": 1793,
+      "sha256": "d23b0fe67a5963168cf91b7c07802aa94c584b9f1214f0acd9ee9ad39a5689e8"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CategoryViewportPolicyTest.kt",
+      "size": 907,
+      "sha256": "c603d8766eb5f48fc632a49e544656a6c76aa8aa89b0ba64416ed37dfd2f3e57"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ChallengeDetailReceiptTest.kt",
+      "size": 1005,
+      "sha256": "b3d89ccda1c446027cf4f132bd35be977c7789cfc55ada58e2c12f45edbfea26"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ChallengeRecoveryPolicyTest.kt",
+      "size": 3625,
+      "sha256": "20c3699014211530a29f4a11ef7efb5eabd6feae78a258d5bbf8031fe76a133e"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ChallengeRunMessageTest.kt",
+      "size": 1021,
+      "sha256": "dd8a8a7f106328f7b14e46762f5cc1a2fdad27f52a8bff9b4215c1adb7ed67df"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ChallengeSignalsTest.kt",
+      "size": 3141,
+      "sha256": "baa2e6cd8cea02ece103f9ae806364ec868d2d6a482295595de3fcc4cd170811"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CheckinBonusPolicyTest.kt",
+      "size": 1737,
+      "sha256": "9050cfd3e4911e07fa85eb6c5d07fa47e2515da24542f34bde50c463ce9680a8"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CheckinExitPolicyTest.kt",
+      "size": 769,
+      "sha256": "384bc5cceb27e3971b5f43ec86329552ee57afff17a8f87d3670620f292e26b8"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/CheckinLotteryReviewTest.kt",
+      "size": 2094,
+      "sha256": "dcc5124f8ef4e482adf9a05c892d51418344d695a7271b29995d14e3613515e8"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ControlRevealPolicyTest.kt",
+      "size": 776,
+      "sha256": "dd6b60cc6051ebbee6e426decaaf03162a0236528ecd43cd2ed8a5eaa14e886b"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ControlRevealTargetTest.kt",
+      "size": 749,
+      "sha256": "91fee4d0f8a46e60adcf3465403cc2ed02bee416ac2a0d1827206f1fde7fec99"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DailyAdBaselineTest.kt",
+      "size": 3507,
+      "sha256": "5b6e9299cd0dc7c65750f1ff0c02065db723b3e514b800bef1c6d7f48d6c0fd2"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DailyAdTaskTest.kt",
+      "size": 6686,
+      "sha256": "e57d93f08778da4d5db7d9676b1f1e0bc5fbdc45dabc19ba1a111f2b52981717"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DailyCardDeadlineTest.kt",
+      "size": 1904,
+      "sha256": "b53df3030a0c8aa57623cdaa46bf6e62c315f0495a2cfd6c073727f40160419f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DetailStateMachineTest.kt",
+      "size": 5363,
+      "sha256": "c111cae2fa37d49a62ebfc907811e00fb556ea328831e2781644417eb8106586"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DiagnosticPolicyTest.kt",
+      "size": 2253,
+      "sha256": "b5e482403b3d0388befd9fa3455a025d79290f50645689c9b377c100aeb7c204"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DistTest.kt",
+      "size": 5427,
+      "sha256": "370af51f37326f4fd2750a56d40ba46a2ceed722fa93d113517878d5836bc8d3"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/DistanceLimitPolicyTest.kt",
+      "size": 578,
+      "sha256": "62b1589ce440daac5c7dc5def2a9a74532270556e05f72f95940f159416e5ad9"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/GoogleAdvanceBudgetRegressionTest.kt",
+      "size": 3704,
+      "sha256": "ef2ed48403e95bac143620c9f3d24923b01736c6bf8e0aceeaa4a131d6567fd3"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/GoogleDismissPolicyTest.kt",
+      "size": 1360,
+      "sha256": "66ccc32102f01ed028c67eabfb71e5186afb56d1c2cdb2476ba5122675755ce8"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/GoogleNativeCloseRegressionTest.kt",
+      "size": 775,
+      "sha256": "36523a112cc8a030fcdeb50055af8c99974052eaa6da1b7d8dd82742fa31bd82"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/H10ResumeAndNoticeRegressionTest.kt",
+      "size": 6231,
+      "sha256": "04ae65bc5586ccecae8665f6c7f1ee5269d71c819679f13ccc60a316789f671c"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/H11StalledRestartRegressionTest.kt",
+      "size": 4307,
+      "sha256": "a2c3c9a0682b36e522379f268e855a3b0cb90359999333541197591bbd56e5bc"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/H12ChallengeRescanTest.kt",
+      "size": 2968,
+      "sha256": "9615e8f4f0e0c5f875e84eab3f7fe7c3e83acf9ca904e6278a6cb84b7eda005c"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/H12NativeReceiptReturnTest.kt",
+      "size": 3973,
+      "sha256": "bf4925782295b00e20b8e5bca3e68d14c4cdb17b59f9e764cba648978fb8fd7c"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/H12ParticipatingDayTest.kt",
+      "size": 509,
+      "sha256": "bc944c21b3e39543d97126495386d16e3f6f56d40d926c3f6d03ee0c8da7db87"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/HomeNavigationPolicyTest.kt",
+      "size": 1506,
+      "sha256": "2820dc513094a2a58ddbaa834d8cdb52fc27fab0259a69d09a95c91b90ed3926"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/InitialJoinReceiptPolicyTest.kt",
+      "size": 1162,
+      "sha256": "fc2e15fcc44381703a920d563c9223f5953adf7279455444ef4ab0d4f5983d1b"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/JoinedChallengeResumePolicyTest.kt",
+      "size": 1488,
+      "sha256": "63a6c9bed54d38c5ea27ffcb8579aa75c5946225f399b6b686dc8ad24c07d11f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/LockScreenConfirmationTest.kt",
+      "size": 895,
+      "sha256": "0308e0192652eb5a46a82b8a04c055828cc3f138de1ec5738921c2e18b749d1b"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/LoginOfferReturnRegressionTest.kt",
+      "size": 2346,
+      "sha256": "73c6de65fa9a2d6b8eb768fffcf84c4cc96cb77684087f3ad6ffabd2991485e9"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/MBridgePlaybackPolicyTest.kt",
+      "size": 2038,
+      "sha256": "f0fcd3afad12638d317ec91ac99d8e31b2634339a2d4803831467bace38ac34f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/NativePangleWaitTest.kt",
+      "size": 2378,
+      "sha256": "023132511e324cdaff260edb5fad0a6934fb5654fccc5707f4469ae06b6c108f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/NavigationOcclusionRegressionTest.kt",
+      "size": 2564,
+      "sha256": "074bb2f7213b896f26eed6d1eddc24927c352a7b53d90e1e9f97b32e85bbcd00"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/OfficialAdQuotaTest.kt",
+      "size": 1881,
+      "sha256": "3a2f5603d8e1dba465424843aac59e47aa2695439ab3ec34ad5d8a3d03ed6d10"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/OfficialAdRecoveryPolicyTest.kt",
+      "size": 1573,
+      "sha256": "09ca4ba17c740aaef641c7b93ffeb44fce40a85b31eb94f782a8c5b0ba0facef"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/OfficialDailyMessageTest.kt",
+      "size": 720,
+      "sha256": "0928959a82445b4f84dea571b86ac1086935564001280f0f0169f4d87466e9a7"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/OfficialLoadFailureRegressionTest.kt",
+      "size": 4261,
+      "sha256": "0ad41f49e519ce62c91b94c6cd11e4d055cdc2165cd09eb920370e8a3510db36"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/OguryClosePolicyTest.kt",
+      "size": 1358,
+      "sha256": "802ca5c8a4c95c627027a12363de8562adca3599b204c80115c9975972fb0928"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/OpaqueRecoveryPolicyTest.kt",
+      "size": 4180,
+      "sha256": "cadc6b6fa34c139e4240e494876b78c1708cb2b592c56c505d02812629dba77f"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/PangleChromeReturnRegressionTest.kt",
+      "size": 2151,
+      "sha256": "da8766bef6301aa2d0a2c3f0e879ff2b4d7b68f4dbea3fe7c8f62608d0d8267b"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/PangleNativeCloseTest.kt",
+      "size": 984,
+      "sha256": "254eb8357ab230c5b0eb83b167c22bea873f8eeb4d6558e89e638d9e72d2a423"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/PangleStoreReplayPolicyTest.kt",
+      "size": 4174,
+      "sha256": "98aff2ad4b20fab06e091672f836ed88742a7e2155182bb213bd51e152e6b7a4"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/PlayStoreReturnPolicyTest.kt",
+      "size": 1095,
+      "sha256": "770e52d48415f90a3f5e9d43184d46dd484e9029b1cfe5ce08038e10c8f3b996"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/RemoteCategoryTest.kt",
+      "size": 1632,
+      "sha256": "7da0324fdaedfb72c6406c25d37ff8cfc688dca0547aaaa21949062aa536d9f7"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/ReviewedAdRecoveryRegressionTest.kt",
+      "size": 2021,
+      "sha256": "8936b24b51bcf8a98545ea2fbacedad082e2f24fe1d679f9fd74e494600f0695"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/RoutineMessageTest.kt",
+      "size": 1346,
+      "sha256": "4f11f0d6c7f81c91b5a0625a6cb2e1bb8bd0843d0adddc719905e1f6632f2fc3"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/RoutineRecoveryRegressionTest.kt",
+      "size": 1344,
+      "sha256": "487de1bff2dae974eb0a48e09ba4b3ece41ccc06ed4c1ee59eb1d49f2cf3a15b"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/RoutineSequenceTest.kt",
+      "size": 3652,
+      "sha256": "d0c82c6d87d4467368635ac8e6d95c13a5e5a32a7683948385b3c7cd9456d882"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/SafetyPolicyTest.kt",
+      "size": 5225,
+      "sha256": "12ceae3b7cbae6418f86758585afd6132947b391ae28030cf4019a650e1110e7"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/SelectionAndDispatchTest.kt",
+      "size": 3193,
+      "sha256": "e26116889465a646322227f6246716ec12404ce9c2bb37147107b9a6261435c9"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/StartupAdSequenceTest.kt",
+      "size": 3545,
+      "sha256": "d064bb95951aa77ce12319a42d591f76928a3826a02ae9b64156998e056c4df6"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/StartupPolicyTest.kt",
+      "size": 3095,
+      "sha256": "9cb50c4a4e9af9fa90fdbfa2417d9e5ec771ee8931cf7566ece914efbb675a00"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/StartupPopupSequenceTest.kt",
+      "size": 2087,
+      "sha256": "2fcfc573d9d7393ec0c68d0b2c0e4500b309cdae1bd5a837b44d1630f6f13667"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/TaskFinishPolicyTest.kt",
+      "size": 728,
+      "sha256": "f0dd373179124bb15126eed47a8f10d1778a4e609aa6140afbd822b14a24a471"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/TelegramPolicyTest.kt",
+      "size": 3318,
+      "sha256": "123945f8ab85743731f2b72287fe3dbc6ad2de5d1859905748e0c1c55a58ace5"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/UnityLabelledCloseTest.kt",
+      "size": 1432,
+      "sha256": "97961421047b055a74418e309b777bb4ecaf0e036972809cb80a6c6b02d3d577"
+    },
+    {
+      "path": "app/src/test/java/com/anapocket/auto/VerifiedLoadFailureRegressionTest.kt",
+      "size": 1886,
+      "sha256": "3feba83260c8a1b41154eac4782817f23598192ed47069abc13a2a6be21590aa"
+    },
+    {
+      "path": "app/src/test/resources/canvas/README.txt",
+      "size": 810,
+      "sha256": "1e33702c2c04b2f4cd4884422a3b2cc4ba3c89b1be0c6bc7dcdeba2db7c86147"
+    },
+    {
+      "path": "app/src/test/resources/canvas/hidden.argb-le",
+      "size": 1013760,
+      "sha256": "b5ffec79f7c86aef355e41ed6297822d900f494d15b1fe4a82a1abb7fe0b5148"
+    },
+    {
+      "path": "app/src/test/resources/canvas/hidden.png",
+      "size": 270171,
+      "sha256": "8c9605a4f2295643e9f8516c68d09b9dc28a2c0d5efe282744b47b2dfbc66524"
+    },
+    {
+      "path": "app/src/test/resources/canvas/revealed1.argb-le",
+      "size": 1013760,
+      "sha256": "cb5bbc205b6cf0583b4d3a9607ab21ac09febc6216e7357a538b7e9c11e71f63"
+    },
+    {
+      "path": "app/src/test/resources/canvas/revealed1.png",
+      "size": 37092,
+      "sha256": "3a2d125b015ed6006c3d46203983aa0d9c493cda9c20bf9cb0914b416f247cd3"
+    },
+    {
+      "path": "app/src/test/resources/canvas/revealed2.argb-le",
+      "size": 1013760,
+      "sha256": "5234e089419f34d9ed5f4fadaa966aaa45d55f1b80b7967aae5d68bc8b9e2832"
+    },
+    {
+      "path": "app/src/test/resources/canvas/revealed2.png",
+      "size": 30585,
+      "sha256": "bd9970efd2f60d9d8dee745953bda4942a1452bc6e1522a97c2eed21a3bfaa87"
+    },
+    {
+      "path": "app/src/test/resources/category/README.txt",
+      "size": 1050,
+      "sha256": "4a77f1f7950c68ff1102a9424f4db8480254f21ba698b6704531d615b9b0c06c"
+    },
+    {
+      "path": "app/src/test/resources/category/any.argb-le",
+      "size": 36864,
+      "sha256": "644bf98a0939ae1166f62a4524a07321e46b0d2000b4e6893f2f995203a2f279"
+    },
+    {
+      "path": "app/src/test/resources/category/any.png",
+      "size": 2157,
+      "sha256": "3f1a7376e092d652fc7e25ade38ecb46480e98d56557b72571770cca93f7dbce"
+    },
+    {
+      "path": "app/src/test/resources/category/bike.argb-le",
+      "size": 36864,
+      "sha256": "4185c768501a9df660bdc3dc2b970d5e39979c58437ac0b06fbfb3c3943fa93f"
+    },
+    {
+      "path": "app/src/test/resources/category/bike.png",
+      "size": 1979,
+      "sha256": "6769f46366009e3b72a57577d0e58b1477597ff8407c28922b662028c1f5fa90"
+    },
+    {
+      "path": "app/src/test/resources/category/bullet.argb-le",
+      "size": 36864,
+      "sha256": "c182cdf82350e7e099846bb6a299d300c9f266b46e1e052cb381ccb1fa634558"
+    },
+    {
+      "path": "app/src/test/resources/category/bullet.png",
+      "size": 1751,
+      "sha256": "3fda2edc20a092ebc00b8ee3c4de3ed570815a1f754ea5b25ef180f2b12175b2"
+    },
+    {
+      "path": "app/src/test/resources/category/car.argb-le",
+      "size": 36864,
+      "sha256": "b81810d5a8a9990a23c2bf0f92402455673f59a750bf11c1a38c10995bdf0f11"
+    },
+    {
+      "path": "app/src/test/resources/category/car.png",
+      "size": 1623,
+      "sha256": "8f258c147fe6ed02deb2c5a0131b9a3b0be3aef342f009eaf4d193f20f351bbf"
+    },
+    {
+      "path": "app/src/test/resources/category/flight.argb-le",
+      "size": 36864,
+      "sha256": "575ac47d15c3850769de629cff6b879d61bb2d06ecee1dfe3442f62bd0b0c25a"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-any.argb-le",
+      "size": 36864,
+      "sha256": "abe8b544a58818f9350f0b427a42dc5c6d7a9e4e3e93162ea9c85baaf81334b0"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-any.png",
+      "size": 2233,
+      "sha256": "f178c85634ba90cb9921199883c03076ade9258e026573ba04e0209d60d6a262"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-bike.argb-le",
+      "size": 36864,
+      "sha256": "225d9dade3b606afc867f9596da1f503c1c5bc1fb72abbcacdb087e2fb687204"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-bike.png",
+      "size": 2056,
+      "sha256": "110995c68dd5bca7a54d1112c42b69629cb615645b2f0b1583d92880b37189d6"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-car.argb-le",
+      "size": 36864,
+      "sha256": "fecea113ece64af18694ceddd1adb9abd9e017edef8987f42bf8db4e49165d30"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-car.png",
+      "size": 1688,
+      "sha256": "dbf82238fc58588858591b98ac62c345e00a5704db2b00cee5f61e8def64d7b2"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-walk.argb-le",
+      "size": 36864,
+      "sha256": "cb527650aef7fcbda7d89ce6b85d1c24f1c4b0b651e1b88c2af44f1302be2754"
+    },
+    {
+      "path": "app/src/test/resources/category/selected-walk.png",
+      "size": 1826,
+      "sha256": "12afacc9530b46f690dd2d934c10d77a5758370d0a875c30bb277ee81a9f0e84"
+    },
+    {
+      "path": "app/src/test/resources/category/train.argb-le",
+      "size": 36864,
+      "sha256": "c7f8101a382523859b4dd95a1d06f8449d5e941208f3b184a636ef89cf86e4dc"
+    },
+    {
+      "path": "app/src/test/resources/category/train.png",
+      "size": 1557,
+      "sha256": "e4bb0fe512444e9a9c63131659149910b6e26ccf6350c4b9e2e82448dacac4ea"
+    },
+    {
+      "path": "app/src/test/resources/category/walk.argb-le",
+      "size": 36864,
+      "sha256": "1be9678c8788475c0e60932c6f2926661a3d5474a3b67a29b6ea9e02240818f1"
+    },
+    {
+      "path": "app/src/test/resources/category/walk.png",
+      "size": 1763,
+      "sha256": "09b6f972eb090fc70979a143e1a1df51a2793e9a2bb2535792f2deaf731e9135"
+    },
+    {
+      "path": "app/src/test/resources/five-close.argb-le",
+      "size": 20736,
+      "sha256": "1c8bb9145e1f5cae6f9eff9431cbcfa98c57a14a20c48520172ce743446f744d"
+    },
+    {
+      "path": "app/src/test/resources/five-close.png",
+      "size": 1304,
+      "sha256": "e56ec584411e0f34dd189e7959d96e8e0ffc96a7f2f228eae8d246c331cb9450"
+    },
+    {
+      "path": "app/src/test/resources/fyber-close.svg",
+      "size": 232,
+      "sha256": "0988b5cca98d12556ded44933bf618d5e44e6586f69208bfac9e1ed14fefae95"
+    },
+    {
+      "path": "app/src/test/resources/fyber-native-close.argb-le",
+      "size": 6724,
+      "sha256": "edbdd87c35939574130f61c952fbc7852e1851afef432a8fdaf92bf32891c1a8"
+    },
+    {
+      "path": "app/src/test/resources/fyber-rating.svg",
+      "size": 376,
+      "sha256": "be6876c4c9a336f9f423b628fcdf45c006973398026c63da6180e84228cdea2d"
+    },
+    {
+      "path": "app/src/test/resources/h12/bike_initial_receipt_nodes.txt",
+      "size": 7811,
+      "sha256": "9ae4ca1648bb2dc013443d76d02b3861a32a83f94322593ddc72465e84e94800"
+    },
+    {
+      "path": "app/src/test/resources/h12/bike_initial_start_nodes.txt",
+      "size": 15576,
+      "sha256": "86fcc8ca5880979727dc0e6858e2b984578ac57e767ddc690afc6a7459f5e6bf"
+    },
+    {
+      "path": "app/src/test/resources/mbridge-circle-close.argb-le",
+      "size": 10000,
+      "sha256": "7867b0f2af694ec8bbd2c6b785413671852f5500fed60126e4a05643214e50cc"
+    },
+    {
+      "path": "app/src/test/resources/mbridge-info.argb-le",
+      "size": 10000,
+      "sha256": "8150d603956e77e988f1bf81fbf3068a6b5f56cdee95912c940d328730417bc5"
+    },
+    {
+      "path": "app/src/test/resources/pangle-forward.argb-le",
+      "size": 5184,
+      "sha256": "e4bae08059fcdabfb8146da73c6a6d491aa5a13b90e9ff16942181a102eb121b"
+    },
+    {
+      "path": "app/src/test/resources/pangle-sound.argb-le",
+      "size": 5184,
+      "sha256": "4677ea80793475c48736f445896542b02205691f8f489222669c7e1027160cf4"
+    },
+    {
+      "path": "app/src/test/resources/pangle_store_replay_README.txt",
+      "size": 1032,
+      "sha256": "7b8559185a207c532512dacfee346fca5e33f6dc628b405736a790b86ab08700"
+    },
+    {
+      "path": "app/src/test/resources/pangle_store_replay_first.txt",
+      "size": 109,
+      "sha256": "dcde2ca5598ce99f965397a9f62daff7fe19937945f363afa321eac229f858d4"
+    },
+    {
+      "path": "app/src/test/resources/pangle_store_replay_repeated.txt",
+      "size": 109,
+      "sha256": "9fb8a92ef11ff255895adccf38a7ddec5e62dbd5e036370c6dbbd3485b02078c"
+    },
+    {
+      "path": "build.gradle",
+      "size": 140,
+      "sha256": "43f605388294ca10e199db43b0a50c1b48ef5bfaebb2ebb808997aa35bd2bdf8"
+    },
+    {
+      "path": "gradle.properties",
+      "size": 232,
+      "sha256": "d4127dde8e2f2f0e970a52674ed9f27156af49d41615c9bad2be11a4d4cc280f"
+    },
+    {
+      "path": "settings.gradle",
+      "size": 332,
+      "sha256": "94eac668f37a01aa2ab8bb540f752bfe762b35512fc01b4c7f3659130313d2df"
+    }
+  ]
+}

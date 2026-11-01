@@ -126,7 +126,7 @@ class TelegramDeliveryLedger(ctx: Context, namespace: String = "ana_telegram_del
     }
 }
 object TelegramNotifier {
-    fun enqueue(ctx: Context, id: String, text: String) {
+    fun enqueue(ctx: Context, id: String, text: String, checkinApp:String="", checkinGeneration:Long=-1, checkinDate:String="") {
         try {
             val store = TelegramSettingsStore(ctx)
             val c = store.load()
@@ -134,7 +134,8 @@ object TelegramNotifier {
             val event = id + "_" + TelegramPolicy.fingerprint(c)
             if (!TelegramPolicy.mayBeginDelivery(TelegramDeliveryLedger(ctx).state(event))) return
             val request = OneTimeWorkRequestBuilder<TelegramWorker>()
-                .setInputData(workDataOf("text" to text.take(1000), "target" to TelegramPolicy.fingerprint(c), "event" to event))
+                .setInputData(workDataOf("text" to text.take(1000), "target" to TelegramPolicy.fingerprint(c), "event" to event,
+                    "checkinApp" to checkinApp,"checkinGeneration" to checkinGeneration,"checkinDate" to checkinDate))
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
             WorkManager.getInstance(ctx).enqueueUniqueWork("telegram_" + id, ExistingWorkPolicy.KEEP, request)
@@ -168,6 +169,13 @@ class TelegramWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         if (!c.enabled || TelegramPolicy.fingerprint(c) != inputData.getString("target")) return Result.success()
         val text = inputData.getString("text") ?: return Result.failure()
         val event = inputData.getString("event") ?: return Result.failure()
+        // An old P1 delivery cannot announce a disabled/new-generation task as a new fault.
+        if(event.startsWith("checkin_")){
+            val app=CheckinApp.from(inputData.getString("checkinApp"))?:return Result.success()
+            val config=CheckinStore(applicationContext,app).config()
+            if(!CheckinDispatchPolicy.accepts(config.enabled,config.generation,inputData.getLong("checkinGeneration",-1),
+                inputData.getString("checkinDate")==TokyoDate.of()))return Result.success()
+        }
         val ledger = TelegramDeliveryLedger(applicationContext)
         if (!ledger.begin(event)) {
             if (ledger.state(event) == "sending") { ledger.set(event, "uncertain"); store.status("上次发送中断，结果未确认；未自动重复发送") }

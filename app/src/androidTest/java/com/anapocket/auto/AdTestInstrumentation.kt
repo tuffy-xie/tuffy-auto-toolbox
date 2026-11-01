@@ -21,6 +21,24 @@ class AdTestInstrumentation : Instrumentation() {
         val runId = "DEVICE-FIXTURE-" + System.currentTimeMillis()
         try {
             when (args.getString("phase", "suite")) {
+                "h12" -> { H12DeviceChecks.run(targetContext); lines += "PASS H12 isolated scan reset; no official UI or advertising" }
+                "h10-audit" -> {
+                    val ledgerDate=args.getString("ledgerDate",date)!!
+                    val body=org.json.JSONObject().put("date",ledgerDate).put("readOnly",true)
+                        .put("settings",org.json.JSONObject(Prefs.loadBlocking(targetContext).toJson()))
+                        .put("daily",org.json.JSONArray().also{a->OfficialAdStore.attempts(targetContext,ledgerDate).forEach{a.put(it.toJson())}})
+                        .put("challenges",ChallengeStore.rows(targetContext,ledgerDate)).put("login",LoginBonusStore.read(targetContext,ledgerDate))
+                        .put("checkins",org.json.JSONObject().also{a->CheckinApp.entries.forEach{app->val s=CheckinStore(targetContext,app);val cfg=s.config()
+                            a.put(app.name,org.json.JSONObject().put("enabled",cfg.enabled).put("hour",cfg.hour).put("minute",cfg.minute).put("generation",cfg.generation).put("rows",org.json.JSONArray(s.all(ledgerDate))))}})
+                    Evidence.write(targetContext,"h10_readonly_audit_"+ledgerDate+".json",body.toString(2))
+                    lines += "PASS read-only audit saved; no UI or submission"
+                }
+                "h10" -> runBlocking {
+                    CheckinStoreProbe.run(targetContext)
+                    R47SelectionProbe.run(targetContext)
+                    H10DeviceChecks.run(targetContext)
+                    lines += "PASS H10 isolated regression + unchanged R46/R47 Android fixtures; no official UI actions or ad starts"
+                }
                 "ui", "ui-error" -> runBlocking {
                     val expectError = args.getString("phase") == "ui-error"
                     // Instrumentation restarts the target process; use its own Accessibility automation connection.

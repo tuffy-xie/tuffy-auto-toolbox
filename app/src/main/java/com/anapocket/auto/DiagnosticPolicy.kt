@@ -21,6 +21,18 @@ object DiagnosticPrivacy {
 }
 
 object TaskExitPolicy {
+    fun canLock(returnedHome:Boolean,stopped:Boolean,pending:Boolean,sameRun:Boolean)=returnedHome&&!stopped&&!pending&&sameRun
+    fun lockConfirmed(screenOff:Boolean,keyguardLocked:Boolean)=screenOff&&keyguardLocked
     fun allowed(finished:Boolean,stopped:Boolean,pending:Boolean,adSurface:Boolean,anaForeground:Boolean)=
         finished&&!stopped&&!pending&&!adSurface&&anaForeground
+}
+
+/** A notification can wake a locked phone shortly after the system lock action. */
+class LockScreenConfirmation(private val stableMillis:Long=2500L) {
+    private var since:Long?=null
+    fun observe(now:Long,screenOff:Boolean,keyguardLocked:Boolean):Boolean {
+        if(!TaskExitPolicy.lockConfirmed(screenOff,keyguardLocked)){since=null;return false}
+        if(since==null||now<since!!)since=now
+        return now-since!!>=stableMillis
+    }
 }

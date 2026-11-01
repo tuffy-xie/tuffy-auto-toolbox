@@ -397,10 +397,18 @@ class Ui(private val svc: AutoAccessibilityService) {
     fun activeNodes(
         maxNodes: Int = 1200,
         maxDepth: Int = 40,
-        pkg: String? = null
+        pkg: String? = null,
+        foregroundOnly:Boolean=false
     ): List<AccessibilityNodeInfo> {
         val out = ArrayList<AccessibilityNodeInfo>(256)
-        val r = pickRoot(pkg) ?: return out
+        val r = if(foregroundOnly&&pkg!=null){
+            val foreground=root()?:return out
+            if(foreground.packageName?.toString()!=pkg)return out
+            val ws=runCatching{svc.windows.toList()}.getOrDefault(emptyList())
+            val descriptions=ws.mapIndexed{i,w->NavigationWindow(i,runCatching{w.root?.packageName?.toString()}.getOrNull().orEmpty(),w.isActive,w.isFocused,w.layer)}
+            NavigationWindowPolicy.choose(pkg,foreground.packageName?.toString(),descriptions)?.let{ws[it].root}?:foreground
+        }else pickRoot(pkg)
+        if(r==null)return out
         if (DEBUG_WINDOWS) {
             DEBUG_WINDOWS = false
             try {

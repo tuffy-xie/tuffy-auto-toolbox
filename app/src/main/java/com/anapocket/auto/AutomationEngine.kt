@@ -3,6 +3,7 @@ package com.anapocket.auto
 import android.content.Context
 import android.graphics.Rect
 import android.os.PowerManager
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.delay
 
@@ -112,7 +113,7 @@ class AutomationEngine(
     private var activeFilteredCategory: Cat? = null
     private fun categoryRow(): AccessibilityNodeInfo? {
         ui.refreshCache()
-        return ui.activeNodes(pkg = pkg).firstOrNull { it.isVisibleToUser && it.viewIdResourceName == "$pkg:id/category_filter_compose_view" }
+        return ui.activeNodes(pkg = pkg,foregroundOnly=true).firstOrNull { it.isVisibleToUser && it.viewIdResourceName == "$pkg:id/category_filter_compose_view" }
     }
     private fun nativeCardFields(title: AccessibilityNodeInfo): List<AccessibilityNodeInfo> {
         var parent = title.parent
@@ -136,7 +137,7 @@ class AutomationEngine(
     private fun visibleDailyCards(): List<ChallengeCard> {
         ui.refreshCache()
         val (_, h) = screen()
-        val today = ui.activeNodes(pkg = pkg).filter { it.isVisibleToUser && topOf(it) in 400..(h * .86).toInt() &&
+        val today = ui.activeNodes(pkg = pkg,foregroundOnly=true).filter { it.isVisibleToUser && topOf(it) in 400..(h * .86).toInt() &&
             it.viewIdResourceName == "$pkg:id/text_name" }.map { it to nativeCardFields(it) }.filter { (_, fields) ->
             DailyCardDeadline.matches(fields.singleOrNull { it.viewIdResourceName == "$pkg:id/text_period" }?.let { ui.label(it) }, TokyoDate.of())
         }
@@ -148,7 +149,7 @@ class AutomationEngine(
     }
     private fun dailyPositionSignature(): String {
         ui.refreshCache()
-        return ui.activeNodes(pkg = pkg).filter { it.isVisibleToUser }
+        return ui.activeNodes(pkg = pkg,foregroundOnly=true).filter { it.isVisibleToUser }
             .filter { it.viewIdResourceName == "$pkg:id/text_name" }
             .joinToString("|") { ui.label(it) + "@" + topOf(it) }
     }
@@ -166,15 +167,36 @@ class AutomationEngine(
     }
     private fun categoryStripSignature():String {
         val strip=Rect();(categoryRow()?:return "missing").getBoundsInScreen(strip)
-        return ui.activeNodes(pkg=pkg).filter{val b=Rect();it.getBoundsInScreen(b);it.isVisibleToUser&&strip.contains(b)&&it.isClickable}.joinToString("|"){val b=Rect();it.getBoundsInScreen(b);ui.label(it)+"@"+b}
+        return ui.activeNodes(pkg=pkg,foregroundOnly=true).filter{val b=Rect();it.getBoundsInScreen(b);it.isVisibleToUser&&strip.contains(b)&&it.isClickable}.joinToString("|"){val b=Rect();it.getBoundsInScreen(b);ui.label(it)+"@"+b}
+    }
+    private suspend fun awaitClearCategoryFrame() {
+        val until=SystemClock.elapsedRealtime()+90_000L
+        val date=TokyoDate.of();var captured=false
+        while(SystemClock.elapsedRealtime()<until){
+            check(!stop&&TokyoDate.of()==date){"category_visibility_stopped_or_date_changed"}
+            ui.refreshCache()
+            val row=categoryRow();val strip=Rect();row?.getBoundsInScreen(strip)
+            val bitmap=categoryBitmap()?:error("category_icon_screenshot_unavailable")
+            val ready=try{row!=null&&ui.activeNodes(pkg=pkg,foregroundOnly=true).any{n->
+                val b=Rect();n.getBoundsInScreen(b)
+                n.isVisibleToUser&&n.isClickable&&n.childCount==0&&ui.label(n).isBlank()&&strip.contains(b)&&
+                    b.width()>0&&b.height()>=strip.height()*.6&&b.width().toDouble()/b.height() in .8..1.3&&
+                    tilePixels(bitmap,b)?.let{CategoryChipVision.unobscured(it)}==true
+            }}finally{bitmap.recycle()}
+            if(ready)return
+            if(!captured){captured=true;Logger.w("CHSTRIP","category_visual_obscured no_navigation_gestures=true");FaultStore.capture(svc,AutoAccessibilityService.currentRunId,"category_visibility","native_category_frame_obscured_no_tap")}
+            delay(1000)
+        }
+        error("category_visual_obscured_timeout")
     }
     /** Scroll the observed Compose strip itself; never accept a parent-pager gesture as progress. */
     private suspend fun scrollCategoryStrip(forward:Boolean):Boolean {
+        awaitClearCategoryFrame()
         val strip=Rect();(categoryRow()?:return false).getBoundsInScreen(strip)
         val before=categoryStripSignature()
         val direct=if(forward)AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id else AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id
         val generic=if(forward)AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-        val nodes=ui.activeNodes(pkg=pkg).filter{n->val b=Rect();n.getBoundsInScreen(b);n.isVisibleToUser&&strip.contains(b)&&b.width()>=strip.width()/2&&(n.isScrollable||n.actionList.any{it.id==direct||it.id==generic})}
+        val nodes=ui.activeNodes(pkg=pkg,foregroundOnly=true).filter{n->val b=Rect();n.getBoundsInScreen(b);n.isVisibleToUser&&strip.contains(b)&&b.width()>=strip.width()/2&&(n.isScrollable||n.actionList.any{it.id==direct||it.id==generic})}
         Evidence.write(svc,"category_strip_actions_"+System.currentTimeMillis()+".txt",nodes.joinToString("\n"){n->val b=Rect();n.getBoundsInScreen(b);n.className.toString()+" bounds="+b+" scrollable="+n.isScrollable+" actions="+n.actionList.map{it.id}})
         for(n in nodes){
             val action=if(n.actionList.any{it.id==direct})direct else generic
@@ -191,39 +213,32 @@ class AutomationEngine(
         wakeScreen(); ensureForeground()
         check(StartupFlow(svc).prepare("NAV"+System.currentTimeMillis(),launch=false).ok) { "startup_popup_blocks_category_navigation" }
         check(ensureListPage() && ensureChallengeTab()) { "filtered_list_unreachable" }
-        if (categoryRow() == null) {
-            val participating = ui.activeNodes(pkg = pkg).firstOrNull { it.isVisibleToUser && ui.label(it) == "参加中" }
-                ?: error("native_participating_tab_missing_for_category_reset")
-            val b = Rect(); participating.getBoundsInScreen(b)
-            check(ui.tap(b.centerX(), b.centerY())) { "native_participating_tab_dispatch_failed" }
-            for (i in 0 until 12) {
-                ui.refreshCache()
-                if (ui.activeLabels(pkg = pkg).any { it.startsWith("進行中") || it.startsWith("報酬未受取") }) break
-                delay(300)
-            }
-            val joinable = ui.activeNodes(pkg = pkg).firstOrNull { it.isVisibleToUser && ui.label(it) == "参加可能" }
-                ?: error("native_joinable_tab_missing_for_category_reset")
-            val j = Rect(); joinable.getBoundsInScreen(j)
-            check(ui.tap(j.centerX(), j.centerY())) { "native_joinable_tab_dispatch_failed" }
+        check(StartupFlow(svc).prepare("CATNAV"+System.currentTimeMillis(),launch=false).ok){"category_popup_blocks_navigation"}
+        // A selected joinable tab does not expand its collapsed header when tapped again.
+        check(scrollToTop()) { "filtered_navigation_top_not_verified" }
+        if(categoryRow()==null){
+            check(selectNativeChallengeTab("参加可能"){categoryRow()!=null&&ui.activeLabels(pkg=pkg).any{it=="今日"||it=="明日"}}){"native_joinable_tab_not_verified"}
         }
         repeat(12) { if (categoryRow() == null) delay(400) }
         check(categoryRow() != null && ensureJoinableTab() && selectDate(0)) { "native_category_strip_not_observed" }
+        awaitClearCategoryFrame()
         for(reset in 0 until 4){
             val r=Rect();(categoryRow()?:error("category_strip_disappeared")).getBoundsInScreen(r)
-            val allVisible=ui.activeNodes(pkg=pkg).any{n->val b=Rect();n.getBoundsInScreen(b);n.isVisibleToUser&&ui.label(n)=="すべて"&&r.contains(b)&&b.width()>r.width()/5}
+            val allVisible=ui.activeNodes(pkg=pkg,foregroundOnly=true).any{n->val b=Rect();n.getBoundsInScreen(b);n.isVisibleToUser&&ui.label(n)=="すべて"&&r.contains(b)&&b.width()>0}
             if(allVisible)break
             if(!scrollCategoryStrip(false))break
         }
         ui.refreshCache()
-        val all = ui.activeNodes(pkg = pkg).firstOrNull { it.isVisibleToUser && ui.label(it) == "すべて" }
+        val all = ui.activeNodes(pkg = pkg,foregroundOnly=true).firstOrNull { it.isVisibleToUser && ui.label(it) == "すべて" }
             ?: error("category_all_reset_not_observed")
         val allBounds = Rect(); all.getBoundsInScreen(allBounds)
-        ui.tap(allBounds.centerX(), allBounds.centerY()); delay(800)
+        check(ui.clickSemantic(all)){"category_all_semantic_dispatch_failed"}; delay(800)
         var overlapTried=false
         repeat(8) { scan ->
             check(!stop) { "user_stopped" }
+            awaitClearCategoryFrame()
             val strip = Rect(); (categoryRow() ?: error("category_strip_missing")).getBoundsInScreen(strip)
-            val candidates = ui.activeNodes(pkg = pkg).filter { n ->
+            val candidates = ui.activeNodes(pkg = pkg,foregroundOnly=true).filter { n ->
                 val b = Rect(); n.getBoundsInScreen(b)
                 n.isVisibleToUser && n.isEnabled && n.isClickable && n.childCount == 0 && ui.label(n).isBlank() &&
                     strip.contains(b) && b.width() > 0 && b.height() >= strip.height() * .6 && b.width().toDouble() / b.height() in .8..1.3
@@ -238,11 +253,11 @@ class AutomationEngine(
                 val b = Rect(); matches.single().getBoundsInScreen(b)
                 dumpUi("category_" + cat.name + "_observed_before")
                 Logger.i("CHQUEUE", "category=" + cat + " actualIconBounds=" + b + " strip=" + strip + " scan=" + scan)
-                ui.tap(b.centerX(), b.centerY()); delay(900)
+                check(ui.clickSemantic(matches.single())){"category_icon_semantic_dispatch_failed"}; delay(900)
                 repeat(10) {
                     val selected = categoryBitmap() ?: error("category_selected_screenshot_unavailable")
                     val freshStrip = Rect(); (categoryRow() ?: error("category_strip_missing_after_selection")).getBoundsInScreen(freshStrip)
-                    val isSelected = try { ui.activeNodes(pkg = pkg).any { n ->
+                    val isSelected = try { ui.activeNodes(pkg = pkg,foregroundOnly=true).any { n ->
                         val currentBounds = Rect(); n.getBoundsInScreen(currentBounds)
                         n.isVisibleToUser && n.isClickable && n.childCount == 0 && ui.label(n).isBlank() &&
                             freshStrip.contains(currentBounds) && tilePixels(selected, currentBounds)?.let {
@@ -251,6 +266,9 @@ class AutomationEngine(
                     } } finally { selected.recycle() }
                     val cards = visibleDailyCards()
                     if (isSelected && cards.all { it.cat == cat }) {
+                        check(scrollToTop()) { "filtered_list_top_not_verified_"+cat }
+                        delay(700)
+                        seenDailyTitles.clear(); observedDailyTitles=0
                         activeFilteredCategory = cat
                         dumpUi("category_" + cat.name + "_verified")
                         Logger.i("CHQUEUE", "category=" + cat + " iconSelected=true visibleDaily=" + cards.map { it.title })
@@ -271,6 +289,55 @@ class AutomationEngine(
         }
         error("category_icon_not_found_" + cat)
     }
+
+    /** Native semantic actions for these observed tabs, with fresh post-transition verification. */
+    private suspend fun selectNativeChallengeTab(label:String,verified:()->Boolean):Boolean {
+        repeat(2){attempt->
+            check(!stop&&AutoAccessibilityService.isConnected()&&TokyoDate.of()==scanDate){"challenge_tab_cancelled_or_disconnected"}
+            ui.refreshCache()
+            val tab=ui.activeNodes(pkg=pkg,foregroundOnly=true).singleOrNull{it.isVisibleToUser&&it.isEnabled&&ui.label(it)==label}
+                ?:return false
+            val dispatched=ui.clickSemantic(tab)
+            Logger.i("CHTAB","label="+label+" nativeDispatched="+dispatched+" attempt="+attempt)
+            if(dispatched){
+                delay(1200)
+                repeat(12){ui.refreshCache();if(verified())return true;check(!stop&&AutoAccessibilityService.isConnected()){"challenge_tab_disconnected"};delay(400)}
+            }
+        }
+        return false
+    }
+    /** Only 参加中 → 進行中 and this exact business day; yesterday's PROCESSING is excluded. */
+    suspend fun auditParticipating(run:String):List<ChallengeCard> {
+        check(ensureListPage() && ensureChallengeTab()) { "participating_list_unreachable" }
+        check(selectNativeChallengeTab("参加中"){ui.activeLabels(pkg=pkg).contains("進行中")}){"participating_tab_not_verified"}
+        check(selectNativeChallengeTab("進行中"){ui.activeNodes(pkg=pkg,foregroundOnly=true).any{it.isVisibleToUser&&it.viewIdResourceName=="$pkg:id/list"}}){"in_progress_tab_not_verified"}
+        check(scrollToTop()){"participating_top_not_verified"}
+        val found=linkedMapOf<String,ChallengeCard>();var previous="";var stable=0
+        repeat(40){page->
+            check(!stop&&AutoAccessibilityService.isConnected()&&TokyoDate.of()==scanDate){"participating_scan_cancelled"}
+            ui.refreshCache()
+            val ns=ui.activeNodes(pkg=pkg,foregroundOnly=true).filter{it.isVisibleToUser}
+            val list=ns.firstOrNull{it.viewIdResourceName=="$pkg:id/list"}?:error("participating_native_list_missing")
+            for(n in ns.filter{it.viewIdResourceName=="$pkg:id/text_name"}){
+                val fields=nativeCardFields(n)
+                val deadline=fields.singleOrNull{it.viewIdResourceName=="$pkg:id/text_period"}?.let{ui.label(it)}
+                val card=Cards.fromTitle(ui.label(n))
+                if(card!=null&&ParticipatingDayPolicy.current(deadline,scanDate)&&st.catOn(card.cat)&&card.meters!=null&&card.meters<=st.kmOf(card.cat)*1000)found[card.key]=card
+            }
+            dumpUi("participating_in_progress_"+run+"_"+page)
+            val signature=dailyPositionSignature()
+            stable=if(signature==previous)stable+1 else 0;previous=signature
+            if(stable>=3&&!list.actionList.any{it.id==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD})return found.values.toList()
+            val moved=list.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);delay(500)
+            if(!moved||dailyPositionSignature()==signature){val(w,h)=screen();swipeListWithFallback(w,h,false)}
+            if(stable>=5&&dailyPositionSignature()==signature)return found.values.toList()
+        }
+        error("participating_in_progress_scan_budget_exhausted")
+    }
+    private val scanDate=TokyoDate.of()
+    var observedDailyTitles=0;private set
+    private val seenDailyTitles=mutableSetOf<String>()
+
     /** Next eligible card from the current category viewport, without resetting to the first page. */
     suspend fun nextFilteredChallenge(cat: Cat, maxMeters: Int, processed: Set<String>): ChallengeCard? {
         check(activeFilteredCategory == cat && ensureListPage()) { "filtered_category_context_lost" }
@@ -280,6 +347,8 @@ class AutomationEngine(
         repeat(60) { page ->
             check(!stop) { "user_stopped" }
             val cards = visibleDailyCards()
+            seenDailyTitles.addAll(cards.map{it.key}); observedDailyTitles=seenDailyTitles.size
+            check(AutoAccessibilityService.isConnected()&&TokyoDate.of()==scanDate){"filtered_scan_disconnected_or_date_changed"}
             when (CategoryViewportPolicy.action(cat, cards.map { it.cat }.toSet(), repairs)) {
                 CategoryViewportAction.KEEP_POSITION -> Unit
                 CategoryViewportAction.RESELECT_CATEGORY -> {

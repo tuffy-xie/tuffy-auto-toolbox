@@ -1,3 +1,4 @@
+# Android / Gradle build output
 *.iml
 .gradle/
 local.properties
@@ -22,3 +23,19 @@ signing.properties
 **/faults/
 **/evidence/
 *.log
+
+# Packaged deliverables: APK / bundles / archives are archived outside the repo
+*.apk
+*.aab
+*.zip
+*.tar
+dist/
+
+# Local-only verification and archive recovery material
+.private/
+private-recovery/
+private-staging/
+.gradle-user-home/
+.android-user-home/
+*.aesgcm
+*.key
