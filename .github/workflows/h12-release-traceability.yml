@@ -1,0 +1,111 @@
+name: H12 Release Traceability
+
+on:
+  push:
+    branches: [ docs/h12-release-20261102 ]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  trace-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_MAIN: 5be68d6f25474708dcfb424deb9aeaea272a6516
+      H12_TAG: v22.0.12-R47
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify merged main and successful exact-commit CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/heads/main --jq .object.sha)" = "$EXPECTED_MAIN"
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/41318606636 > /tmp/h12-main-ci.json
+          python3 - <<'PY'
+          import json, os, pathlib, hashlib
+          run = json.loads(pathlib.Path('/tmp/h12-main-ci.json').read_text())
+          assert run['head_sha'] == os.environ['EXPECTED_MAIN']
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          manifest = json.loads(pathlib.Path('R47_hotfix12_source_manifest.json').read_text())
+          assert manifest['versionCode'] == 34
+          assert manifest['apkSha256'] == 'bc37d89472f2aa154e394401c769ce400a8ec017175d46647ec000e158da663a'
+          files = [f for f in manifest['files'] if f['path'].startswith('app/src/')]
+          assert len(files) == 257
+          for f in files:
+              assert hashlib.sha256(pathlib.Path(f['path']).read_bytes()).hexdigest() == f['sha256'], f['path']
+          build = pathlib.Path('app/build.gradle').read_text()
+          assert 'versionCode 34' in build and '22.0.12-R47' in build
+          print('Verified merged main, successful main CI and all 257 frozen source files')
+          PY
+
+      - name: Create annotated H12 tag without replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Tuffy release automation'
+          git config user.email '156120910+tuffy-xie@users.noreply.github.com'
+          cat > h12-release-notes.txt <<'NOTES'
+          Tuffy H12 — 22.0.12-R47 / versionCode 34
+          
+          Source main commit: 5be68d6f25474708dcfb424deb9aeaea272a6516
+          Preserved archive source: c01387f52f108c2cdea31959f7a8ad37852a0046
+          Production APK SHA256: bc37d89472f2aa154e394401c769ce400a8ec017175d46647ec000e158da663a
+          
+          Validation: independent H checkout 504 JVM tests / 72 suites, zero failures/errors/skips; signed Release built. GitHub PR #2 run 41318128644 and main push run 41318606636 each executed 504 JVM tests with zero failures/errors/skips and built a Debug APK. Build task cache was disabled and tasks forced to execute. The 257 app/src files match the frozen H12 manifest.
+          
+          Device evidence is historical, with manual recovery assistance: 24 challenge joins and 5/5 Boosts, official daily 25/25. Signup, Rakuten bonus and steak darts remain UNCONFIRMED. Continuous low-memory callback recovery and automatic AppInfo exit are not fully accepted; ANR root cause remains unknown. Original 110 Android checks were not rerun. Repository formalization performed no phone operations or new device validation. Join/Boost confirmation is not movement completion or wallet credit.
+          
+          Production APK and corresponding frozen source/tests/evidence remain in the separate NAS archive. No production signing key or local private configuration is stored in Git or required by CI.
+          NOTES
+          if git rev-parse -q --verify "refs/tags/$H12_TAG" >/dev/null; then
+            test "$(git rev-parse "$H12_TAG^{}")" = "$EXPECTED_MAIN"
+            test "$(git cat-file -t "$H12_TAG")" = tag
+            echo 'Existing matching annotated tag retained'
+          else
+            git tag -a "$H12_TAG" "$EXPECTED_MAIN" -F h12-release-notes.txt
+            git push origin "refs/tags/$H12_TAG:refs/tags/$H12_TAG"
+          fi
+
+      - name: Export verifiable Git history without local credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --all --tags
+          git bundle create h12-full-history.bundle --all
+          git bundle verify h12-full-history.bundle
+          python3 - <<'PY'
+          import subprocess, json, os, pathlib, hashlib
+          def git(*args):
+              p = subprocess.run(['git', *args], capture_output=True, text=True)
+              return p.stdout.strip() if p.returncode == 0 else None
+          bundle = pathlib.Path('h12-full-history.bundle')
+          proof = {'expectedMain': os.environ['EXPECTED_MAIN'], 'tag': os.environ['H12_TAG'],
+                   'tagObject': git('rev-parse', 'refs/tags/' + os.environ['H12_TAG']),
+                   'tagTarget': git('rev-parse', os.environ['H12_TAG'] + '^{}'),
+                   'tagType': git('cat-file', '-t', os.environ['H12_TAG']),
+                   'bundleSha256': hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                   'bundleBytes': bundle.stat().st_size, 'bundleVerify': True,
+                   'privateSigningInputsUsed': False, 'phoneOperations': False}
+          pathlib.Path('release-proof.json').write_text(json.dumps(proof, indent=2))
+          print(json.dumps(proof))
+          PY
+
+      - name: Archive release metadata and Git bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h12-release-traceability
+          path: |
+            h12-full-history.bundle
+            h12-release-notes.txt
+            release-proof.json
+          retention-days: 14
+          if-no-files-found: error
