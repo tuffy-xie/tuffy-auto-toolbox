@@ -27,6 +27,7 @@ object Scheduler {
     private fun am(ctx: Context) = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     fun schedule(ctx: Context) {
+        runCatching{AnaProcessRecovery.resumePending(ctx)}
         val st = Prefs.loadBlocking(ctx)
         schedule(ctx, st.hour, st.minute)
     }

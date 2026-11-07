@@ -21,18 +21,50 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
     private var opaqueSince = 0L
     private var revealCount = 0
     private var lastReveal = -100_000L
-    private var revealedPng: ByteArray? = null
-    private var revealedPngAt = 0L
+    private var lastVisualRequestAt = 0L
     private var canvasControlBounds: android.graphics.Rect? = null
     private var canvasControlAt = 0L
     private var canvasControlProof = ""
+    private var stallSample:Triple<Long,IntArray,Int>?=null
     val recentlyRevealed: Boolean get() = android.os.SystemClock.elapsedRealtime() - lastReveal < 5000L
     fun beginFlow(knownStoreSheet: Boolean = false) {
         seenStoreSheet = knownStoreSheet; storeBacks = 0; opaqueSince = 0; revealCount = 0; playbackContinueRequests=0
         pangleReplay = PangleStoreReplayPolicy()
         chromeReturn=PangleChromeReturnPolicy();flowOwner=CheckinRuntime.ownership.owner()
         flowRun=AutoAccessibilityService.currentRunId;flowDate=TokyoDate.of()
-        lastReveal = -100_000L; revealedPng = null; canvasControlBounds = null; canvasControlProof = ""
+        lastReveal = -100_000L; canvasControlBounds = null; canvasControlProof = "";stallSample=null
+    }
+    fun releaseVisualCache(){canvasControlBounds=null;flowOwner=null;stallSample=null}
+    /** Called only after the existing segment timeout; normal identification never calls this. */
+    suspend fun stallProgressKey():String? {
+        fun unavailable(reason:String):String? {Logger.w("ADSTALL","run="+AutoAccessibilityService.currentRunId+" probe_unavailable="+reason+"; original UNKNOWN kept");return null}
+        ui.refreshCache()
+        if(android.os.Build.VERSION.SDK_INT<30||!isStallReviewSurface())return unavailable("unsupported_or_shape")
+        val root=svc.rootInActiveWindow?:return unavailable("root_missing")
+        if(root.packageName?.toString()!=pkg||svc.windows.none{it.id==root.windowId&&(it.isActive||it.isFocused)})return unavailable("window_owner_changed")
+        val visible=ui.foregroundNodes().filter{it.isVisibleToUser&&it.windowId==root.windowId}
+        val canvas=visible.singleOrNull{it.viewIdResourceName=="application-canvas"}
+            ?:visible.singleOrNull{it.viewIdResourceName=="image"}?:return unavailable("canvas_missing_or_ambiguous")
+        val area=android.graphics.Rect();canvas.getBoundsInScreen(area)
+        val now=android.os.SystemClock.elapsedRealtime();val previous=stallSample
+        if(previous==null||now-previous.first>=OpaqueRecoveryPolicy.STALL_SAMPLE_MS){
+            kotlinx.coroutines.delay(OpaqueRecoveryPolicy.stallCaptureDelay(lastVisualRequestAt,now))
+            val pixels=ui.inspectBitmap(onFailure={code->Logger.w("ADSTALL","run="+AutoAccessibilityService.currentRunId+" screenshot_error="+code+"; no restart proof")}) { bitmap->
+                if(area.width()<16||area.height()<16||!android.graphics.Rect(0,0,bitmap.width,bitmap.height).contains(area))null
+                else IntArray(256){i->bitmap.getPixel(area.left+(area.width()*(.1+.8*((i%16)+.5)/16)).toInt(),
+                    area.top+(area.height()*(.1+.8*((i/16)+.5)/16)).toInt())}
+            }?:return unavailable("bitmap_or_bounds_unavailable")
+            val sequence=(previous?.third?:0)+if(previous!=null&&OpaqueRecoveryPolicy.visualProgress(previous.second,pixels))1 else 0
+            stallSample=Triple(android.os.SystemClock.elapsedRealtime(),pixels,sequence)
+        }
+        val semantic=visible.map{ui.label(it)}.filter{it.isNotBlank()}.take(12).joinToString("|"){it.take(160)}
+        return "${root.windowId}:${AutoAccessibilityService.foregroundActivity}:${stallSample?.third}:$semantic"
+    }
+    /** Observation only. This must never authorize a reveal touch or a painted control tap. */
+    fun isStallReviewSurface():Boolean {
+        if(ui.currentPackage()!=pkg)return false
+        val ids=ui.foregroundNodes().filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet()
+        return OpaqueRecoveryPolicy.stallSurface(AutoAccessibilityService.foregroundActivity,ids)
     }
     fun isOpaquePlayable(): Boolean {
         if (ui.currentPackage() != pkg) return false
@@ -52,16 +84,13 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         val x = r.centerX(); val y = r.centerY()
         if (ui.foregroundNodes().any {
             val b = android.graphics.Rect(); it.getBoundsInScreen(b)
-            ControlRevealTarget.blocks(it.isVisibleToUser && it.isClickable, b.contains(x, y), ui.label(it),
-                b.width().toDouble() * b.height() / (r.width().toDouble() * r.height()))
+            ControlRevealTarget.blocks(it.isVisibleToUser && it.isClickable, b.contains(x, y))
         }) return false
         revealCount++; lastReveal = now
         Logger.i("ADREVEAL", "single tap on observed canvas count=$revealCount bounds=$r point=$x,$y")
         ui.tap(x, y)
         kotlinx.coroutines.delay(120)
-        revealedPng = ui.captureVisual(includePng = true).png
-        revealedPngAt = android.os.SystemClock.elapsedRealtime()
-        revealedPng?.let { Evidence.writeBytes(svc, "ad_${AutoAccessibilityService.currentRunId}_${lastReveal}_controls_reveal_${revealCount}.png", it) }
+        Evidence.capture(svc,ui,"ad_${AutoAccessibilityService.currentRunId}_${lastReveal}_controls_reveal_${revealCount}.png")
         return true
     }
     /** A painted control uses its observed glyph bounds, never the entire canvas centre. */
@@ -78,32 +107,27 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         if (revealCount == 0 || !isOpaquePlayable()) return null
         val canvas = ui.foregroundNodes().firstOrNull { it.isVisibleToUser && it.isEnabled && it.viewIdResourceName == "application-canvas" } ?: return null
         val r = android.graphics.Rect(); canvas.getBoundsInScreen(r)
-        var png = if (android.os.SystemClock.elapsedRealtime() - revealedPngAt < 1200L) revealedPng else null
-        if (png == null) {
-            png = ui.captureVisual(includePng = true).png ?: return null
-            revealedPng = png; revealedPngAt = android.os.SystemClock.elapsedRealtime()
-        }
-        val bitmap = android.graphics.BitmapFactory.decodeByteArray(png, 0, png.size) ?: return null
-        val result = try {
+        lastVisualRequestAt=android.os.SystemClock.elapsedRealtime()
+        val result = ui.inspectBitmap { bitmap ->
             val height = (r.height() * .22).toInt()
             if (r.left < 0 || r.top < 0 || r.width() <= 0 || height <= 0 || r.right > bitmap.width || r.top + height > bitmap.height) null else {
                 val pixels = IntArray(r.width() * height)
                 bitmap.getPixels(pixels, 0, r.width(), r.left, r.top, r.width(), height)
                 CanvasAdControl.find(r.width(), height, pixels)
             }
-        } finally { bitmap.recycle() } ?: return null
+        } ?: return null
         // Triangle/bar is also used by the observed Google Play promotion pill.
         // Geometry alone cannot authorize a skip tap.
         if (!CanvasControlPolicy.canTap(result.kind)) return null
         val b = result.bounds
         canvasControlBounds = android.graphics.Rect(r.left+b.left, r.top+b.top, r.left+b.right, r.top+b.bottom)
-        canvasControlAt = revealedPngAt
+        canvasControlAt = lastVisualRequestAt
         observedTapOnly = true
         val proof = result.kind + ":" + canvasControlBounds
         if (proof != canvasControlProof) {
             canvasControlProof = proof
             Logger.i("ADCLOSE", "observedPaintedCanvasControl=" + result.kind + " bounds=" + canvasControlBounds)
-            Evidence.writeBytes(svc, "ad_" + AutoAccessibilityService.currentRunId + "_" + canvasControlAt + "_painted_" + result.kind + ".png", png)
+            Evidence.capture(svc,ui,"ad_"+AutoAccessibilityService.currentRunId+"_"+canvasControlAt+"_painted_"+result.kind+".png")
         }
         return canvas
     }
@@ -141,8 +165,7 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         val home = seenStoreSheet && !AdSignals.playSheet(ui.currentPackage(), l) && AdSignals.playHome(ui.currentPackage(), l)
         if (pangleReplay.shouldReturn(home)) {
             Evidence.write(svc, "ad_" + AutoAccessibilityService.currentRunId + "_pangle_store_replay.txt", pangleReplay.description())
-            ui.captureVisual(includePng = true).png?.let { Evidence.writeBytes(svc,
-                "ad_" + AutoAccessibilityService.currentRunId + "_pangle_store_replay.png", it) }
+            Evidence.capture(svc,ui,"ad_"+AutoAccessibilityService.currentRunId+"_pangle_store_replay.png")
             if (ui.launchApp(pkg)) {
                 pangleReplay.markReturned()
                 Logger.i("ADSTORE", "same Pangle document repeated after store return; launch ANA once, no receipt inferred")
@@ -240,24 +263,34 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                 UnityClosePolicy.labelledEndControl(ui.label(n),n.className.toString(),n.isClickable,activeLabels,
                     b.left,b.top,b.width(),b.height(),m.widthPixels,m.heightPixels,m.density)
         }
-        activeNodes.firstOrNull{it.isVisibleToUser&&it.isEnabled&&AdSignals.closeLabel(ui.label(it))&&unitySafe(it)}?.let{return it}
+        val googleIds=if(google)activeNodes.filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet() else emptySet()
+        fun labelledClose(n:android.view.accessibility.AccessibilityNodeInfo):Boolean {
+            if(!n.isVisibleToUser||!n.isEnabled||!AdSignals.closeLabel(ui.label(n))||!unitySafe(n))return false
+            if(!google)return true
+            val b=android.graphics.Rect();n.getBoundsInScreen(b)
+            return !GoogleDismissPolicy.creativeClose(true,googleIds,n.viewIdResourceName,b.top,svc.resources.displayMetrics.heightPixels)
+        }
+        // SDK stages precede generic HTML Close labels; an advance never confirms a reward.
+        if(google){
+            fun advance(n:android.view.accessibility.AccessibilityNodeInfo)=n.isVisibleToUser&&n.isEnabled&&
+                GoogleDismissPolicy.advanceControl(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,
+                    googleIds,n.className.toString(),n.isClickable,ui.label(n))
+            GoogleDismissPolicy.stageControl(activeNodes,
+                dismiss={n->n.isVisibleToUser&&n.isEnabled&&GoogleDismissPolicy.noThanks(ui.currentPackage(),
+                    AutoAccessibilityService.foregroundActivity,googleIds,n.viewIdResourceName,n.className.toString(),n.isClickable,
+                    (0 until n.childCount).mapNotNull{i->n.getChild(i)?.takeIf{it.isVisibleToUser}?.let{ui.label(it)}})},
+                advance=::advance,close=::labelledClose)?.let{
+                observedTapOnly=true;observedAdvanceControl=advance(it)
+                Logger.i("ADCLOSE","sdk=google stageControl advance="+observedAdvanceControl+" id="+it.viewIdResourceName)
+                return it
+            }
+        }
+        activeNodes.firstOrNull(::labelledClose)?.let{return it}
         activeNodes.firstOrNull { it.isVisibleToUser && it.isEnabled &&
             AdSignals.pangleNativeClose(AutoAccessibilityService.foregroundActivity, ui.label(it)) }?.let {
             observedTapOnly = true
             Logger.i("ADCLOSE", "sdk=pangle observedNativeCloseLabel=" + ui.label(it))
             return it
-        }
-        // Observed Google next-stage control; this action never confirms completion.
-        if (google) {
-            val ids=activeNodes.filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet()
-            activeNodes.filter{n->n.isVisibleToUser&&n.isEnabled&&GoogleDismissPolicy.noThanks(ui.currentPackage(),
-                AutoAccessibilityService.foregroundActivity,ids,n.viewIdResourceName,n.className.toString(),n.isClickable,
-                (0 until n.childCount).mapNotNull{i->n.getChild(i)?.takeIf{it.isVisibleToUser}?.let{ui.label(it)}})}
-                .singleOrNull()?.let{observedTapOnly=true;Logger.i("ADCLOSE","sdk=google observedDismissButton=NO_THANKS");return it}
-            activeNodes.filter { it.isVisibleToUser && it.isEnabled && it.isClickable &&
-                GoogleDismissPolicy.advanceControl(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,
-                    ids,it.className.toString(),it.isClickable,ui.label(it)) }
-                .singleOrNull()?.let { observedTapOnly = true; observedAdvanceControl=true; Logger.i("ADCLOSE", "sdk=google observedSkipButton=true"); return it }
         }
         if (mbridgeSurface()) {
             val m=svc.resources.displayMetrics
@@ -311,10 +344,8 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                     r.width() / density in 12f..64f && r.height() / density in 12f..64f)
         }
         if (candidates.isEmpty()) return null
-        val png = (if (android.os.SystemClock.elapsedRealtime() - revealedPngAt < 1500L) revealedPng else null)
-            ?: ui.captureVisual(includePng = true).png ?: return null
-        val bmp = android.graphics.BitmapFactory.decodeByteArray(png, 0, png.size) ?: return null
-        try {
+        lastVisualRequestAt=android.os.SystemClock.elapsedRealtime()
+        val matched=ui.inspectBitmap { bmp ->
             val matches = candidates.filter { n ->
                 if(!unitySafe(n))return@filter false
                 val r = android.graphics.Rect(); n.getBoundsInScreen(r)
@@ -325,15 +356,15 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                         pangle && AdCloseIcon.isWhiteForward(r.width(), r.height(), pixels)
                 }
             }
-            val matched = matches.singleOrNull()
+            matches.singleOrNull()
+        }
             observedTapOnly = pangle || fyber
             if (matched != null) {
                 val r = android.graphics.Rect(); matched.getBoundsInScreen(r)
                 Logger.i("ADCLOSE", "run=" + AutoAccessibilityService.currentRunId + " sdk=" + (if (fyber) "fyber_native" else if (pangle) "pangle" else "five") + " observedVisualEndControl=true bounds=" + r)
-                Evidence.writeBytes(svc, "ad_" + AutoAccessibilityService.currentRunId + "_five_close_observed.png", png)
+                Evidence.capture(svc,ui,"ad_"+AutoAccessibilityService.currentRunId+"_five_close_observed.png")
             }
             return matched
-        } finally { bmp.recycle() }
     }
 
 }

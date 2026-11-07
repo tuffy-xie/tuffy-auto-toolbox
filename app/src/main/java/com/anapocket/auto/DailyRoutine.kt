@@ -1,7 +1,6 @@
 package com.anapocket.auto
 
 import android.content.Context
-import android.os.PowerManager
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -35,8 +34,8 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
     suspend fun run(run:String,manual:Boolean,challengesOnly:Boolean=false):Pair<RoutineOutcome,String>{
         val date=TokyoDate.of();val settings=Prefs.loadBlocking(svc)
         val overlay=OverlayKeeper(svc)
-        @Suppress("DEPRECATION") val wake=(svc.getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK,"ana:daily_routine")
-        var ad:DailyAdResult?=null
+        // Snapshot before this run's STARTUP progress replaces the previous run's steps.
+        var previous=RoutineStore.read(svc,date)
         val port=object:RoutinePort{
             override fun connected()=AutoAccessibilityService.isConnected()
             override fun stopped()=AutoAccessibilityService.stopRequested
@@ -44,9 +43,13 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
             override suspend fun progress(stage:String,result:RoutineStepResult){
                 RunForegroundService.start(svc,result.detail)
                 RoutineStore.update(svc,date,run,stage,if(result.state=="RUNNING")"RUNNING" else result.state,result.detail)
+                AnaProcessRecovery.routineProgress(svc,RoutineStore.read(svc,date))
                 Logger.i("ROUTINE","run=$run stage=$stage state="+result.state+" "+result.detail)
             }
             override suspend fun startup():RoutineStepResult{
+                if(MaxBoostCoordinator.visible(svc)||MaxBoostCoordinator.hasPending(svc,date))return RoutineStepResult("DEFERRED","先完成已升满挑战的确认和分类恢复，不重新观看广告")
+                val existingChallenge=TravelSelection.hasSelectedPending(svc,date)||TravelSelection.hasUnresolvedAd(svc,date)
+                if(RoutineRecoveryNavigation.reviewChallengeFirst(challengesOnly,existingChallenge))return RoutineStepResult("DEFERRED","先核对原出行观看及官方续接入口，未启动新的签到广告")
                 if(challengesOnly){val r=StartupFlow(svc).prepare(run,allowLoginSubmission=false);return RoutineStepResult(if(r.ok)"REVIEW_ONLY" else "BLOCKED",if(r.ok)"仅重新核对出行任务；签到记录保留" else r.reason,r.ok)}
                 if(TravelSelection.hasSelectedPending(svc,date)||TravelSelection.hasUnresolvedAd(svc,date))return RoutineStepResult("DEFERRED","先恢复已记录的出行任务，未启动新的签到广告")
                 if(OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED})
@@ -56,27 +59,47 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
             }
             override suspend fun challenges():RoutineStepResult{
                 val latest=Prefs.loadBlocking(svc)
-                val rows=ChallengeStore.rows(svc,date)
-                val pending=(0 until rows.length()).map{rows.getJSONObject(it)}.any{it.optString("state") !in setOf("BOOST_MAX_CONFIRMED","BOOST_MAX_OBSERVED")}
-                val selected=TravelSelectionPolicy.queue(TravelSelectionPolicy.categoryOrder,latest).filter{pending||!ChallengeScanStore.complete(svc,date,it,latest.kmOf(it))}
+                val completionPending=MaxBoostCoordinator.hasPending(svc,date)||MaxBoostCoordinator.visible(svc)
+                val configured=TravelSelectionPolicy.queue(TravelSelectionPolicy.categoryOrder,latest)
+                val pending=completionPending||ChallengeStore.blocksIndependentNavigation(svc,date)
+                val proofs=configured.associateWith{ChallengeScanStore.resumeState(svc,date,it,latest.kmOf(it))}
+                val reused=configured.filter{cat->
+                    RoutinePolicy.reuseChallenges(TokyoDate.of()==date,!challengesOnly&&latest.dayToday&&!latest.dayTomorrow,
+                        proofs[cat]!=null,pending)
+                }.toSet()
+                val partialReuse=reused.any{proofs[it]=="PARTIALLY_COMPLETED"}
+                val selected=configured.filterNot{it in reused}
+                if(reused.isNotEmpty())Logger.i("ROUTINERESUME","run=$run same_day_reused_categories="+reused.joinToString(","){it.name+":"+proofs[it]}+" skip_reused_category_ui=true remaining="+selected.joinToString(","){it.name})
                 Cat.values().filter{!latest.catOn(it)}.forEach{TravelSelection.audit(svc,date,run,it)}
-                if(Cat.values().none{latest.catOn(it)}&&!TravelSelection.hasUnresolvedAd(svc,date))return RoutineStepResult("DISABLED_BY_USER","出行分类全部取消；签到与每日广告按原设置继续")
-                if(selected.isEmpty()&&!TravelSelection.hasUnresolvedAd(svc,date))return RoutineStepResult("ALREADY_DONE","已开启的交通任务范围已处理，未重复观看")
+                if(Cat.values().none{latest.catOn(it)}&&!TravelSelection.hasUnresolvedAd(svc,date)&&!completionPending)return RoutineStepResult("DISABLED_BY_USER","出行分类全部取消；签到与每日广告按原设置继续")
+                if(selected.isEmpty()&&!pending){
+                    if(partialReuse&&!ChallengeTaskController(svc).isolateForIndependentDaily(run+"_reuse_isolated",date))
+                        return RoutineStepResult("BLOCKED","已隔离的出行观看仍需安全原生页面；未重播广告",false)
+                    return RoutineStepResult(if(partialReuse)"PARTIALLY_COMPLETED" else "ALREADY_DONE",
+                        if(partialReuse)"完整扫描已保存；隔离项仍UNKNOWN，未重复扫描或观看" else "已开启的交通任务范围已处理，未重复观看")
+                }
                 val child="CH"+java.util.UUID.randomUUID().toString()
-                val result=ChallengeTaskController(svc).run(child,selected,allCards=true)
-                val complete=TravelSelectionPolicy.queue(TravelSelectionPolicy.categoryOrder,Prefs.loadBlocking(svc)).all{ChallengeScanStore.complete(svc,date,it,Prefs.loadBlocking(svc).kmOf(it))}&&!TravelSelection.hasSelectedPending(svc,date)
-                return RoutineStepResult(if(complete)"DONE" else "BLOCKED",if(complete)"已核对所选分类官方状态，接取与Boost分别保存" else result.lineSequence().firstOrNull().orEmpty(),complete)
+                val result=ChallengeTaskController(svc).run(child,selected,allCards=true,reuseCompleted=!challengesOnly)
+                if(!result.continueRun||ChallengeStore.blocksIndependentNavigation(svc,date)||MaxBoostDialogPolicy.blocksRoutine(result.detail,MaxBoostCoordinator.hasPending(svc,date)||MaxBoostCoordinator.visible(svc)))
+                    return RoutineStepResult("BLOCKED",result.detail,false)
+                return if(partialReuse&&result.state in setOf("DONE","ALREADY_DONE"))result.copy(state="PARTIALLY_COMPLETED") else result
+
             }
             override suspend fun ads():RoutineStepResult{
                 if(challengesOnly)return RoutineStepResult("UNCHANGED","本次仅处理出行；每日广告记录保持，官方 "+(OfficialAdStore.counter(svc,date)?.toString()?:"未核对")+"/25")
                 if(!settings.adEnabled)return RoutineStepResult("DISABLED","每日广告已在设置中关闭")
+                val official=OfficialAdStore.observation(svc,date)
+                if(RoutinePolicy.reuseAds(previous?.optString("date")==date&&official?.optString("date")==date,
+                    previous?.optJSONObject("steps")?.optJSONObject("ADS")?.optString("state"),
+                    OfficialAdStore.counter(svc,date),!OfficialAdStore.allResolved(svc,date)))
+                    return RoutineStepResult("ALREADY_DONE","同日官方25/25已确认，未重新进入每日广告")
                 if(OfficialAdStore.attempts(svc,date).none{!it.terminal||it.state==AdState.UNCONFIRMED}){
                     val gate=StartupFlow(svc).prepare(run+"_before_ads",launch=false)
                     if(!gate.ok)return RoutineStepResult("BLOCKED",gate.reason,false)
                 }
                 val child="AD"+java.util.UUID.randomUUID().toString()
                 val r=DailyAdTaskController(svc).run(child,if(manual)"routine-manual" else "routine-schedule",manualNew=manual)
-                ad=r;DailyAdStore.saveResult(svc,r)
+                DailyAdStore.saveResult(svc,r)
                 val own=DailyAdStore.allAttempts(svc,date).filter{it.runId==child}
                 val ok=OfficialLoadFailurePolicy.routineAllowed(r.limitReached,r.blockedReason,own,OfficialAdStore.reviewedKeys(svc,date))
                 return RoutineStepResult(if(!ok)"BLOCKED" else if(r.limitReached)"LIMIT_REACHED" else "DONE" ,
@@ -85,20 +108,19 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
         }
         val result:RoutineOutcome
         try{
-            val km=svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
-            val pm=svc.getSystemService(Context.POWER_SERVICE) as PowerManager
             overlay.show()
             val safety=AccountSafetyStore.pending(svc)
             val readiness=if(safety==null)DeviceReady.ensure(svc,run) else DeviceReadyResult(false,"account_safety_human_required")
             if(!readiness.ready)result=RoutineOutcome("BLOCKED",if(safety!=null)AccountSafety.message(svc) else readiness.reason,emptyMap())
             else {
-                wake.acquire(8*60*60*1000L)
+                /* No multi-hour wake hold: native readiness and active UI ownership remain bounded. */
                 var outcome=RoutineSequence(port).run();var restarts=0
                 while(outcome.state=="BLOCKED"&&!AutoAccessibilityService.stopRequested&&restarts<3){
-                    val stage=outcome.steps.keys.lastOrNull()?:break
+                    val stage=if(outcome.detail.contains("MAX_BOOST_"))"MAX_BOOST" else outcome.steps.keys.lastOrNull()?:break
                     if(!StalledAdRestart.recover(svc,date,run,stage))break
                     restarts++
                     // Re-evaluate persisted tasks. Unknown rows and official resume proofs retain their original identity.
+                    previous=RoutineStore.read(svc,date)
                     outcome=RoutineSequence(port).run()
                 }
                 result=outcome
@@ -109,7 +131,7 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
             RoutineStore.finish(svc,date,run,failed,summary)
             Evidence.write(svc,"routine_"+run+"_result.json",RoutineStore.read(svc,date).toString())
             return failed to summary
-        }finally{overlay.hide();if(wake.isHeld)wake.release()}
+        }finally{overlay.hide()}
         val summary=RoutineSummary.build(svc,date,result,run);RoutineStore.finish(svc,date,run,result,summary)
         Evidence.write(svc,"routine_"+run+"_result.json",RoutineStore.read(svc,date).toString())
         return result to summary

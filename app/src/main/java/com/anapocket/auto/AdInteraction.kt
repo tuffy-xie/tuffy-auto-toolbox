@@ -75,10 +75,16 @@ interface AdInteractionPort {
     suspend fun frame(): AdFrame
     suspend fun close(): Boolean
     suspend fun dismissReceipt()
+    /** Must finish successfully before diagnostics, receipt dismissal or subsequent irreversible actions. */
+    suspend fun receiptObserved(frame:AdFrame,before:Int) {}
+    suspend fun completionObserved(frame:AdFrame,before:Int,reward:Boolean) {}
     suspend fun pause(ms: Long) { delay(ms) }
     suspend fun state(state: AdState)
     suspend fun progress(part: AdPart) {}
     suspend fun observationBudgetChanged(ms: Long) {}
+    /** Optional, exception-only probe. Null means no reliable stall proof, not permission to restart. */
+    suspend fun stallProgressKey():String? = null
+    suspend fun stallReviewed(quietMs:Long,key:String) {}
     suspend fun diagnostic(reason:String) {}
 }
 
@@ -98,6 +104,8 @@ class AdInteraction(private val port: AdInteractionPort) {
         var partStartedAt = start
         var observedPart: AdPart? = null
         var nativePangleWait = false
+        var stallKey:String? = null
+        var stallQuietSince=0L
         var lastClose = Long.MIN_VALUE / 2
         suspend fun emit(s: AdState) {
             if (lastState != s) { lastState = s; port.state(s) }
@@ -106,7 +114,14 @@ class AdInteraction(private val port: AdInteractionPort) {
             if (port.stopped()) return AdReceipt(AdState.UNCONFIRMED, reward = reward, reason = port.stopReason())
             val f = port.frame()
             if(f.manualRequired)return AdReceipt(AdState.BLOCKED,reward=reward,reason="account_safety_human_required")
-            if(diagnostic.shouldCapture(port.now()-start,f.adSurface,!f.entry&&!f.receipt&&!f.closeAvailable)) port.diagnostic("slow_or_unrecognized_ad")
+            // A new foreground receipt must follow a departure from the entry page.
+            if (!f.blocked && !f.error && leftEntry && f.anaForeground && f.receipt && !reward) {
+                port.receiptObserved(f,before)
+                reward = true
+                emit(AdState.REWARD_CONFIRMED)
+                port.dismissReceipt()
+            }
+            if(!f.receipt && diagnostic.shouldCapture(port.now()-start,f.adSurface,!f.entry&&!f.receipt&&!f.closeAvailable)) port.diagnostic("slow_or_unrecognized_ad")
             val progress = f.part
             if (f.anaForeground && f.adSurface && progress != null && progress != observedPart) {
                 val previous = observedPart
@@ -121,24 +136,30 @@ class AdInteraction(private val port: AdInteractionPort) {
                 port.observationBudgetChanged(300_000L)
             }
             val segmentBudget = if (nativePangleWait && observedPart == null) 300_000L else 95_000L
-            if (port.now() - partStartedAt >= segmentBudget) return AdReceipt(AdState.UNCONFIRMED, reward = reward,
-                reason = if (observedPart == null || observedPart!!.total == 1) "ad_timeout_95s" else "ad_part_timeout_95s")
+            if (port.now() - partStartedAt >= segmentBudget &&
+                !(leftEntry&&f.anaForeground&&f.entry&&!f.blocked&&!f.error&&reward&&f.watched==before+1)) {
+                val key=if(!f.blocked&&!f.error&&!f.manualRequired&&f.adSurface)port.stallProgressKey() else null
+                if(key!=null){
+                    if(key!=stallKey){stallKey=key;stallQuietSince=port.now()}
+                    val quiet=port.now()-stallQuietSince
+                    if(quiet>=OpaqueRecoveryPolicy.STALL_QUIET_MS){
+                        port.stallReviewed(quiet,key)
+                        return AdReceipt(AdState.UNCONFIRMED,reward=reward,reason="ad_timeout_95s")
+                    }
+                }else return AdReceipt(AdState.UNCONFIRMED,reward=reward,
+                    reason=if(observedPart==null||observedPart!!.total==1)"ad_timeout_95s" else "ad_part_timeout_95s")
+            }
             if (f.blocked) return AdReceipt(AdState.BLOCKED, reward = reward, reason = "accessibility_or_keyguard")
             if (f.error && f.anaForeground) return AdReceipt(AdState.FAILED, reward = reward, reason = "official_error_dialog")
             if (f.adSurface && !f.entry && !f.receipt) {
                 leftEntry = true
                 emit(AdState.AD_PLAYING)
             }
-            // A new foreground receipt must follow a departure from the entry page.
-            if (leftEntry && f.anaForeground && f.receipt && !reward) {
-                reward = true
-                emit(AdState.REWARD_CONFIRMED)
-                port.dismissReceipt()
-            }
             if (leftEntry && f.anaForeground && f.entry) {
                 emit(AdState.AD_RETURNED)
                 if (returnedAt == null) returnedAt = port.now()
                 if (f.watched != null && f.watched == before + 1) {
+                    port.completionObserved(f,before,reward)
                     emit(AdState.AD_FINISHED)
                     completed = true
                     after = f.watched

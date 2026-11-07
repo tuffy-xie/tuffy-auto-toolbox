@@ -1,3 +1,124 @@
+## Latest pending receipt + clock result (2026-11-04)
+
+Phone original code44/15808a00 remains installed; current CAR40 third-Boost150pt modal and UNKNOWN unchanged. Fresh formal backup confirms19 joined/18 at5/5/111 receipts, local daily0; no new Routine/ad/install. Current cached panel cannot prove NO_GAIN and warns dismissing loses Boost qualification. Do not replay, abandon or install just to force progress. Independent tasks in same ANA remain BLOCKED. Original native schedules/Enabled+Bound retained.
+
+Independent source9034abf candidate hardens submitted-unknown isolation and original Boost receipt commits, preserving safe native-detail navigation. Final617/82 UNIT_PASS and signed reviewed APK exist; candidate DEVICE/NATURAL NOT_TESTED, NOT_INSTALLED. Original source/candidates/H12 refs preserved. Read PENDING_CLOCK_RECOVERY_REPORT.md and VERIFICATION.json; use final reviewed APK, not the earlier intermediate artifact.
+
+Clock finding corrected with external evidence: phone UTC agrees with NICT stratum1, Microsoft NTP and HTTPS; WINDOWS is fast7214.34s and configured NoSync. Phone not changed. Formal Windows sync failed service-management access; administrator steps are in report. Native90s dispatch-only alarm really delivered, no business started. Next natural00:03 is NOT_TESTED; do not conflate test delivery with autonomous business readiness. Old native Bot summary15:30:48 was sent successfully; no new final push, browser target creation failed before input. No model-side automatic continuation exists.
+
+## Latest 2026-11-04 AppLovin authorized icon result (supersedes old live-ad state)
+
+Ad closed through explicitly authorized one left-icon test → Google Play → bounded store return → fresh endcard X → ANA. This is NOT proven Skip; do not generalize a CTA/wake tap. code44 unchanged. Formal export19 joined/18 at5/5/111 challenge receipts. CAR40 original key/date/run/index/start remains byte-for-byte unchanged UNKNOWN; official third Boost150pt did not advance. One production Continue stopped BLOCKED/unconfirmed_challenge_requires_evidence_review, no ad replay. Preserve Boost panel rights; noやめる/back/kill/install/reset. Further independent tasks cannot safely navigate away under current authorization. No product-source patch/new APK. Phone and host clocks differ about2h; automatic clock settings unchanged. Native schedules/Enabled+Bound preserved; independent readiness BLOCKED and NATURAL_RUN NOT_TESTED. Detailed final Telegram delivery NOT_TESTED (browser connection failed; window approval timed out); native routine summary only queued. Read APPLOVIN_SKIP_FINAL_REPORT.md and APPLOVIN_SKIP_FINAL_VERIFICATION.json before any action. Extra retry authorization is consumed; never silently grant another reveal. No model-side automatic continuation configured.
+
+<!-- APPLOVIN_BLANK_REVIEW_20261104 -->
+## 11月4日09:07 JST：实装code44，AppLovin仍BLOCKED
+
+功能代码15808a006de5a06e93989c1fd8a251627e7c734d；本轮产品源码0改动、安装0、点击0。新鲜只读42节点证实全屏可点击end卡含PLAY NOW，无法证明安全空白；X未出现，不强点隐藏/0尺寸SDK控件，不强停/重装或重播原广告。原CAR40/CH37ba687e-fb6e-4f71-bb5a-8cf9ddd7feb9/index4/start1793729755524/DISPATCHED仍UNCONFIRMED，业务日和当前日均2026-11-04。今日19接取、18项5/5、111挑战回执；每日本机0/官方NOT_TESTED；本日1＋历史3 UNKNOWN保护。上轮真实恢复已完成14项新5/5，原WALK3接取一次补记；本次未再恢复Routine，不能套用上轮ROUTINE_RESUMED。
+
+完整610项回归本轮实际重跑UNIT_PASS，不代表本AppLovin DEVICE_PASS。当前无障碍Enabled+Bound、Tuffy同PID1900、FGS已停；ANA7147/8501d7f/task1687仍活跃SDK。未为清理切走/退出/锁屏。原自动开关仍ON，11/4 23:58保护、11/5 00:03 ANA及WorkManager/权限保留；无人值守准备BLOCKED，自然运行和拔USB NOT_TESTED。读节点用临时FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES=1只读采集器，未安装APK/抑制Tuffy，无新常驻服务/线程/控制器。新通知渠道/ID见独立APPLOVIN_P0_TELEGRAM_DELIVERY.json，不能把网页发送冒充手机Bot。完整报告H14_APPLOVIN_BLANK_REVIEW_20261104.md、验证JSON及独立NAS归档保留；下方旧“仍code43/未安装”等为历史。
+
+下一步先重新读取真机。只有当前真实SDK关闭/明确阶段控件可验证安全时才操作；绿色空白仍在全屏推广层时不点击。官方返回后，按原run/index/start/业务日通过生产接口复核原attempt；原UNKNOWN不得重放。跨日不能把旧记录并入新日。当前无可证实安全退出，需可靠的官方/人工安全出口；不得仅按95秒或静止画面强关未结算SDK。
+
+<!-- APPLOVIN_BLANK_REVIEW_20261104_END -->
+
+<!-- INTEGRATED_RECOVERY_20261104 -->
+## 11月4日恢复链集成（手机仍43，未安装）
+
+P0原徒歩3km/index1/start1793718980474仍UNKNOWN，官方成功/首次Boost面板保留；正式release无法直接run-as读取SQLite，也没有外部生产补记入口。未点击、切走/关闭面板、重放、安装或强停，Routine仍BLOCKED。独立分支fix/h14-integrated-recovery-20261104审查后集成2201631与a650163，并扩展原核对入口处理精确身份可证的迟到回执；同步重读原行后沿FULL保存，幂等不重复派发。完整603项UNIT_PASS，同签名code44集成APK独立保存；候选DEVICE_PASS/NATURAL_RUN_PASS、实际SQLite进程中断均NOT_TESTED。原未决业务及完整升级备份门槛未满足，不能安装或宣称手机能自动续跑。Home/广告有界恢复、Google阶段关闭、5/5、25上限和收尾保留；旧分支和H12不动。详见H14_INTEGRATED_RECOVERY_20261104.md及独立交付INTEGRATED_RECOVERY_VERIFICATION.json。下方为旧阶段历史。
+
+<!-- INTEGRATED_RECOVERY_20261104_END -->
+
+<!-- CODE44_CANDIDATE_CURRENT -->
+## code44 独立候选（2026-11-03；未安装）
+
+本轮用户已明确授权基于真实MOV20故障作最小改进。独立分支fix/h14-observed-stall-recovery-20261103完成95秒异常进展复核、保留两类有界ANA重开、纯Home安全重开、精确任务身份及共享续接结果观察；删除两个从未acquire的锁对象。完整JVM回归UNIT_PASS；APK原签名VERIFIED。手机仍43，不改自动开关/配置/UNKNOWN，不看新广告、不重跑任务；候选DEVICE_PASS/NATURAL_RUN_PASS均NOT_TESTED。匿名全局弹窗仍无唯一身份时保留UNKNOWN/BLOCKED，不承诺全部自动恢复。既有43定时器仍开启，已知旧恢复风险尚未从手机移除。冻结候选，下一步是受控真机验证，不直接安装或继续版本开发。H12 main/tag、code43分支/实装APK及旧归档保留；详见H14_CODE44_RECOVERY_REVIEW_20261103.md及独立交付CODE44_VERIFICATION.json。下方code43/42“本轮不开发”均为历史阶段记录，不是本次授权结论。
+
+<!-- CODE44_CANDIDATE_CURRENT_END -->
+
+<!-- CODE43_FINAL_ACCEPTANCE_CURRENT -->
+## code43 最终结束验收（2026-11-03 JST）
+
+本轮RT01398ae2-6336-4933-b0c7-b12a566c816b已于12:59:56正常DONE，13:00退出锁屏和FGS停止。正式17:43导出核对24接取/24项5Boost、144挑战回执＋25每日回执＝169，官方当前页25/25，四分类COMPLETED/bothLists=true。签到原UNCONFIRMED保留，整日汇总PARTIAL，不是全部历史清账。11:24后Tuffy新增LOW_MEMORY0，同PID约96分钟。自动恢复确实一次成功，但recoverOpaque在未结算playable画布上移除ANA，与既定安全门冲突，续接页也未提供唯一任务身份；无人值守安全验收BLOCKED。只提出收紧现有入口/恢复身份的最小方案，本轮不改产品源码、不装APK、不重启任务、不看新广告，不建code44。code43/H12及原候选保留。原23:58保护和次日00:03定时器仍在、自动开关ON；尚未获暂停授权，不能把验收BLOCKED误作定时器已停用。18:00:33锁屏纯通知闹钟实际投递，无业务启动；明天自然运行与拔USB NOT_TESTED。当前已安全锁屏，仅保留正常无障碍服务；ANA最近任务移除，后台进程没有强杀。详见[H14_CODE43_FINAL_ACCEPTANCE_20261103.md](H14_CODE43_FINAL_ACCEPTANCE_20261103.md)。后续先读手机，再决定安全规则与调度开关，不凭旧running快照再次点继续。
+
+<!-- CODE43_FINAL_ACCEPTANCE_CURRENT_END -->
+
+<!-- H14_AUTHORIZED_RECOVERY_CURRENT -->
+## 最终授权后真机恢复：2026-11-03 11:45:07 JST
+
+VERIFIED：原匿名再開按用户授权只点1次，原BIKE1km/11月3日/5Boost/400pt已由官方详情确认。code42已真实安装并保留54条；其后真机发现旧MainActivity宿主误判，最小修复code43已原签名正常安装，哈希f6f8ccf9…，仅Tuffy Enabled+Bound，32项必要回归UNIT_PASS。DEVICE_PASS：新BIKE2km/3km连续完整闭环，当前已有5项新任务完整闭环、85回执、14项5/5。手机原生RT01398ae2-6336-4933-b0c7-b12a566c816b / CH64e29b6a-59cc-4e95-b644-7afead2ca77b 仍在执行，不要在活跃广告时安装、重启、导出或再次点继续。原54及UNKNOWN保留，daily官方X/25未观测。物理拔USB/整日NATURAL_RUN_PASS仍NOT_TESTED。今日LOW_MEMORY实读5次，11:24后未见新增。电脑只有单次只读观察，无外部点击控制器/模型额度自动恢复。详见[H14_AUTHORIZED_RECOVERY_20261103.md](H14_AUTHORIZED_RECOVERY_20261103.md)；最新运行快照在本次Codex工作区work/live-code43/latest.json，完整交付H:/Tuffy_Live/H14_standalone/delivery/H14/code43-bound-detail-host。先读真机，不凭本段快照猜之后进展。源提交b2c869bc3007232f02a0f625295aedfec4c94df2，H12主线及旧候选不动。
+
+<!-- H14_AUTHORIZED_RECOVERY_CURRENT_END -->
+
+<!-- H14_TELEGRAM_FOLLOWUP_MESSAGE8178 -->
+## Telegram 发送追加（2026-11-03）
+
+VERIFIED：本轮09:38 JST结果已在「自动化通知」对话发送一次，服务器消息8178，内容/空输入框/双勾已核对。方向是网页登录用户→bot，不是bot主动推送；未提取Token或重发旧结果。原“未登录/未发送”为先前交接时事实，本段补充后续；业务仍BLOCKED，无Android操作、无新广告/安装/代码修复。原现场/NAS归档不改，新凭证独立归档。详见[H14_TELEGRAM_DELIVERY_20261103.md](H14_TELEGRAM_DELIVERY_20261103.md)。
+
+<!-- H14_TELEGRAM_FOLLOWUP_MESSAGE8178_END -->
+
+<!-- H14_SOL_HIGH_DEVICE_CURRENT -->
+## Sol High 真机复核（2026-11-03 09:38 JST）
+
+BLOCKED：重新读取实机后，当前为 HomeActivity/task1667 匿名「やめる / 再開する」。无唯一任务名/日期，且官方取消无损未证实；未点击、未强停/重启循环、未重播。实际仍 code41，code42 只读 SHA/包名/原证书核验 VERIFIED，未安装。09:32:59 正式导出54/54、九项5/5，配置/全部回执/签到UNKNOWN/每日记录/Journal与04:36逐字段一致；Nov2两UNKNOWN原备份CRC/整行SHA不变。daily本机0、官方X/25未观测；连续两项闭环/拔USB均NOT_TESTED，无DEVICE_PASS/NATURAL_RUN_PASS。今日原两次Tuffy LOW_MEMORY仍在，本轮未见新增。应用代码零改动、无code43；仅文档与证据。前三次节点采集曾使A11y短暂重连，已停止；最终Enabled+Bound。Telegram最终提交0次，网页待用户登录，未重发旧消息。详见[H14_SOL_HIGH_DEVICE_REPORT_20261103.md](H14_SOL_HIGH_DEVICE_REPORT_20261103.md)及本轮独立NAS读回证明。无需重跑572测试或盲装候选；先取得原任务唯一身份或当前取消无损证明。
+
+<!-- H14_SOL_HIGH_DEVICE_CURRENT_END -->
+
+<!-- H14_CODE42_NIGHT_CURRENT -->
+## 最新夜间结果（优先于下方历史code41未安装描述）
+
+code41已正常同签名安装，手机仍code41。真机累计9项接取且5/5、54条已确认；最大值400pt弹窗的Accessibility类ComponentDialog被错误排除，OK尝试0而BLOCKED。人工安全关闭重开后为匿名再開する，无法唯一绑定，未点击、未扩大执行。历史UNKNOWN和54条保全。code42候选已提交、572 JVM/76套件全通过；未安装，连续两项闭环及无人值守仍NOT_TESTED。完整范围、SHA、失败证据与人工辅助见[H14_CODE42_NIGHT_REPORT.md](H14_CODE42_NIGHT_REPORT.md)。H12 main/Tag及原始交付未改、不推送。模型额度≠App额度，没有App两小时重试。
+
+<!-- H14_CODE42_NIGHT_CURRENT_END -->
+
+<!-- H14_MAX_BOOST_CODE41_START -->
+## 当前专项：H14 code41 最大值确认弹窗候选（未安装）
+
+从code38快照8e04816f创建独立分支fix/h14-max-boost-dialog-20261103；功能提交79ac34b7aec8320753ad29086683ab81c02b04e4。code39 bcbd11c、code40 45d5b9d保留且未混入。H12 main/正式Tag仍5be68d6，无合并/推送/新稳定Tag。
+
+本次Nov3故障是最终最大值弹窗未验证关闭并落入OTHER通用导航，未发现本轮新LOW_MEMORY。已实现原5/5可靠保存后的任务绑定、当前Window语义识别、原生祖先点击/新Bounds手势、18秒观察/跨进程最多3次关闭、实际页面验证、原类别及今日筛选恢复后继续扫描；失败专用BLOCKED，不重播或通用重开。
+
+最终567 JVM /75套件，新增21，0失败/错误/跳过；原546项全部实际执行、116测试源字节不变。CODE_IMPLEMENTED / UNIT_PASS。DEVICE_PASS、NATURAL_RUN_PASS未取得，Android真实操作和自然运行验收NOT_TESTED。本轮无ADB/手机点击/安装/真实广告，最后实核手机版本仍code38。
+
+候选22.0.14-R47/code41，APK SHA256 d6de4f084d26daa9c1de4cafd71ab6a0047f5b3673b4f691d0381a12966dd834。原正式签名保持；详细范围、失败链、模拟验收和资源开销见[H14_MAX_BOOST_DIALOG_REPORT.md](H14_MAX_BOOST_DIALOG_REPORT.md)。原SQLite事务/广告/UNKNOWN/配置/日程规则未改。code38冻结交付及11月2日两UNKNOWN、11月3日48回执未由本轮操作修改。已有匿名弹窗如无Journal且缺唯一任务名/日期仍BLOCKED，不按200pt猜绑定。
+
+下一步：等待用户明确决定是否安装；未授权前不安装、不触发真实广告、不修改手机数据。牛排误报、MOV30未知及每日25次入口不属于本专项，仍按旧记录待处理。以下code38等内容为历史证据，不代表code41真机通过。
+<!-- H14_MAX_BOOST_CODE41_END -->
+
+<!-- H14_CURRENT_START -->
+## H14 最新候选阶段状态（覆盖下方历史交接）
+
+H14候选22.0.14-R47/code38，APK/实机SHA3380105b06648b0b353e7cd7c258a1a13b7eea2ddc0b47ece3dd8013dc255546，原签名同包名正常Files/PlayProtect更新。源码6ea2e3649ca4b565ed7fd356f7540f5a02edf405，分支fix/h14-standalone-memory-recovery，包含H13 b3cfe0c/功能0b9；H12 main5be68d6及v22.0.12-R47不变，未合并/打稳定Tag/推送。Git CLI认证不足，不冒称GitHub已同步。
+
+P0已实现：默认关闭Evidence/Fault/Checkin持久PNG，临时诊断10min/12张/32MiB；必要视觉直接Bitmap处理并释放，必要OCR临时IPC图片独立；SQLite FULL事务保存身份/派发/确认，写失败阻断；持久意图+原生Worker/FGS实际建立/有界退避与进度/每日预算，保留原调用范围。官方再开不是新接取入口：已绑定普通Boost按旧保护恢复；code38先路由原挑战核对，初次接取缺回执不放宽。
+
+最终546 JVM/74套件0失败/错误/跳过，原517及115测试源字节不变。Android隔离事务code37实际APK19步/6测试ART自终止通过，code38相同Ledger/AdAttempt源码及最终APK合成烟测通过；不杀真实广告/不用instrumentation。限域DEVICE_PASS不是自然连续LOW_MEMORY或拔线多日通过。
+
+code38有限真机核对phone22:03:17–22:03:23，RT9d06cedc-d7fc-488a-a13c-31baa921bd77/CHe419584b-08ea-4bd4-a3aa-6159a2ff4594正确进入原挑战核对并识别官方“再開する”，原MOV30初次接取缺唯一回执，明确BLOCKED，未点击该按钮或提交新观看。23挑战/128ads/126确认/2UNKNOWN、21项接取及各5Boost、签到保持；daily本地0，官方X/25未观测。MOV40未执行，独立推进BLOCKED。BIKE4/MOV30整行SHA be752fbe09c1e31659df6dcb8ccf39642b67cb17407bf97b702c51b99651e95c / c168465060e920d9a2dd8cda818c3a24766b653d9caaef75f065097cc01745ab 不变。
+
+22:05:29正式导出1633254B、SHA f508ed7a78bc0d7333a456b30bc688df6f2e6fc7520b9640289e688774a68352，CRC/字段对照通过，0 PNG；旧手机PNG9481新增0/缺失0。设置四类5/5/40/40、两长途OFF0、ANA00:03；最新楽天09:15gen9、牛排09:30gen9，禁止写回历史楽天gen7或50/100km。仅Tuffy Enabled+Bound，省电无限制实核；P1/ANA原生闹钟保留，无新外部监控。因UNKNOWN未完成，不Recent清理、不锁屏、不强停ANA。
+
+原生90秒自检在code36 phone16:32:40送达，手机直接Telegram测试20:59:18成功；物理拔线/多自然业务日及H14活动广告连续回收NOT_TESTED。H13两个空闲PSS样本为69,511/70,853KiB，H14不同候选/负载样本为25,736–107,986KiB，工作负载并不相同；没有同负载峰值/GC对照，不能宣称内存问题根因消除或优化百分比。详见H14_STABILITY_REPORT.md与H14_ACCEPTANCE_MATRIX.md。
+
+用户新报牛排立即执行约6秒退出锁屏/复用旧1円推送：已留证，根因为当日旧SUCCESS跳过后用全日旧summary在新manual RUN下发COMPLETED；原rewardConfirmed=false/REWARD_DISPLAYED/CREDIT_UNCONFIRMED，旧识别及到账仍UNKNOWN。按用户要求列待处理OPEN_NOT_FIXED，没有重抽或改账。
+
+交付及证明：H:/Tuffy_Live/H14_standalone/delivery/H14/code38；NAS独立H14/code38，不覆盖H12/H13。私有证据与完整Gitbundle仅AES-GCM认证加密；逐SHA/AES读回证明见最终交付JSON。当前只是稳定性候选阶段，未满足长期无人值守验收。
+<!-- H14_CURRENT_END -->
+
+<!-- H13_CURRENT_START -->
+## H13最终状态：本次监控已因原MOV30接取回执无法安全绑定而结束，BLOCKED/INCOMPLETE
+
+手机2026-11-02自然00:03任务；最终正式诊断phone04:38:23，最终RTdc89e6d1-134e-4ba3-86ea-d8d428d4284a于04:33:57 BLOCKED。签到已确认；WALK7、BIKE5（500m/1/2/3/5km）、CAR6、MOV5/10/20共21项接取及各5Boost确认。挑战128条广告尝试记录、126回执、0FAILED、2UNKNOWN。BIKE4原index1/start1793547617246无departure隔离保留；MOV30原index1/start1793561396418为DISPATCHED且有departure，仍未确认。MOV40及剩余范围未完成扫描/接取核对。daily本机0次，官方X/25未观测，不能称0/25或25/25；整日未完成，不是PASS，也不代表实际移动达成或钱包到账。
+
+H13/22.0.13-R47/code35正式同签名安装，最终再次读实机base SHA256=64bb977a4288a2b7346b7be806b3f8f4e2055faf6529b14ef95c94d52dfbd163，与交付一致；原证书ab39397d23fca7803fa7cd3e33125874d010874d5641e6ffd044a2a3b55f484c保持。功能提交0b9cae6d30f3d14065da154f2888dc7eb73add1d，fix/h13-bike-initial-reservation-20261102；main5be68d6/H12标签未动，H13未推送合并。517JVM/73套件0失败错误跳过，原114测试源字节不变，未跑干扰A11y的instrumentation；最终仅文档更新，没有H14、没有额外APK。
+
+H13真实隔离旧BIKE4通过且原row减去唯一隔离字段及ads均与升级前相等；新RESERVED初始恢复分支仍NOT_TESTED。MOV5商店返回后原index2回执确认，人工一次Back及一次继续披露。04:19 MOV20自然LOW_MEMORY既有Boost自动恢复回执确认；04:19:50 SIGNALED/status9原因UNKNOWN，一次人工继续后原index5回执确认。04:29:59和04:30:21再次LOW_MEMORY，3/3自动恢复已用；原MOV30广告关闭后出现匿名“已开始挑战/第1次Boost”面板，但没有任务名/日期且25pt表与多项相同，原REWARD_CONFIRMED证据不存在。04:33正常继续入口一次仅保全并BLOCKED，未提交新观看。不能通过匿名回执领养未知、手工改账、清UNKNOWN或放宽Boost/跨日限制。RAM压力上游根因及SIGKILL原因仍UNKNOWN。
+
+04:38正常Records正式导出35,052,849字节、ZIP CRC通过、SHA9828a4d5e7d18e98a1e10a2f15d5667ba99b5a2ab126e8859d61f0564fe07300。原12条挑战去掉唯一隔离字段后全部逐字段相等；settings/checkinConfig/login/dailyAttempts均与升级前一致。四类5/5/40/40、长途OFF0、ANA00:03、楽天ON09:15gen7、牛排ON09:30gen9保留；历史11/1签到UNKNOWN和10/31旧FAILED/UNKNOWN不删不重播，未声称本次全量重导所有旧业务日私有SP。最终仅Tuffy Enabled+Bound/Crashed空。通知04:33:57 posted；未因结果未明执行Recent清理或锁屏，未主动关闭原ANA回执。
+
+外部原18:11–18:33UTC采集缺口保留，18:58–21:06样本持续但无即时故障处理亦披露。最终host21:40:14UTC按硬阻塞停止外部controller13904/collector4716，exit0、样本止874（恢复段242–874共633）、androidStateChanged=false；heartbeat tuffy-11-2-00-03已删除。原绝对上限05:30UTC未延长，Android独立闹钟/P1保留。手机4GB证据清理明确延后，未手动删数据。最终报告H13_FINAL_REAL_DEVICE_REPORT.md；私有原图/节点/日志及正式诊断在H私有目录，NAS仅认证加密备份；公开交付不含凭据。H13 APK/sourceZIP/JUnit冻结，后续文档与最终Git包另存。
+<!-- H13_CURRENT_END -->
+
+
 <!-- H12_CURRENT_START -->
 ## H12 最新正式交接：24项接取与5Boost确认，daily25/25，原签到仍待核对
 

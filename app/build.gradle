@@ -30,8 +30,8 @@ android {
         minSdk 24
         targetSdk 34
         testInstrumentationRunner "com.anapocket.auto.AdTestInstrumentation"
-        versionCode 34
-        versionName "22.0.12-R47"
+        versionCode 44
+        versionName "22.0.14-R47"
     }
 
     signingConfigs {

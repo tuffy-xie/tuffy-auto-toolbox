@@ -2,6 +2,8 @@ package com.anapocket.auto
 
 /** User-authorized recovery of one timed-out viewing; never authorizes a new viewing. */
 object StalledAdRestartPolicy {
+    /** Persistence acknowledgment is the fence before any system-stop action. */
+    fun reserve(used:Boolean,dailyRestarts:Int,commit:()->Boolean)=!used&&dailyRestarts in 0..2&&commit()
     fun eligible(date:String,recordedDate:String,stage:String,state:String,reason:String,startedAt:Long,
         now:Long,confirmed:Boolean,used:Boolean,dailyRestarts:Int,live:Boolean,sdk:Boolean):Boolean =
         live && sdk && date==recordedDate && stage in setOf("STARTUP","CHALLENGES","ADS") &&

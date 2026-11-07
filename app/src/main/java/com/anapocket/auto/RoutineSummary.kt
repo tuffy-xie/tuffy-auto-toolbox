@@ -22,7 +22,8 @@ object RoutineSummary {
   val done=mutableListOf<String>();val pending=mutableListOf<String>();val disabled=mutableListOf<String>();val unknown=mutableListOf<String>()
   for(cat in listOf(Cat.WALK,Cat.BIKE,Cat.CAR,Cat.MOV_ANY,Cat.SHINKANSEN,Cat.FLIGHT)){
    val rr=rows.filter{it.optString("cat")==cat.name};val unresolved=rr.any{it.optString("state") !in setOf("BOOST_MAX_CONFIRMED","BOOST_MAX_OBSERVED")}
-   when{!s.catOn(cat)->disabled.add(cat.title);unresolved->unknown.add(cat.title);ChallengeScanStore.complete(c,date,cat,s.kmOf(cat))->done.add(cat.title+if(rr.isEmpty())"（范围内无可接任务）" else "（均5/5）");else->pending.add(cat.title)}
+   if(rr.any{ChallengeStore.unconfirmedAd(it)})unknown.add(cat.title+"广告回执")
+   when{!s.catOn(cat)->disabled.add(cat.title);unresolved->pending.add(cat.title);ChallengeScanStore.complete(c,date,cat,s.kmOf(cat))->done.add(cat.title+if(rr.isEmpty())"（可接取列表范围内无候选）" else "（本机记录均5/5）");else->pending.add(cat.title)}
   }
   val safety=AccountSafetyStore.pending(c)
   if(safety!=null)unknown.add(safety.optString("title"))
@@ -34,6 +35,6 @@ object RoutineSummary {
    if(counts.unconfirmed>0)unknown.add("广告"+counts.unconfirmed+"次")
    (official?.let{"官方"+it+"/25"}?:"官方次数未核对")+"；本机确认"+counts.completed+"次"
   }
-  return RoutineMessage.render(date,done,pending,disabled,unknown,ads,login,if(safety!=null)"请手动处理后回Tuffy复核" else if(outcome.state in setOf("BLOCKED","STOPPED"))TaskFailureText.short(outcome.detail) else "",outcome.state in setOf("BLOCKED","STOPPED"))
+  return RoutineMessage.render(date,done,pending,disabled,unknown,ads,login,if(safety!=null)"请手动处理后回Tuffy复核" else if(outcome.state in setOf("BLOCKED","STOPPED","PARTIALLY_COMPLETED"))TaskFailureText.short(outcome.detail) else "",outcome.state in setOf("BLOCKED","STOPPED","PARTIALLY_COMPLETED"))
  }
 }

@@ -23,6 +23,7 @@ object Evidence {
     }
 
     fun writeBytes(ctx: Context, name: String, content: ByteArray) {
+        if(name.endsWith(".png",true) && (!ScreenshotDiagnostics.reserve(ctx)||!ScreenshotDiagnostics.charge(ctx,content.size)))return
         try {
             File(dir(ctx), name).writeBytes(content)
         } catch (t: Throwable) {
@@ -30,5 +31,10 @@ object Evidence {
         }
     }
 
+    suspend fun capture(ctx:Context,ui:Ui,name:String) {
+        if(!ScreenshotDiagnostics.reserve(ctx))return
+        val png=ui.captureVisual(includePng=true).png?:return
+        if(ScreenshotDiagnostics.charge(ctx,png.size))runCatching{File(dir(ctx),name).writeBytes(png)}
+    }
     fun path(ctx: Context, name: String): String = File(dir(ctx), name).absolutePath
 }

@@ -29,7 +29,9 @@ object AdTaskReturn {
                 if(cards.isEmpty()){
                     val container=nodes.singleOrNull{it.viewIdResourceName=="com.miui.home:id/recents_view"}?:return false
                     val signature=nodes.filter{it.isClickable}.mapNotNull{it.contentDescription?.toString()?.takeIf{v->v.isNotBlank()}}.sorted().joinToString("|")
-                    if(signature.isBlank()||signature==previousCards||!AdTaskReturnPolicy.maySearch(true,cards.size,searches,safe()))return false
+                    // The native Recents container can precede its cards; retain the existing 36-poll budget.
+                    if(signature.isBlank()){if(it==0)Logger.i("ADRETURN","await native recents first frame; no task action");return@repeat}
+                    if(signature==previousCards||!AdTaskReturnPolicy.maySearch(true,cards.size,searches,safe()))return false
                     previousCards=signature;val area=Rect();container.getBoundsInScreen(area)
                     val w=svc.resources.displayMetrics.widthPixels;val h=svc.resources.displayMetrics.heightPixels
                     if(area.width()<w*.8||area.height()<h*.4)return false

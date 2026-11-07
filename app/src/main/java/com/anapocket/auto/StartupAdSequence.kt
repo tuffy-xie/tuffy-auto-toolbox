@@ -13,6 +13,7 @@ interface StartupAdPort {
     suspend fun dismissPopup():Boolean=false
     suspend fun diagnostic(reason:String) {}
     suspend fun observedAd()
+    suspend fun confirmedReceipt() {}
     suspend fun pause(ms:Long){delay(ms)}
 }
 /** Startup dismissal is navigation evidence only; a login reward needs a new official receipt after an observed ad. */
@@ -26,14 +27,14 @@ class StartupAdSequence(private val p:StartupAdPort){
             if(!p.sameDate())return StartupAdOutcome("UNCONFIRMED","phone_date_changed")
             val f=p.frame()
             if(f.manualRequired)return StartupAdOutcome("BLOCKED","account_safety_human_required")
-            if(diagnostic.shouldCapture(p.now()-start,f.ad,!f.normal&&!f.receipt&&!f.close&&!f.popup))p.diagnostic("slow_or_unrecognized_startup_ad")
+            if(!f.receipt&&diagnostic.shouldCapture(p.now()-start,f.ad,!f.normal&&!f.receipt&&!f.close&&!f.popup))p.diagnostic("slow_or_unrecognized_startup_ad")
             if(f.error)return StartupAdOutcome("FAILED","official_login_or_startup_ad_error")
             if(f.popup){
                 if(popupCloses>=6||!p.dismissPopup())return StartupAdOutcome("UNCONFIRMED","native_popup_not_dismissed")
                 popupCloses++;p.pause(750);continue
             }
             if(f.ad&&!departed){departed=true;p.observedAd()}
-            if(StartupPolicy.loginConfirmed(requireReward,departed,f.receipt,p.sameDate()))return StartupAdOutcome("REWARD_CONFIRMED")
+            if(StartupPolicy.loginConfirmed(requireReward,departed,f.receipt,p.sameDate())){p.confirmedReceipt();return StartupAdOutcome("REWARD_CONFIRMED")}
             if(!requireReward&&!f.ad&&!f.store&&(f.normal||f.login)){
                 if(++stable>=3)return StartupAdOutcome("DISMISSED")
             }else stable=0

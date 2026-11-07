@@ -17,6 +17,7 @@ object CheckinDiagnostics {
                 ?.sortedByDescending{it.lastModified()}?.take(10).orEmpty()
             for(run in runs)for(file in run.listFiles()?.filter{it.isFile}?.sortedByDescending{it.lastModified()}.orEmpty()){
                 if(file.canonicalFile.parentFile!=run.canonicalFile||file.extension !in setOf("json","log","png"))continue
+                if(file.extension=="png"&&!ScreenshotDiagnostics.enabled(ctx))continue
                 val limit=if(file.extension=="png")8L*1024*1024 else 2L*1024*1024
                 if(file.length()>limit||file.length()>remaining)continue
                 val data=if(file.extension=="png")file.readBytes() else DiagnosticPrivacy.redact(file.readText()).toByteArray()

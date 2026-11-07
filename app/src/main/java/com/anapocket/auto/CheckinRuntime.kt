@@ -301,7 +301,9 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
         return withTimeout(2500){suspendCancellableCoroutine{c->svc.takeScreenshot(Display.DEFAULT_DISPLAY,svc.mainExecutor,object:AccessibilityService.TakeScreenshotCallback{
             override fun onSuccess(result:AccessibilityService.ScreenshotResult){
                 val buffer=result.hardwareBuffer
-                try{if(!c.isActive)return;val hardware=Bitmap.wrapHardwareBuffer(buffer,result.colorSpace);val bmp=hardware?.copy(Bitmap.Config.ARGB_8888,false);hardware?.recycle();if(bmp==null){c.cancel();return};val stream=ByteArrayOutputStream();bmp.compress(Bitmap.CompressFormat.PNG,100,stream);bmp.recycle();if(c.isActive)c.resume(stream.toByteArray())}finally{buffer.close()}
+                var hardware:Bitmap?=null;var bmp:Bitmap?=null
+                try{if(!c.isActive)return;hardware=Bitmap.wrapHardwareBuffer(buffer,result.colorSpace);bmp=hardware?.copy(Bitmap.Config.ARGB_8888,false);val image=bmp;if(image==null){c.cancel();return};MemoryTrace.imageRequested(true);MemoryTrace.bitmapAllocated(image.allocationByteCount);val stream=ByteArrayOutputStream();image.compress(Bitmap.CompressFormat.PNG,100,stream);if(c.isActive)c.resume(stream.toByteArray())}
+                catch(t:Exception){if(c.isActive)c.cancel(t)}finally{bmp?.recycle();hardware?.recycle();buffer.close()}
             }
             override fun onFailure(errorCode:Int){if(c.isActive)c.resumeWith(Result.failure(CheckinPerceptionUnavailable("screenshot_"+errorCode)))}
         })}}
@@ -309,7 +311,7 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
     suspend fun frame():CheckinFrame {
         assertOwn();refreshNodes();val pkg=pkg();check(pkg==app.pkg){"unexpected_foreground"};val at=SystemClock.elapsedRealtime();val p=png();val raw=CheckinOcr.read(svc,p);val lines=CheckinOcr.normalizeGreenStatus(p,raw);assertOwn()
         val dir=CheckinStore(svc,app).dir(token.run)
-        dir.resolve("last_ocr.png").writeBytes(p)
+        if(ScreenshotDiagnostics.reserve(svc)&&ScreenshotDiagnostics.charge(svc,p.size))dir.resolve("last_ocr.png").writeBytes(p)
         dir.resolve("last_ocr.json").writeText(org.json.JSONObject().put("runId",token.run).put("appId",app.pkg).put("phoneTime",TokyoDate.time()).put("capturedElapsed",at).put("lines",org.json.JSONArray().also{a->lines.forEachIndexed{i,l->a.put(org.json.JSONObject().put("text",l.text).put("rawText",raw[i].text).put("left",l.left).put("top",l.top).put("right",l.right).put("bottom",l.bottom))}}).toString(2))
         return CheckinFrame(p,lines,pkg,at)
     }
@@ -333,7 +335,8 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
         delay(1000);assertOwn();return accepted
     }
     suspend fun evidence(store:CheckinStore,run:String,label:String):String {
-        val name=label+"_"+System.currentTimeMillis();val dir=store.dir(run);dir.resolve(name+".png").writeBytes(png())
+        val name=label+"_"+System.currentTimeMillis();val dir=store.dir(run)
+        if(ScreenshotDiagnostics.reserve(svc)){val image=png();if(ScreenshotDiagnostics.charge(svc,image.size))dir.resolve(name+".png").writeBytes(image)}
         val n=nodes().filter{it.isVisibleToUser}.joinToString("\n"){if(it.isPassword||it.isEditable)"[EDITABLE_REDACTED]" else it.className.toString()+" id="+it.viewIdResourceName+" text="+DiagnosticPrivacy.redact(it.text?.toString().orEmpty())}
         dir.resolve(name+".json").writeText(org.json.JSONObject().put("runId",run).put("appId",app.pkg).put("businessDate",date).put("phoneTime",TokyoDate.time()).put("phase",label).put("foregroundPackage",pkg()).put("foregroundActivity",AutoAccessibilityService.foregroundActivity).put("source","real_accessibility_screenshot_no_fixture").put("nodes",n).toString(2))
         store.log(run,"EVIDENCE "+name);return app.name+"/"+run+"/"+name

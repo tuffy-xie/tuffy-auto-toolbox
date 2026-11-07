@@ -1,15 +1,21 @@
 package com.anapocket.auto
 
-/** Recognition derives from the installed ANA2.3.4 layouts, never from a generic GET/claim label. */
+/** Recognition derives from the installed ANA2.3.5 layout and recorded native offer, never from a generic GET/claim label. */
 object StartupPolicy {
     const val ANA = "us.ana_pocket.ANAPocket"
-    fun loginOffer(pkg: String?, labels: List<String>, ids: Set<String>): Boolean = pkg == ANA &&
-        labels.any { it.trim() == "ログインボーナス" } && labels.any { it.contains("連続ログインでボーナスポイントUP") } &&
-        "button_get_point" in ids && "bonus_point" in ids && "recycler" in ids
+    fun loginContext(pkg:String?,labels:List<String>):Boolean = pkg==ANA&&
+        labels.any{it.trim()=="ログインボーナス"}&&labels.any{it.contains("連続ログインでボーナスポイントUP")}
+    fun loginVideoClaim(label:String):Boolean = Regex("^動画を見てさらに[1-9][0-9]{0,4}ptをGET$").matches(label.replace(Regex("\\s|　"),""))
+    fun loginClaimId(pkg:String?,labels:List<String>,ids:Set<String>):String? {
+        if(!loginContext(pkg,labels)||!labels.any{loginVideoClaim(it)}||"button_ok" !in ids)return null
+        if("recycler" !in ids&&labels.filter{Regex("^[0-9]{1,2}日目$").matches(it.trim())}.distinct().size<2)return null
+        return when {"button_get_point" in ids->"button_get_point";"bonus_point" in ids->"bonus_point";else->null}
+    }
+    fun loginOffer(pkg:String?,labels:List<String>,ids:Set<String>)=loginClaimId(pkg,labels,ids)!=null
     fun rewardReceipt(pkg: String?, labels: List<String>, ids: Set<String>, adSurface: Boolean): Boolean =
         pkg == ANA && !adSurface && AdSignals.receipt(labels) && "button_ok" in ids
-    fun nativePopup(pkg: String?, ids: Set<String>, login: Boolean, receipt: Boolean, adSurface: Boolean) =
-        pkg == ANA && !login && !receipt && !adSurface && "image_close" in ids && "content" in ids
+    fun nativePopup(pkg: String?, ids: Set<String>, loginContext: Boolean, receipt: Boolean, adSurface: Boolean) =
+        pkg == ANA && !loginContext && !receipt && !adSurface && "image_close" in ids && "content" in ids
     fun loginConfirmed(reserved: Boolean, observedAd: Boolean, officialFreshReceipt: Boolean, sameDate: Boolean) =
         reserved && observedAd && officialFreshReceipt && sameDate
     fun canReserveLogin(date: String, recordedDate: String?, recordedState: String?): Boolean =
@@ -23,6 +29,12 @@ object StartupPolicy {
 }
 
 object RoutinePolicy {
+    fun reuseChallenges(sameDate:Boolean, currentDayOnly:Boolean,
+        scopeVerified:Boolean, pending:Boolean):Boolean =
+        sameDate && currentDayOnly && scopeVerified && !pending
+    fun reuseAds(sameDate:Boolean, priorStage:String?, official:Int?, pending:Boolean):Boolean =
+        sameDate && priorStage in setOf("DONE","LIMIT_REACHED","ALREADY_DONE") && official==DAILY_AD_LIMIT && !pending
+
     fun mayContinue(stopped: Boolean, sameDate: Boolean, phaseBlocked: Boolean) = !stopped && sameDate && !phaseBlocked
     fun stageLabel(stage: String) = when(stage) {
         "STARTUP" -> "打开ANA Pocket与签到"

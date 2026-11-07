@@ -1,0 +1,22 @@
+us.ana_pocket.ANAPocket:id/title_count	3回目のブーストをしますか？
+us.ana_pocket.ANAPocket:id/current_bonus_label	現在のチャレンジ達成後の報酬：
+us.ana_pocket.ANAPocket:id/current_point	150pt
+us.ana_pocket.ANAPocket:id/count	1回
+us.ana_pocket.ANAPocket:id/point	+50
+us.ana_pocket.ANAPocket:id/point_unit	pt
+us.ana_pocket.ANAPocket:id/count	2回
+us.ana_pocket.ANAPocket:id/point	+50
+us.ana_pocket.ANAPocket:id/point_unit	pt
+us.ana_pocket.ANAPocket:id/count	3回
+us.ana_pocket.ANAPocket:id/point	+50
+us.ana_pocket.ANAPocket:id/point_unit	pt
+us.ana_pocket.ANAPocket:id/count	4回
+us.ana_pocket.ANAPocket:id/point	+100
+us.ana_pocket.ANAPocket:id/point_unit	pt
+us.ana_pocket.ANAPocket:id/count	5回
+us.ana_pocket.ANAPocket:id/point	+100
+us.ana_pocket.ANAPocket:id/point_unit	pt
+us.ana_pocket.ANAPocket:id/button_see_ad_text	動画を見て報酬をブースト
+us.ana_pocket.ANAPocket:id/button_no_text	ブーストをやめる
+us.ana_pocket.ANAPocket:id/note	※この画面を閉じると  ブーストができなくなります
+us.ana_pocket.ANAPocket:id/text_ad_title	[広告]

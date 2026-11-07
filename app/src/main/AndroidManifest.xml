@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Explicit user approval: read ANA Fragment identity before ad dispatch; standard adb grant required. -->
+    <uses-permission android:name="android.permission.DUMP" />
+    <!-- Explicit user consent required: ActivityManager diagnostics also checks this development permission. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

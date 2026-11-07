@@ -2,6 +2,14 @@ package com.anapocket.auto
 
 /** A manual restart can observe the same dispatched ad, never reserve a replacement. */
 object ChallengeRecoveryPolicy {
+    /** Navigation authority only. It grants neither receipt confirmation nor a replacement ad. */
+    fun liveRestartNavigation(sameAttempt:Boolean,sameDate:Boolean,liveOwner:Boolean,pending:Int,
+        stage:String,elapsedMs:Long,requests:Int):Boolean =
+        sameAttempt&&sameDate&&liveOwner&&pending==1&&stage=="REMOVE_ONLY_OBSERVED_ANA_TASK"&&
+            elapsedMs in 0L..60_000L&&requests==0
+    fun recordedRestartNavigation(bound:Boolean,sameDate:Boolean,pending:Int,stage:String,sameOriginalRun:Boolean,requests:Int,dispatched:Boolean)=
+        bound&&sameDate&&pending==1&&sameOriginalRun&&requests==0&&dispatched&&
+            stage in setOf("REMOVE_ONLY_OBSERVED_ANA_TASK","REMOVED_AND_RELAUNCHED_REVIEW_REQUIRED")
     fun officialNoGainReady(elapsedMs:Long,loading:Boolean)=elapsedMs>=15_000&&!loading
     fun blockingOfficialLoading(id:String?,className:String,containsScreenCenter:Boolean)=
         className=="android.widget.ProgressBar"&&id?.endsWith("/boost_bar")!=true&&containsScreenCenter

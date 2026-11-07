@@ -134,7 +134,7 @@ class AutomationEngine(
         }
         return emptyList()
     }
-    private fun visibleDailyCards(): List<ChallengeCard> {
+    private fun visibleDailyCards(selectedCategory:Cat?=null): List<ChallengeCard> {
         ui.refreshCache()
         val (_, h) = screen()
         val today = ui.activeNodes(pkg = pkg,foregroundOnly=true).filter { it.isVisibleToUser && topOf(it) in 400..(h * .86).toInt() &&
@@ -145,7 +145,7 @@ class AutomationEngine(
             fields.any { it.viewIdResourceName == "$pkg:id/unit" && ui.label(it) in setOf("km", "m") },
             fields.count { it.viewIdResourceName == "$pkg:id/icon" }) }
         check(unknown.isEmpty()) { "unsupported_same_day_distance_card:" + unknown.joinToString { ui.label(it.first) } }
-        return Cards.dedupe(today.mapNotNull { Cards.fromTitle(ui.label(it.first)) })
+        return Cards.dedupe(today.mapNotNull { Cards.fromTitle(ui.label(it.first))?.let{card->if(selectedCategory==null)card else card.copy(cat=selectedCategory)} })
     }
     private fun dailyPositionSignature(): String {
         ui.refreshCache()
@@ -153,10 +153,10 @@ class AutomationEngine(
             .filter { it.viewIdResourceName == "$pkg:id/text_name" }
             .joinToString("|") { ui.label(it) + "@" + topOf(it) }
     }
-    private suspend fun categoryBitmap(): android.graphics.Bitmap? {
-        repeat(3) {
-            val png = ui.captureVisual(includePng = true).png
-            if (png != null) return android.graphics.BitmapFactory.decodeByteArray(png, 0, png.size)
+    private suspend fun <T> inspectCategory(inspect:(android.graphics.Bitmap)->T):T? {
+        repeat(3){
+            val value=ui.inspectBitmap(inspect=inspect)
+            if(value!=null)return value
             delay(350)
         }
         return null
@@ -176,13 +176,12 @@ class AutomationEngine(
             check(!stop&&TokyoDate.of()==date){"category_visibility_stopped_or_date_changed"}
             ui.refreshCache()
             val row=categoryRow();val strip=Rect();row?.getBoundsInScreen(strip)
-            val bitmap=categoryBitmap()?:error("category_icon_screenshot_unavailable")
-            val ready=try{row!=null&&ui.activeNodes(pkg=pkg,foregroundOnly=true).any{n->
+            val ready=inspectCategory{bitmap->row!=null&&ui.activeNodes(pkg=pkg,foregroundOnly=true).any{n->
                 val b=Rect();n.getBoundsInScreen(b)
                 n.isVisibleToUser&&n.isClickable&&n.childCount==0&&ui.label(n).isBlank()&&strip.contains(b)&&
                     b.width()>0&&b.height()>=strip.height()*.6&&b.width().toDouble()/b.height() in .8..1.3&&
                     tilePixels(bitmap,b)?.let{CategoryChipVision.unobscured(it)}==true
-            }}finally{bitmap.recycle()}
+            }}?:error("category_icon_screenshot_unavailable")
             if(ready)return
             if(!captured){captured=true;Logger.w("CHSTRIP","category_visual_obscured no_navigation_gestures=true");FaultStore.capture(svc,AutoAccessibilityService.currentRunId,"category_visibility","native_category_frame_obscured_no_tap")}
             delay(1000)
@@ -209,11 +208,12 @@ class AutomationEngine(
         return moved
     }
     /** R40: actual icon selection inside the native strip; never fall back to all-category scanning. */
-    suspend fun prepareFilteredCategory(cat: Cat): Boolean {
+    suspend fun prepareFilteredCategory(cat: Cat, allowLoginSubmission:Boolean=true): Boolean {
         wakeScreen(); ensureForeground()
-        check(StartupFlow(svc).prepare("NAV"+System.currentTimeMillis(),launch=false).ok) { "startup_popup_blocks_category_navigation" }
+        if(MaxBoostCoordinator.visible(svc))MaxBoostCoordinator.refuseGenericNavigation(svc)
+        check(StartupFlow(svc).prepare("NAV"+System.currentTimeMillis(),launch=false,allowLoginSubmission=allowLoginSubmission).ok) { "startup_popup_blocks_category_navigation" }
         check(ensureListPage() && ensureChallengeTab()) { "filtered_list_unreachable" }
-        check(StartupFlow(svc).prepare("CATNAV"+System.currentTimeMillis(),launch=false).ok){"category_popup_blocks_navigation"}
+        check(StartupFlow(svc).prepare("CATNAV"+System.currentTimeMillis(),launch=false,allowLoginSubmission=allowLoginSubmission).ok){"category_popup_blocks_navigation"}
         // A selected joinable tab does not expand its collapsed header when tapped again.
         check(scrollToTop()) { "filtered_navigation_top_not_verified" }
         if(categoryRow()==null){
@@ -243,11 +243,10 @@ class AutomationEngine(
                 n.isVisibleToUser && n.isEnabled && n.isClickable && n.childCount == 0 && ui.label(n).isBlank() &&
                     strip.contains(b) && b.width() > 0 && b.height() >= strip.height() * .6 && b.width().toDouble() / b.height() in .8..1.3
             }
-            val bitmap = categoryBitmap() ?: error("category_icon_screenshot_unavailable")
-            val matches = try { candidates.filter { n ->
+            val matches = inspectCategory { bitmap -> candidates.filter { n ->
                 val b = Rect(); n.getBoundsInScreen(b)
                 tilePixels(bitmap, b)?.let { CategoryChipVision.matches(cat, b.width(), b.height(), it) } == true
-            } } finally { bitmap.recycle() }
+            } }?:error("category_icon_screenshot_unavailable")
             check(matches.size <= 1) { "category_icon_ambiguous_" + cat }
             if (matches.size == 1) {
                 val b = Rect(); matches.single().getBoundsInScreen(b)
@@ -255,17 +254,16 @@ class AutomationEngine(
                 Logger.i("CHQUEUE", "category=" + cat + " actualIconBounds=" + b + " strip=" + strip + " scan=" + scan)
                 check(ui.clickSemantic(matches.single())){"category_icon_semantic_dispatch_failed"}; delay(900)
                 repeat(10) {
-                    val selected = categoryBitmap() ?: error("category_selected_screenshot_unavailable")
                     val freshStrip = Rect(); (categoryRow() ?: error("category_strip_missing_after_selection")).getBoundsInScreen(freshStrip)
-                    val isSelected = try { ui.activeNodes(pkg = pkg,foregroundOnly=true).any { n ->
+                    val isSelected = inspectCategory { selected -> ui.activeNodes(pkg = pkg,foregroundOnly=true).any { n ->
                         val currentBounds = Rect(); n.getBoundsInScreen(currentBounds)
                         n.isVisibleToUser && n.isClickable && n.childCount == 0 && ui.label(n).isBlank() &&
                             freshStrip.contains(currentBounds) && tilePixels(selected, currentBounds)?.let {
                                 CategoryChipVision.selectedBackground(cat, it)
                             } == true
-                    } } finally { selected.recycle() }
-                    val cards = visibleDailyCards()
-                    if (isSelected && cards.all { it.cat == cat }) {
+                    } }?:error("category_selected_screenshot_unavailable")
+                    val cards = visibleDailyCards(cat)
+                    if (isSelected) {
                         check(scrollToTop()) { "filtered_list_top_not_verified_"+cat }
                         delay(700)
                         seenDailyTitles.clear(); observedDailyTitles=0
@@ -307,7 +305,7 @@ class AutomationEngine(
         return false
     }
     /** Only 参加中 → 進行中 and this exact business day; yesterday's PROCESSING is excluded. */
-    suspend fun auditParticipating(run:String):List<ChallengeCard> {
+    suspend fun auditParticipating(run:String, requiredKeys:Set<String> = emptySet()):List<ChallengeCard> {
         check(ensureListPage() && ensureChallengeTab()) { "participating_list_unreachable" }
         check(selectNativeChallengeTab("参加中"){ui.activeLabels(pkg=pkg).contains("進行中")}){"participating_tab_not_verified"}
         check(selectNativeChallengeTab("進行中"){ui.activeNodes(pkg=pkg,foregroundOnly=true).any{it.isVisibleToUser&&it.viewIdResourceName=="$pkg:id/list"}}){"in_progress_tab_not_verified"}
@@ -322,7 +320,7 @@ class AutomationEngine(
                 val fields=nativeCardFields(n)
                 val deadline=fields.singleOrNull{it.viewIdResourceName=="$pkg:id/text_period"}?.let{ui.label(it)}
                 val card=Cards.fromTitle(ui.label(n))
-                if(card!=null&&ParticipatingDayPolicy.current(deadline,scanDate)&&st.catOn(card.cat)&&card.meters!=null&&card.meters<=st.kmOf(card.cat)*1000)found[card.key]=card
+                if(card!=null&&ParticipatingDayPolicy.inspect(deadline,scanDate,card.key,st.catOn(card.cat),card.meters,st.kmOf(card.cat)*1000,requiredKeys))found[card.key]=card
             }
             dumpUi("participating_in_progress_"+run+"_"+page)
             val signature=dailyPositionSignature()
@@ -338,55 +336,40 @@ class AutomationEngine(
     var observedDailyTitles=0;private set
     private val seenDailyTitles=mutableSetOf<String>()
 
-    /** Next eligible card from the current category viewport, without resetting to the first page. */
-    suspend fun nextFilteredChallenge(cat: Cat, maxMeters: Int, processed: Set<String>): ChallengeCard? {
-        check(activeFilteredCategory == cat && ensureListPage()) { "filtered_category_context_lost" }
-        var stable = 0
-        var previous = ""
-        var repairs = 0
-        repeat(60) { page ->
-            check(!stop) { "user_stopped" }
-            val cards = visibleDailyCards()
-            seenDailyTitles.addAll(cards.map{it.key}); observedDailyTitles=seenDailyTitles.size
-            check(AutoAccessibilityService.isConnected()&&TokyoDate.of()==scanDate){"filtered_scan_disconnected_or_date_changed"}
-            when (CategoryViewportPolicy.action(cat, cards.map { it.cat }.toSet(), repairs)) {
-                CategoryViewportAction.KEEP_POSITION -> Unit
-                CategoryViewportAction.RESELECT_CATEGORY -> {
-                    dumpUi("category_" + cat.name + "_lost_after_sdk_return")
-                    ui.captureVisual(includePng = true).png?.let { png -> Evidence.writeBytes(svc,
-                        "ui_category_" + cat.name + "_lost_" + System.currentTimeMillis() + ".png", png) }
-                    Logger.i("CHQUEUE", "category=" + cat + " contextLostObserved=" + cards.map { it.cat }.distinct() + " repairOnce=true")
-                    repairs++
-                    check(prepareFilteredCategory(cat)) { "category_context_reselect_failed_" + cat }
-                    previous = ""; stable = 0
-                    return@repeat
-                }
-                CategoryViewportAction.STOP -> error("category_context_changed_again_after_reselect_" + cat)
+    /** Complete native joinable discovery before any acquisition. No participating-list scan. */
+    suspend fun scanFilteredChallenges(cat:Cat,maxMeters:Int):List<ChallengeCard> {
+        check(activeFilteredCategory==cat&&ensureListPage()) { "filtered_category_context_lost" }
+        val found=linkedMapOf<String,ChallengeCard>();val observedInScan=mutableSetOf<String>();var stable=0;var previous=""
+        val until=SystemClock.elapsedRealtime()+60_000L
+        repeat(60){page->
+            check(!stop&&AutoAccessibilityService.isConnected()&&TokyoDate.of()==scanDate){"filtered_scan_cancelled_or_date_changed"}
+            check(SystemClock.elapsedRealtime()<until){"filtered_scan_time_budget_exhausted_"+cat}
+            val cards=visibleDailyCards(cat)
+            seenDailyTitles.addAll(cards.map{it.key});observedDailyTitles=seenDailyTitles.size;observedInScan.addAll(cards.map{it.key})
+            CategoryRunSelection.plan(cards,maxMeters).forEach{found[it.key]=it}
+            check(found.size<=256){"joinable_plan_capacity_exceeded"}
+            val list=ui.activeNodes(pkg=pkg,foregroundOnly=true).firstOrNull{it.isVisibleToUser&&it.viewIdResourceName=="$pkg:id/list"}
+                ?:error("filtered_native_list_unreadable")
+            val signature=dailyPositionSignature()
+            stable=if(signature==previous)stable+1 else 0;previous=signature
+            val canForward=list.actionList.any{it.id==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD}
+            val officialEmpty=ui.activeLabels(pkg=pkg).any{it=="参加可能なチャレンジはありません"}
+            val loading=ui.activeNodes(pkg=pkg,foregroundOnly=true).any{it.isVisibleToUser&&
+                (it.className?.toString()=="android.widget.ProgressBar"||it.viewIdResourceName?.substringAfterLast('/') in setOf("loading","progress","progress_bar"))}
+            val end=ChallengeScanPolicy.verifiedJoinableEnd(stable,canForward,loading,observedInScan.size,officialEmpty)
+            if(end){
+                check(observedInScan.isNotEmpty()||officialEmpty){"empty_scan_without_native_official_proof"}
+                Logger.i("CHPLAN","category=$cat pages=${page+1} complete=true eligible=${found.size} source=JOINABLE")
+                return found.values.toList()
             }
-            CategoryRunSelection.next(cards, cat, maxMeters, processed)?.let {
-                Logger.i("CHQUEUE", "category=" + cat + " maxMeters=" + maxMeters + " next=" + it.title + " currentViewport=true page=" + page)
-                return it
-            }
-            val list = ui.activeNodes(pkg = pkg).firstOrNull { it.isVisibleToUser && it.viewIdResourceName == "$pkg:id/list" }
-                ?: error("filtered_native_list_unreadable")
-            val signature = dailyPositionSignature()
-            if (signature == previous) stable++ else stable = 0
-            previous = signature
-            val canForward = list.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD }
-            if (stable >= 3 && !canForward) { Logger.i("CHQUEUE", "category=" + cat + " exhausted=true maxMeters=" + maxMeters); return null }
-            val moved = list.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-            delay(650)
-            if (!moved || dailyPositionSignature() == signature) {
-                val (w, h) = screen(); swipeListWithFallback(w, h, towardTop = false)
-            }
-            if (stable >= 5 && dailyPositionSignature() == signature) { Logger.i("CHQUEUE", "category=" + cat + " exhaustedStable=true"); return null }
+            val moved=list.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);delay(650)
+            if(!moved||dailyPositionSignature()==signature){val(w,h)=screen();swipeListWithFallback(w,h,false)}
         }
-        error("filtered_scan_budget_exhausted_" + cat)
+        error("filtered_scan_budget_exhausted_"+cat)
     }
-    suspend fun openVisibleChallenge(card: ChallengeCard): Boolean {
-        val meters = card.meters ?: return false
-        return openCardFromTop(card.cat, meters, card.title, applyFilter = false, resetToTop = false)
-    }
+    /** Compatibility for the existing debug category probe; shares the complete discovery implementation. */
+    suspend fun nextFilteredChallenge(cat:Cat,maxMeters:Int,processed:Set<String>):ChallengeCard? =
+        scanFilteredChallenges(cat,maxMeters).firstOrNull{it.key !in processed}
 
     // ------------------------------------------------------------ 基础能力
 
@@ -1534,11 +1517,14 @@ class AutomationEngine(
     ): DetailObservation {
         val start = System.currentTimeMillis()
         var readyStreak = 0
+        var visualProbes=0;var lastVisualProbe=-5000L
         var last = observeDetail(target, baseline, 0)
         while (System.currentTimeMillis() - start < 12_000L && !stop) {
             val elapsed = System.currentTimeMillis() - start
-            val visual = ui.captureVisual(baseline).visual
-            val obs = observeDetail(target, visual, elapsed)
+            val native=observeDetail(target,baseline,elapsed)
+            val needsVisual=native.state!=DetailState.DETAIL_READY&&elapsed>=1500&&visualProbes<2&&elapsed-lastVisualProbe>=3000
+            val visual=if(needsVisual){visualProbes++;lastVisualProbe=elapsed;ui.captureVisual(baseline).visual}else baseline
+            val obs=if(native.state==DetailState.DETAIL_READY)native else observeDetail(target,visual,elapsed)
             last = obs
             lastDetailObservation = obs
             Logger.i("DETAIL", obs.logLine(elapsed))
@@ -1581,10 +1567,9 @@ class AutomationEngine(
         var screenshot = ""
         try {
             val now = System.currentTimeMillis()
-            val capture = ui.captureVisual(includePng = true)
-            capture.png?.let {
-                screenshot = "${tag}_${now}.png"
-                Evidence.writeBytes(svc, screenshot, it)
+            if(ScreenshotDiagnostics.enabled(svc)){
+                screenshot="${tag}_${now}.png"
+                Evidence.capture(svc,ui,screenshot)
             }
             val windows = ui.detailWindows()
             val body = StringBuilder(obs.logLine(0)).append('\n')
@@ -1617,6 +1602,7 @@ class AutomationEngine(
      * 否则一次误触跳转（例如点进「所有ポイント」明细）就会让整轮扫描读到 0 张卡片。
      */
     private fun pageType(): String {
+        if(MaxBoostCoordinator.visible(svc))return "MAX_BOOST_DIALOG"
         when (observeDetail().state) {
             DetailState.DETAIL_OPENING,
             DetailState.DETAIL_READY,
@@ -1649,6 +1635,7 @@ class AutomationEngine(
             val t = pageType()
             Logger.i("CHAL", "ensureListPage: page=$t")
             when (t) {
+                "MAX_BOOST_DIALOG" -> MaxBoostCoordinator.refuseGenericNavigation(svc)
                 "CHALLENGE_LIST" -> return true
                 "APP_HOME", "ANA_HOME" -> {
                     ensureChallengeTab()
@@ -1673,19 +1660,29 @@ class AutomationEngine(
                 }
             }
         }
+        if(MaxBoostCoordinator.visible(svc))MaxBoostCoordinator.refuseGenericNavigation(svc)
         if (!tabsVisible()) recoverToEarnTab()
+        if(MaxBoostCoordinator.visible(svc))MaxBoostCoordinator.refuseGenericNavigation(svc)
         if (ensureChallengeTab() && hasJoinableTab()) {
             Logger.i("CHAL", "ensureListPage final=true")
             return true
         }
         // 最后一招：重启目标 App 再进列表
+        if(MaxBoostCoordinator.visible(svc))MaxBoostCoordinator.refuseGenericNavigation(svc)
         Logger.w("CHAL", "ensureListPage: relaunch target app")
         ui.launchApp(pkg)
         delay(4000)
         ensureChallengeTab()
         val ok = hasJoinableTab()
         Logger.i("CHAL", "ensureListPage final=$ok")
-        return ok
+        if(ok)return true
+        // Existing navigation retries are exhausted. Reuse the single bounded system-stop path only on pure Home.
+        if(HomeNavigationPolicy.nativeHome(ui.currentPackage(),ui.activeLabels(pkg=pkg))&&
+            StalledAdRestart.recover(svc,TokyoDate.of(),AutoAccessibilityService.currentRunId,"HOME")){
+            if(!StartupFlow(svc).prepare("HOME_RECOVERY",launch=false,allowLoginSubmission=false).ok)return false
+            return ensureChallengeTab()&&hasJoinableTab()
+        }
+        return false
     }
 
     /**
@@ -1811,6 +1808,7 @@ class AutomationEngine(
         // 按用户实际操作先选分类图标，避免在 ANA 搭乘/赞助等无关区块反复滚动。
         val filtered = if (applyFilter) selectCategoryFilter(cat) else activeFilteredCategory == cat
         Logger.i("CHAL", "category filter ${cat.name} applied=$filtered")
+        if(!filtered)return false
         if (resetToTop) scrollToTop()
         // 回顶后列表仍有 overscroll 回弹；立即读到的 bounds 会随后移动
         // （R30 实测 1km 标题从 y=1077 回弹到 y=989，旧坐标点击未打开）。
@@ -1830,7 +1828,7 @@ class AutomationEngine(
                 if (t < 300 || t > (h * 0.90).toInt()) return@firstOrNull false
                 val c = Cards.fromTitle(l) ?: return@firstOrNull false
                 val sameTitle = l == title || l.contains(title) || title.contains(l)
-                c.cat == cat && c.meters == meters && sameTitle
+                (!applyFilter || c.cat == cat) && c.meters == meters && sameTitle
             }
             if (hit != null) {
                 delay(320)
@@ -1848,7 +1846,7 @@ class AutomationEngine(
                             val t = topOf(n)
                             if (t < 300 || t > (h * 0.90).toInt()) return@firstOrNull false
                             val c = Cards.fromTitle(l) ?: return@firstOrNull false
-                            c.cat == cat && c.meters == meters &&
+                            (!applyFilter || c.cat == cat) && c.meters == meters &&
                                 (l == title || l.contains(title) || title.contains(l))
                         }
                         if (again != null) {
@@ -1862,17 +1860,18 @@ class AutomationEngine(
                             return false
                         }
                         // 点击前重新取一次节点与坐标，禁止使用滚动/回弹前的旧 bounds。
-                        val fresh = ui.activeNodes(pkg = pkg).firstOrNull { n ->
+                        ui.refreshCache()
+                        val fresh = ui.activeNodes(pkg = pkg,foregroundOnly=true).firstOrNull { n ->
                             val l = ui.label(n)
                             val c = Cards.fromTitle(l)
-                            l.isNotEmpty() && c != null && c.cat == cat && c.meters == meters &&
+                            n.isVisibleToUser && n.isEnabled && l.isNotEmpty() && c != null && (!applyFilter || c.cat == cat) && c.meters == meters &&
                                 (l == title || l.contains(title) || title.contains(l))
                         }
-                        if (fresh != null) {
-                            val fr = Rect()
-                            fresh.getBoundsInScreen(fr)
-                            if (fr.width() > 0 && fr.height() > 0) r = fr
-                        }
+                        if(fresh==null)return@repeat
+                        if(!applyFilter&&!DailyCardDeadline.matches(nativeCardFields(fresh).singleOrNull{it.viewIdResourceName=="$pkg:id/text_period"}?.let{ui.label(it)},scanDate))return false
+                        val fr=Rect();fresh.getBoundsInScreen(fr)
+                        if(fr.width()<=0||fr.height()<=0)return@repeat
+                        r=fr
                         if (r.centerY() > (h * 0.74).toInt()) {
                             Logger.w("CHAL", "card moved too low before tap (${r.centerY()}) -> scroll more")
                             ui.swipe((w * 0.97).toInt(), (h * 0.70).toInt(), (w * 0.97).toInt(), (h * 0.44).toInt(), 320)
@@ -1881,8 +1880,8 @@ class AutomationEngine(
                         }
                         tapAttempts++
                         Logger.i("CHAL", "open '$title' at (${r.centerX()},${r.centerY()}) attempt=$tapAttempts")
-                        val baseline = ui.captureVisual().visual
-                        val semantic = ui.clickSemantic(fresh ?: hit)
+                        val baseline = DetailVisual() // Native detail identity first; no per-card screenshot allocation.
+                        val semantic = ui.clickSemantic(fresh)
                         val dispatched = semantic || ui.tap(r.centerX(), r.centerY())
                         Logger.i("DETAIL", "tap dispatched=$dispatched semantic=$semantic attempt=$tapAttempts")
                         val target = ChallengeCard(cat, title, meters, title)

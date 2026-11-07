@@ -9,13 +9,13 @@ import org.json.JSONObject
 
 object LoginBonusStore {
     private fun sp(c:Context)=c.getSharedPreferences("ana_login_bonus_v1",Context.MODE_PRIVATE)
-    @Synchronized fun read(c:Context,date:String):JSONObject?=sp(c).getString("day_"+date,null)?.let{JSONObject(it)}
-    @Synchronized fun save(c:Context,date:String,row:JSONObject){check(sp(c).edit().putString("day_"+date,row.toString()).commit()){ "login_ledger_write_failed" }}
+    @Synchronized fun read(c:Context,date:String):JSONObject?=ReliableLedger.read(c,"login",date,"day"){sp(c).getString("day_"+date,null)}?.let{JSONObject(it)}
+    @Synchronized fun save(c:Context,date:String,row:JSONObject){ReliableLedger.put(c,"login",date,"day",row.toString())}
     @Synchronized fun reserve(c:Context,date:String,run:String):JSONObject? {
         val old=read(c,date)
         if(TokyoDate.of()!=date || !StartupPolicy.canReserveLogin(date,old?.optString("date"),old?.optString("state")))return null
         return JSONObject().put("runId",run).put("date",date).put("state","AD_OPENING").put("startedAt",System.currentTimeMillis())
-            .put("completed",false).put("rewardConfirmed",false).also{save(c,date,it)}
+            .put("completed",false).put("rewardConfirmed",false).put("dispatchPhase","RESERVED").also{save(c,date,it)}
     }
     fun label(c:Context,date:String):String=when(read(c,date)?.optString("state")){
         "REWARD_CONFIRMED"->"领奖广告回执已确认"
@@ -41,15 +41,23 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
     private suspend fun proof(run:String,tag:String,detail:String){
         val name="startup_"+run+"_"+tag+"_"+System.currentTimeMillis()
         Evidence.write(svc,name+".txt",detail+"\nJST="+TokyoDate.time()+"\n"+ui.dump())
-        ui.captureVisual(includePng=true).png?.let{Evidence.writeBytes(svc,name+".png",it)}
+        Evidence.capture(svc,ui,name+".png")
     }
     private fun node(id:String)=nodes().singleOrNull{it.isEnabled && it.viewIdResourceName==pkg+":id/"+id}
+    private fun loginButton():AccessibilityNodeInfo? {
+        val observed=nodes();val ls=observed.map{ui.label(it)}
+        val ids=observed.mapNotNull{it.viewIdResourceName?.takeIf{v->v.startsWith(pkg+":id/")}?.substringAfterLast('/')}.toSet()
+        val id=StartupPolicy.loginClaimId(ui.currentPackage(),ls,ids)?:return null
+        return observed.singleOrNull{it.isEnabled&&it.viewIdResourceName==pkg+":id/"+id&&
+            (id!="bonus_point"||StartupPolicy.loginVideoClaim(ui.label(it)))}
+    }
     private suspend fun tap(n:AccessibilityNodeInfo):Boolean{val r=Rect();n.getBoundsInScreen(r);return n.isVisibleToUser&&n.isEnabled&&r.width()>0&&r.height()>0&&ui.tap(r.centerX(),r.centerY())}
     private fun sdkSurface():Boolean {
-        if(StartupPolicy.loginOffer(ui.currentPackage(),labels(),ids()) || StartupPolicy.rewardReceipt(ui.currentPackage(),labels(),ids(),false))return false
+        if(StartupPolicy.loginContext(ui.currentPackage(),labels()) || StartupPolicy.rewardReceipt(ui.currentPackage(),labels(),ids(),false))return false
         return ui.currentPackage()==pkg && (AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity) || close.isAdSurface() && !normal())
     }
-    private fun normal():Boolean=ui.currentPackage()==pkg && labels().let{ls->ls.any{it in setOf("ホーム","ためる","参加可能","広告視聴")} && !AdSignals.receipt(ls) || HomeNavigationPolicy.nativeDetail(ui.currentPackage(),ls,ids())}
+    private fun normal():Boolean=ui.currentPackage()==pkg && labels().let{ls->!StartupPolicy.loginContext(pkg,ls)&&
+        (ls.any{it in setOf("ホーム","ためる","参加可能","広告視聴")} && !AdSignals.receipt(ls) || HomeNavigationPolicy.nativeDetail(ui.currentPackage(),ls,ids()))}
     suspend fun prepare(run:String, launch:Boolean=true,allowLoginSubmission:Boolean=true):StartupResult {
         val date=TokyoDate.of()
         if(!AccountSafety.authorize(svc,"startup"))return StartupResult(false,"BLOCKED",0,AccountSafety.message(svc))
@@ -73,8 +81,12 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
             if(blocked()||TokyoDate.of()!=date)return StartupResult(false,"BLOCKED",closed,"已停止、锁屏或日期变化")
             ui.refreshCache()
             if(!AccountSafety.authorize(svc,"startup"))return StartupResult(false,"BLOCKED",closed,AccountSafety.message(svc))
-            val ls=labels();val ii=ids();val login=StartupPolicy.loginOffer(ui.currentPackage(),ls,ii)
-            if(StartupPolicy.nativeBrowser(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,ii)){
+            val observed=nodes();val ls=observed.map{ui.label(it)}
+            val ii=observed.mapNotNull{it.viewIdResourceName?.takeIf{v->v.startsWith(pkg+":id/")}?.substringAfterLast('/')}.toSet()
+            val context=StartupPolicy.loginContext(ui.currentPackage(),ls);val login=StartupPolicy.loginOffer(ui.currentPackage(),ls,ii)
+            // A known daily reward is never a generic dismissible popup, including transient/incomplete layouts.
+            if(context&&!login){stable=0;delay(650);continue}
+            if(!context&&StartupPolicy.nativeBrowser(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,ii)){
                 val browserClose=node("close")?:return StartupResult(false,"BLOCKED",closed,"ANA内网页关闭控件不可用")
                 proof(run,"native_browser_before_close","observed_ANA_WebViewActivity_toolbar;navigation_only;no_reward_claim")
                 if(!ui.clickSemantic(browserClose))return StartupResult(false,"BLOCKED",closed,"ANA内网页关闭失败")
@@ -102,10 +114,12 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                     return StartupResult(false,prior.optString("state"),closed,"此前签到广告未确认，未重复提交")
                 }
                 if(!allowLoginSubmission)return StartupResult(false,"UNCONFIRMED",closed,"pending_daily_ad_login_offer_no_new_submission")
-                val button=node("button_get_point")?:return StartupResult(false,"BLOCKED",closed,"签到领奖按钮不可用")
+                if(loginButton()==null)return StartupResult(false,"BLOCKED",closed,"签到领奖按钮不可用")
                 val row=LoginBonusStore.reserve(svc,date,run)?:return StartupResult(false,"BLOCKED",closed,"签到记录不允许重复启动")
                 proof(run,"login_before_click",row.toString())
-                if(!tap(button)){row.put("state","FAILED").put("reason","login_button_click_failed");LoginBonusStore.save(svc,date,row);return StartupResult(false,"FAILED",closed,"签到广告未能打开")}
+                val sent=AdDispatchProtocol.dispatch({phase->row.put("dispatchPhase",phase).put(if(phase=="ARMED")"dispatchArmedAt" else "dispatchCompletedAt",System.currentTimeMillis());LoginBonusStore.save(svc,date,row)},
+                    {!blocked()&&TokyoDate.of()==date&&loginButton()?.let{tap(it)}==true})
+                if(!sent){row.put("state","UNCONFIRMED").put("reason","login_dispatch_unconfirmed");LoginBonusStore.save(svc,date,row);return StartupResult(false,"UNCONFIRMED",closed,"签到提交尚未确认，原记录保留待核对")}
                 val watched=observeAd(run,date,row)
                 if(!watched)return StartupResult(false,row.optString("state"),closed,row.optString("reason"))
                 stable=0;until=SystemClock.elapsedRealtime()+15_000L;continue
@@ -128,7 +142,7 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 if(!tap(node("button_ok")?:return StartupResult(false,"BLOCKED",closed,"既有回执无法关闭")))return StartupResult(false,"BLOCKED",closed,"回执关闭失败")
                 delay(900);stable=0;continue
             }
-            if(StartupPolicy.nativePopup(ui.currentPackage(),ii,login,false,false)){
+            if(StartupPolicy.nativePopup(ui.currentPackage(),ii,context,false,false)){
                 val x=node("image_close")
                 if(x!=null){val r=Rect();x.getBoundsInScreen(r);val d=svc.resources.displayMetrics.density
                     if(r.width()/d in 12f..64f && r.height()/d in 12f..64f){proof(run,"native_popup_before_close","observed_native_image_close");if(!tap(x))return StartupResult(false,"BLOCKED",closed,"宣传弹窗关闭失败");closed++;stable=0;delay(800);if(closed>=6)return StartupResult(false,"BLOCKED",closed,"启动弹窗超过有界关闭次数");continue}}
@@ -141,9 +155,10 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
             }}else stable=0
             delay(650)
         }
-        proof(run,"startup_blocked","unknown_or_unstable_foreground")
+        val knownReward=StartupPolicy.loginContext(ui.currentPackage(),labels())
+        proof(run,"startup_blocked",if(knownReward)"known_login_offer_control_incomplete; window_preserved; ids="+ids().joinToString(",") else "unknown_or_unstable_foreground")
         FaultStore.capture(svc,run,"startup","unknown_or_unstable_foreground")
-        return StartupResult(false,"BLOCKED",closed,"启动页面未稳定，已保存证据")
+        return StartupResult(false,"BLOCKED",closed,if(knownReward)"每日奖励已识别但领取控件未就绪；保留窗口未关闭" else "启动页面未稳定，已保存证据")
     }
     private suspend fun session(run:String,date:String,row:JSONObject?):StartupAdOutcome {
         close.beginFlow();var closeNode:AccessibilityNodeInfo?=null
@@ -157,7 +172,7 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 val ls=labels();val ii=ids();val ad=sdkSurface()
                 val login=StartupPolicy.loginOffer(ui.currentPackage(),ls,ii)
                 val receipt=StartupPolicy.rewardReceipt(ui.currentPackage(),ls,ii,ad)
-                val popup=StartupPolicy.nativePopup(ui.currentPackage(),ii,login,receipt,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))
+                val popup=StartupPolicy.nativePopup(ui.currentPackage(),ii,StartupPolicy.loginContext(ui.currentPackage(),ls),receipt,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))
                 closeNode=if(login||receipt||popup)null else close.identifyClose()
                 if(closeNode==null&&!login&&!receipt&&!popup&&close.revealIfNeeded())closeNode=close.identifyClose()
                 return StartupAdFrame(ad&&!popup,receipt,normal(),login,closeNode!=null,close.observedStoreOverlay,AdSignals.part(ls),ui.currentPackage()==pkg && AdSignals.error(ls),popup,advanceControl=close.observedAdvanceControl)
@@ -169,6 +184,14 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 val ok=tap(x);delay(650);return ok
             }
             override suspend fun diagnostic(reason:String){FaultStore.capture(svc,run,"startup",reason,row?.optString("startedAt").orEmpty())}
+            override suspend fun confirmedReceipt(){
+                check(row!=null&&TokyoDate.of()==date&&row.optBoolean("adDepartureObserved")){"login_receipt_binding_missing"}
+                val saved=LoginBonusStore.read(svc,date)?:error("login_receipt_identity_missing")
+                check(saved.getString("runId")==row.getString("runId")&&saved.getLong("startedAt")==row.getLong("startedAt")){"login_receipt_identity_changed"}
+                row.put("state","REWARD_CONFIRMED").put("completed",true).put("rewardConfirmed",true).put("finishedAt",System.currentTimeMillis())
+                    .put("evidence","fresh_foreground_ANA_reward_receipt_after_reserved_login_ad")
+                LoginBonusStore.save(svc,date,row)
+            }
             override suspend fun observedAd(){
                 if(row!=null){row.put("adDepartureObserved",true).put("state","AD_PLAYING");LoginBonusStore.save(svc,date,row)}
                 proof(run,if(row==null)"startup_ad_playing" else "login_ad_playing",row?.toString()?:"navigation_blocker_only")
@@ -180,7 +203,7 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 ui.tap(b.centerX(),b.centerY())
             }
         }
-        return StartupAdSequence(port).run(row!=null)
+        return try{StartupAdSequence(port).run(row!=null)}finally{closeNode=null;close.releaseVisualCache()}
     }
     private suspend fun observeAd(run:String,date:String,row:JSONObject):Boolean{
         try{
@@ -235,11 +258,12 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
             if(!safe())return false
             delay(650);ui.refreshCache()
             if(StartupPolicy.rewardReceipt(ui.currentPackage(),labels(),ids(),false)){
-                proof(run,"bound_blank_login_fresh_receipt",row.toString()+";fresh_receipt_after_same_login_normal_return")
                 row.put("previousFailure",row.optString("reason")).put("state","REWARD_CONFIRMED")
                     .put("completed",true).put("rewardConfirmed",true).put("finishedAt",System.currentTimeMillis())
                     .put("evidence","same_bound_login_fresh_native_reward_receipt_after_blank_return")
-                LoginBonusStore.save(svc,date,row);node("button_ok")?.let{tap(it)};return true
+                LoginBonusStore.save(svc,date,row)
+                proof(run,"bound_blank_login_fresh_receipt",row.toString()+";fresh_receipt_after_same_login_normal_return")
+                node("button_ok")?.let{tap(it)};return true
             }
             if(normal()||StartupPolicy.loginOffer(ui.currentPackage(),labels(),ids()))break
         }

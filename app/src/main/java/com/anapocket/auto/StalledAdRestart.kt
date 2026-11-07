@@ -17,11 +17,16 @@ object StalledAdRestart {
     private data class Bound(val key:String,val date:String,val stage:String,val state:String,val reason:String,val startedAt:Long,val confirmed:Boolean)
     private fun prefs(c:Context)=c.getSharedPreferences("ana_stalled_restart_v1",Context.MODE_PRIVATE)
     private fun bound(c:Context,date:String,stage:String):Bound? = when(stage){
+        "HOME" -> Bound("HOME|"+date+"|"+AutoAccessibilityService.currentRunId,date,stage,"NAVIGATION_STALLED","home_navigation_stalled",System.currentTimeMillis(),false)
         "STARTUP" -> LoginBonusStore.read(c,date)?.takeIf{it.optBoolean("adDepartureObserved")}?.let{
             Bound("LOGIN|"+date+"|"+it.optString("runId")+"|"+it.optLong("startedAt"),it.optString("date"),stage,it.optString("state"),it.optString("reason"),it.optLong("startedAt"),it.optBoolean("rewardConfirmed")||it.optBoolean("completed"))
         }
         "ADS" -> OfficialAdStore.attempts(c,date).lastOrNull()?.takeIf{it.terminal}?.let{
             Bound("DAILY|"+date+"|"+it.runId+"|"+it.index+"|"+it.startedAt,it.date,stage,it.state.name,it.failureReason,it.startedAt,it.rewardConfirmed||it.completed)
+        }
+        "MAX_BOOST" -> MaxBoostCompletionStore.pending(c,date)?.takeIf{MaxBoostCompletionStore.valid(c,it)}?.let{v->
+            Bound("MAX_BOOST|"+date+"|"+v.key+"|"+v.adRun+"|"+v.adIndex+"|"+v.adStarted,date,stage,"BOOST_MAX_CONFIRMED",
+                MaxBoostCompletionStore.read(c,v)?.optString("failure").orEmpty(),v.adStarted,true)
         }
         "CHALLENGES" -> {
             val a=ChallengeStore.rows(c,date)
@@ -33,9 +38,11 @@ object StalledAdRestart {
         else -> null
     }
     @Synchronized private fun reserve(c:Context,date:String,b:Bound,run:String):Boolean {
-        val p=prefs(c);if(p.contains(b.key)||p.getInt("count_"+date,0)>=3)return false
+        val p=prefs(c)
         val marker=JSONObject().put("date",date).put("identity",b.key).put("controllerRun",run).put("requestedAt",System.currentTimeMillis()).put("state","REQUESTED").put("reason",b.reason).put("noRewardInferred",true)
-        return p.edit().putString(b.key,marker.toString()).putInt("count_"+date,p.getInt("count_"+date,0)+1).commit()
+        return StalledAdRestartPolicy.reserve(p.contains(b.key),p.getInt("count_"+date,0)){
+            p.edit().putString(b.key,marker.toString()).putInt("count_"+date,p.getInt("count_"+date,0)+1).commit()
+        }
     }
     /** A previous claim survives process/update interruptions; it never grants another stop attempt. */
     private fun mark(c:Context,b:Bound,state:String){val p=prefs(c);val o=JSONObject(p.getString(b.key,"{}")!!).put("state",state).put("updatedAt",System.currentTimeMillis());check(p.edit().putString(b.key,o.toString()).commit())}
@@ -46,11 +53,28 @@ object StalledAdRestart {
     }
     suspend fun recover(svc:AutoAccessibilityService,date:String,run:String,stage:String):Boolean {
         val b=bound(svc,date,stage)?:return false
+        // A timeout is not evidence that an SDK viewing or irreversible submission has ended.
+        if(AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)||TravelSelection.hasUnresolvedAd(svc,date)||
+            OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED}){
+            Logger.w("ADRESTART","run=$run restart blocked: unresolved advertisement or SDK; original identity preserved")
+            return false
+        }
         val ui=Ui(svc);val owner=CheckinRuntime.ownership.owner()
         fun live()=!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.isConnected()&&AutoAccessibilityService.currentRunId==run&&TokyoDate.of()==date&&
             owner!=null&&owner.app=="ANA"&&owner.run==run&&CheckinRuntime.ownership.valid(owner,SystemClock.elapsedRealtime())&&!(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked&&AccountSafety.authorize(svc,"stalled_ad_restart")
         ui.refreshCache()
-        val allowed=StalledAdRestartPolicy.eligible(date,b.date,b.stage,b.state,b.reason,b.startedAt,System.currentTimeMillis(),b.confirmed,prefs(svc).contains(b.key),prefs(svc).getInt("count_"+date,0),live(),ui.currentPackage()==PKG&&AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))
+        val homeNodes=if(stage=="HOME")ui.foregroundNodes().filter{it.isVisibleToUser} else emptyList()
+        val pureHome=stage=="HOME"&&HomeNavigationPolicy.nativeHome(ui.currentPackage(),homeNodes.map{ui.label(it)})&&
+            AutoAccessibilityService.foregroundActivity==MaxBoostDialogPolicy.ACTIVITY&&
+            !AdUiClose(svc).isAdSurface()&&homeNodes.none{it.viewIdResourceName in setOf("android:id/message","android:id/button1",PKG+":id/design_bottom_sheet",PKG+":id/title_count")}
+        val allowed=if(stage=="HOME")HomeNavigationPolicy.restartAllowed(pureHome,
+            TravelSelection.hasUnresolvedAd(svc,date)||OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED}||
+                LoginBonusStore.read(svc,date)?.optString("state") in setOf("AD_OPENING","AD_PLAYING"),
+            AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),date==b.date,prefs(svc).contains(b.key),prefs(svc).getInt("count_"+date,0),live())
+        else if(stage=="MAX_BOOST")MaxBoostDialogPolicy.completedRestartAllowed(date==b.date,b.confirmed&&b.reason.startsWith("MAX_BOOST_"),
+            TravelSelection.hasUnresolvedAd(svc,date)||OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED},
+            AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),prefs(svc).contains(b.key),prefs(svc).getInt("count_"+date,0),live()&&ui.currentPackage()==PKG&&MaxBoostCoordinator.visible(svc))
+        else StalledAdRestartPolicy.eligible(date,b.date,b.stage,b.state,b.reason,b.startedAt,System.currentTimeMillis(),b.confirmed,prefs(svc).contains(b.key),prefs(svc).getInt("count_"+date,0),live(),ui.currentPackage()==PKG&&AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))
         if(!allowed)return false
         // The initial navigation stage may not interrupt a separately reserved challenge or daily viewing.
         if(stage=="STARTUP"&&(TravelSelection.hasUnresolvedAd(svc,date)||OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED}))return false
@@ -59,21 +83,21 @@ object StalledAdRestart {
         fun labels()=nodes().map{ui.label(it)}
         fun exact(text:String)=nodes().filter{ui.label(it)==text}.singleOrNull()
         fun usable(n:AccessibilityNodeInfo?):Boolean {var p=n;repeat(8){val node=p?:return false;if(!node.isEnabled)return false;if(node.isClickable)return true;p=node.parent};return false}
-        suspend fun proof(tag:String){Evidence.write(svc,"stalled_restart_"+run+"_"+tag+".txt","identity="+b.key+";stage="+stage+";JST="+TokyoDate.time()+";no_new_viewing;no_reward_inferred\n"+ui.dump());ui.captureVisual(includePng=true).png?.let{Evidence.writeBytes(svc,"stalled_restart_"+run+"_"+tag+".png",it)}}
+        suspend fun proof(tag:String){Evidence.write(svc,"stalled_restart_"+run+"_"+tag+".txt","identity="+b.key+";stage="+stage+";JST="+TokyoDate.time()+";no_new_viewing;no_reward_inferred\n"+ui.dump());Evidence.capture(svc,ui,"stalled_restart_"+run+"_"+tag+".png")}
         FaultStore.capture(svc,run,"stalled_restart","user_authorized_timeout_restart",b.startedAt.toString())
         if(!live()||!reserve(svc,date,b,run))return false
         Logger.w("ADRESTART","run="+run+" stage="+stage+" bound="+b.key+" one system restart requested; unknown preserved")
         val ok=withTimeoutOrNull(55_000L){
             if(!act{svc.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+PKG)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))})return@withTimeoutOrNull false
             var info=false
-            repeat(25){if(!live())return@withTimeoutOrNull false;delay(300);ui.refreshCache();if(StalledAdRestartPolicy.appInfo(ui.currentPackage().orEmpty(),AutoAccessibilityService.foregroundActivity,labels()))info=true;if(info)return@repeat}
+            for(i in 0 until 25){if(!live())return@withTimeoutOrNull false;delay(300);ui.refreshCache();if(StalledAdRestartPolicy.appInfo(ui.currentPackage().orEmpty(),AutoAccessibilityService.foregroundActivity,labels())){info=true;break}}
             if(!info||!live()||!StalledAdRestartPolicy.appInfo(ui.currentPackage().orEmpty(),AutoAccessibilityService.foregroundActivity,labels()))return@withTimeoutOrNull false
             val stop=exact("结束运行")?:return@withTimeoutOrNull false
             if(!usable(stop))return@withTimeoutOrNull false
             proof("observed_ana_app_info")
             var clicked=false;if(!act{clicked=ui.clickSemantic(stop)}||!clicked)return@withTimeoutOrNull false
             var dialog=false
-            repeat(15){if(!live())return@withTimeoutOrNull false;delay(300);ui.refreshCache();if(StalledAdRestartPolicy.confirmation(ui.currentPackage().orEmpty(),labels(),info))dialog=true;if(dialog)return@repeat}
+            for(i in 0 until 15){if(!live())return@withTimeoutOrNull false;delay(300);ui.refreshCache();if(StalledAdRestartPolicy.confirmation(ui.currentPackage().orEmpty(),labels(),info)){dialog=true;break}}
             if(!dialog||!live()||!StalledAdRestartPolicy.confirmation(ui.currentPackage().orEmpty(),labels(),info))return@withTimeoutOrNull false
             val confirm=exact("确定")?:return@withTimeoutOrNull false
             if(!usable(confirm))return@withTimeoutOrNull false
@@ -88,7 +112,7 @@ object StalledAdRestart {
             delay(650)
             var launched=false;if(!act{launched=ui.launchApp(PKG)}||!launched)return@withTimeoutOrNull false
             var foreground=false
-            repeat(50){if(!live())return@withTimeoutOrNull false;delay(400);ui.refreshCache();if(ui.currentPackage()==PKG)foreground=true;if(foreground)return@repeat}
+            for(i in 0 until 50){if(!live())return@withTimeoutOrNull false;delay(400);ui.refreshCache();if(ui.currentPackage()==PKG){foreground=true;break}}
             if(!foreground||!live())return@withTimeoutOrNull false
             proof("normal_relaunch_observed");true
         }?:false

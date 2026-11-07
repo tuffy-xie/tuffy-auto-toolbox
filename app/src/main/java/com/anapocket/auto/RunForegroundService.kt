@@ -11,27 +11,27 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
-/**
- * 运行期前台服务。
- *
- * 为什么需要：真机实测发现，App 退到后台后会被 lowmemorykiller 以
- * oom_score_adj=900 直接杀掉（logcat: `Kill 'com.anapocket.auto' ... reason: cw`），
- * 导致无障碍服务被反复重建、自动化中途中断。前台服务把进程优先级提到
- * FOREGROUND，是 Android 上唯一可靠的做法。
- */
+/** Visible execution notification raises importance; Android may still reclaim the process. */
 class RunForegroundService : Service() {
 
     companion object {
         private const val CH = "ana_running"
         private const val ID = 9100
+        @Volatile private var established=false
+        suspend fun ensure(ctx:Context,text:String):Boolean {
+            if(!start(ctx,text))return false
+            return kotlinx.coroutines.withTimeoutOrNull(3000L){while(!established)kotlinx.coroutines.delay(50);true}?:false
+        }
 
-        fun start(ctx: Context, text: String) {
-            try {
+        fun start(ctx: Context, text: String):Boolean {
+            return try {
                 val i = Intent(ctx, RunForegroundService::class.java).putExtra("text", text)
                 ContextCompat.startForegroundService(ctx, i)
                 Logger.i("FGS", "foreground service start requested")
+                true
             } catch (t: Throwable) {
                 Logger.w("FGS", "start failed: ${t.message}")
+                false
             }
         }
 
@@ -70,13 +70,17 @@ class RunForegroundService : Service() {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build()
             startForeground(ID, n)
+            established=true
         } catch (t: Throwable) {
+            established=false
             Logger.w("FGS", "startForeground failed: ${t.message}")
+            stopSelf(startId)
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        established=false
         try {
             stopForeground(true)
         } catch (_: Throwable) {

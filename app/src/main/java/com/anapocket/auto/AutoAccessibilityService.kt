@@ -70,6 +70,7 @@ class AutoAccessibilityService : AccessibilityService() {
         val interruptedRoutine=RoutineStore.read(this)
         runCatching { RoutineStore.reconcile(this) }
         Logger.i("A11Y", "service connected")
+        MemoryTrace.record(this,"service_connected",true)
         CheckinRuntime.serviceConnected(this)
         Notifier.serviceRestored(this)
         try {
@@ -165,7 +166,7 @@ class AutoAccessibilityService : AccessibilityService() {
             val pending=(0 until a.length()).map{a.getJSONObject(it)}.filter{it.optString("state") in setOf("AD_OPENING","UNCONFIRMED","JOINED")}.single()
             val cat=Cat.ofName(pending.getString("cat"))!!;val km=(pending.getInt("meters")+999)/1000
             val settings=Prefs.loadBlocking(this).copy(catKm=Prefs.loadBlocking(this).catKm+(cat.name to km))
-            val result=ChallengeTaskController(this).run(run,listOf(cat),allCards=true,settingsOverride=settings)
+            val result=ChallengeTaskController(this).run(run,listOf(cat),allCards=true,settingsOverride=settings).detail
             Evidence.write(this,"r44_existing_challenge_"+run+".txt",result)
             Notifier.challengeSummary(this,run,result)
             Logger.i("RECOVER_TEST","run="+run+" "+result.lineSequence().firstOrNull())
@@ -200,7 +201,7 @@ class AutoAccessibilityService : AccessibilityService() {
                 Evidence.write(this@AutoAccessibilityService,"r43_category_"+cat.name+"_"+run+".json",meta.toString(2))
                 if(!navigateOnly){
                     check(meters!=null&&meters>0){"no_real_today_remote_card"};val km=(meters+999)/1000
-                    val result=ChallengeTaskController(this@AutoAccessibilityService).run(run,listOf(cat),allCards=true,adBudget=6,settingsOverride=settings.copy(catKm=settings.catKm+(cat.name to km)))
+                    val result=ChallengeTaskController(this@AutoAccessibilityService).run(run,listOf(cat),allCards=true,adBudget=6,settingsOverride=settings.copy(catKm=settings.catKm+(cat.name to km))).detail
                     Evidence.write(this@AutoAccessibilityService,"challenge_result_"+run+".txt",result)
                     RunStore.appendHistory(this@AutoAccessibilityService,run,result);Notifier.challengeSummary(this@AutoAccessibilityService,run,result)
                     Logger.i("REMOTE_TEST","END run="+run+" cat="+cat+" "+result.lineSequence().firstOrNull())
@@ -229,22 +230,30 @@ class AutoAccessibilityService : AccessibilityService() {
     }
 
     @Synchronized
-    fun startDailyRoutine(reason:String="manual"){
+    fun startDailyRoutine(reason:String="manual",originalMode:RoutineRunMode?=null){
         if(isRunning)return
+        val mode=RoutineRunModes.choose(reason,originalMode)
         val run="RT"+java.util.UUID.randomUUID().toString()
         currentRunId=run;stopRequested=false;isRunning=true
         scope.launch{
             try{
-                RunForegroundService.start(this@AutoAccessibilityService,"每日流程执行中")
+                AnaProcessRecovery.controllerStarting(this@AutoAccessibilityService,run,mode)
+                if(!RunForegroundService.ensure(this@AutoAccessibilityService,"每日流程执行中")){
+                    if(reason.startsWith("persistent_"))AnaProcessRecovery.defer(this@AutoAccessibilityService,"foreground_start_temporarily_disallowed")
+                    else AnaProcessRecovery.deferUnstarted(this@AutoAccessibilityService,run)
+                    return@launch
+                }
                 Logger.i("ROUTINE","START run=$run reason=$reason")
-                val (outcome,summary)=DailyRoutineController(this@AutoAccessibilityService).run(run,reason.contains("manual"),reason=="manual-challenge-rescan")
+                scope.launch{while(isRunning&&currentRunId==run){MemoryTrace.record(this@AutoAccessibilityService,"routine_active");kotlinx.coroutines.delay(60_000)}}
+                val (outcome,summary)=DailyRoutineController(this@AutoAccessibilityService).run(run,mode.manual,mode.challengesOnly)
+                AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,outcome.state)
                 lastSummary=summary
                 RunStore.appendHistory(this@AutoAccessibilityService,run,summary)
                 Notifier.routineSummary(this@AutoAccessibilityService,run,summary)
                 Logger.i("ROUTINE","END run=$run state="+outcome.state)
                 if(outcome.state!="DONE")FaultStore.capture(this@AutoAccessibilityService,run,"routine",outcome.detail)
-                TaskExit.finish(this@AutoAccessibilityService,run,outcome.state=="DONE")
-            }catch(e:Exception){Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}
+                TaskExit.finish(this@AutoAccessibilityService,run,outcome.state in setOf("DONE","PARTIALLY_COMPLETED"))
+            }catch(e:Exception){runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"BLOCKED")};Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}
             finally{if(currentRunId==run){isRunning=false;stopRequested=false;RunStore.setLastRunAt(this@AutoAccessibilityService,System.currentTimeMillis());RunForegroundService.stop(this@AutoAccessibilityService)}}
         }
     }
@@ -271,7 +280,7 @@ class AutoAccessibilityService : AccessibilityService() {
         scope.launch {
             var result: DailyAdResult? = null
             try {
-                RunForegroundService.start(this@AutoAccessibilityService, "广告任务 $runId")
+                check(RunForegroundService.ensure(this@AutoAccessibilityService,"广告任务 $runId")){"foreground_execution_unavailable"}
                 Logger.i("ADTASK", "=== $runId START reason=$reason ===")
                 val r = DailyAdTaskController(this@AutoAccessibilityService).run(runId, reason, maxAttempts, manualNew)
                 result = r
@@ -354,10 +363,10 @@ class AutoAccessibilityService : AccessibilityService() {
         currentRunId = runId; stopRequested = false; isRunning = true
         scope.launch {
             try {
-                RunForegroundService.start(this@AutoAccessibilityService, "挑战接取与 Boost")
+                check(RunForegroundService.ensure(this@AutoAccessibilityService,"挑战接取与 Boost")){"foreground_execution_unavailable"}
                 Logger.i("CHBOOST", "START run=$runId categories=$categories budget=$adBudget pilot=$pilot")
                 lastSummary = if (BuildConfig.DEBUG && resumePilot != null) ChallengeTaskController(this@AutoAccessibilityService).continuePilot(runId, resumePilot, reviewedNoGain, reviewedReceipt, reviewedInitial, reviewedTitle)
-                    else ChallengeTaskController(this@AutoAccessibilityService).run(runId, categories, allCards, adBudget, pilot,settingsOverride)
+                    else ChallengeTaskController(this@AutoAccessibilityService).run(runId, categories, allCards, adBudget, pilot,settingsOverride).detail
                 Evidence.write(this@AutoAccessibilityService, "challenge_result_" + runId + ".txt", lastSummary)
                 RunStore.appendHistory(this@AutoAccessibilityService, runId, lastSummary)
                 Notifier.challengeSummary(this@AutoAccessibilityService, runId, lastSummary)

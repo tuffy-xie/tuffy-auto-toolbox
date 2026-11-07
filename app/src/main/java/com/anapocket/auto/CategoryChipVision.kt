@@ -30,8 +30,13 @@ object CategoryChipVision {
 }
 
 object CategoryRunSelection {
+    // The already verified icon owns the category. This plan filters distance only.
+    fun plan(cards:List<ChallengeCard>,maxMeters:Int):List<ChallengeCard> =
+        Cards.dedupe(cards).filter{it.meters?.let{m->m in 1..maxMeters}==true}.sortedBy{it.meters}
+    fun takeNext(plan:List<ChallengeCard>,attempted:MutableSet<String>):ChallengeCard? =
+        plan.firstOrNull{it.key !in attempted}?.also{attempted.add(it.key)}
     fun next(cards: List<ChallengeCard>, cat: Cat, maxMeters: Int, processed: Set<String>): ChallengeCard? =
-        Cards.select(Cards.dedupe(cards), cat, maxMeters).matched.firstOrNull { it.key !in processed }
+        Cards.select(Cards.dedupe(cards),cat,maxMeters).matched.firstOrNull { it.key !in processed }
 }
 
 object DistanceLimitPolicy {

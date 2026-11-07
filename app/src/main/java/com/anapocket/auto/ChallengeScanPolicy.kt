@@ -2,6 +2,8 @@ package com.anapocket.auto
 
 enum class ChallengeScanStatus { NOT_SCANNED, SCANNING, SCAN_FAILED, NO_ELIGIBLE_TASK, TASKS_AVAILABLE, PARTIALLY_COMPLETED, COMPLETED, BLOCKED }
 object ChallengeScanPolicy {
+    fun verifiedJoinableEnd(stable:Int,canForward:Boolean,loading:Boolean,observedTitles:Int,officialEmpty:Boolean)=
+        stable>=3&&!canForward&&!loading&&(observedTitles>0||officialEmpty)
     fun reusable(status: ChallengeScanStatus, scannedKm: Int, currentKm: Int, bothLists: Boolean, pending: Boolean): Boolean =
         status in setOf(ChallengeScanStatus.COMPLETED, ChallengeScanStatus.NO_ELIGIBLE_TASK) && bothLists &&
             currentKm > 0 && scannedKm == currentKm && !pending
@@ -19,10 +21,21 @@ object ChallengeScanPolicy {
         ChallengeScanStatus.NO_ELIGIBLE_TASK -> "当前官方暂无符合所选条件的可接取任务"
         ChallengeScanStatus.TASKS_AVAILABLE -> "存在可接任务"
         ChallengeScanStatus.PARTIALLY_COMPLETED -> "部分完成"
-        ChallengeScanStatus.COMPLETED -> "符合条件任务已确认完成"
+        ChallengeScanStatus.COMPLETED -> "可接取列表扫描完成，Boost另行核对"
         ChallengeScanStatus.BLOCKED -> "扫描受阻，需核对"
     }
 }
 
 /** Equality to today's native task date, never <= today or the in-progress total. */
-object ParticipatingDayPolicy { fun current(nativeTaskDate:String?,date:String)=DailyCardDeadline.matches(nativeTaskDate,date) }
+object ParticipatingDayPolicy {
+    fun current(nativeTaskDate:String?,date:String)=DailyCardDeadline.matches(nativeTaskDate,date)
+    /** Required keys expand read-only recovery inspection, never the user's acquisition selection. */
+    fun inspect(nativeTaskDate:String?,date:String,key:String,selected:Boolean,meters:Int?,maxMeters:Int,requiredKeys:Set<String>) =
+        current(nativeTaskDate,date)&&meters!=null&&(key in requiredKeys||selected&&meters<=maxMeters)
+}
+
+/** Preserving reconciliation is distinct from resetting a disposable scan projection. */
+object ChallengeScanEntryPolicy {
+    fun preservingReview(challengePending:Boolean,running:Boolean,dailyPending:Boolean,sdk:Boolean,risk:Boolean)=
+        challengePending&&!running&&!dailyPending&&!sdk&&!risk
+}

@@ -89,12 +89,12 @@ object RunStore {
 
     /** 闹钟触发时无障碍服务可能尚未连接：先挂起，等服务连上再执行。 */
     fun setPendingTrigger(ctx: Context, reason: String) {
-        sp(ctx).edit().putString("pending_trigger", reason).apply()
+        check(sp(ctx).edit().putString("pending_trigger", reason).commit()){ "pending_trigger_write_failed" }
     }
 
     fun pendingTrigger(ctx: Context): String? = sp(ctx).getString("pending_trigger", null)
 
     fun clearPendingTrigger(ctx: Context) {
-        sp(ctx).edit().remove("pending_trigger").apply()
+        check(sp(ctx).edit().remove("pending_trigger").commit()){ "pending_trigger_clear_failed" }
     }
 }

@@ -30,6 +30,8 @@ object TelegramText {
         "ANA每日任务｜$date JST\n5/5：徒步$walk · 自行车$bike · 车$car · 不限$any\n$result" +
             (if (unknown > 0) "\n历史未确认 $unknown" else "") + "\nBoost额度不等于积分到账"
     fun reason(reason: String): String = when(reason) {
+        "recorded_daily_receipt_counter_unconfirmed_no_replay" -> "原每日广告已播放，但当前次数无法唯一核对该次结果；UNKNOWN保留，已停止且未重播"
+        "recorded_daily_receipt_page_unavailable" -> "原每日广告页面未能安全读取；记录保留，已停止且未重播"
         "official_limit_with_unconfirmed_attempt" -> "官方已满，本机个别观看结果待核对"
         "original_ad_surface_missing_counter_unchanged" -> "原广告界面已不在，官方次数核对未增加；该次观看仍待核对，未重看"
         "original_ad_surface_missing_receipt_unproven" -> "原广告界面已不在，次数有增加但缺少同条奖励回执；未重复观看"

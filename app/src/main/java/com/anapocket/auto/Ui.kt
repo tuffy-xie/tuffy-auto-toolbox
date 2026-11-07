@@ -36,6 +36,39 @@ class Ui(private val svc: AutoAccessibilityService) {
     }
     fun root(): AccessibilityNodeInfo? = svc.rootInActiveWindow
 
+    /** User-authorized DUMP read, ANA component only. No shell, bitmap, retained dump or background watcher. */
+    suspend fun officialChallengeIdentity(): OfficialChallengeIdentity? {
+        // Native BottomSheetDialog events replace the accessibility class name with a Dialog.
+        // The scoped dump below, not that event label, must prove the actual resumed HomeActivity.
+        fun native():Boolean {
+            if(currentPackage()!=StartupPolicy.ANA)return false
+            if(!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))return true
+            // Share AdUiClose's actual native-receipt authority over stale SDK Activity events.
+            // The scoped diagnostic must additionally prove the resumed HomeActivity and exact IDs.
+            val visible=foregroundNodes().filter{it.isVisibleToUser}
+            return NativeChallengeReceiptPolicy.panel(currentPackage(),visible.mapNotNull{it.viewIdResourceName}.toSet(),visible.map{label(it)})
+        }
+        refreshCache();val window=root()?.windowId?:return null
+        if(!native()||svc.checkSelfPermission("android.permission.DUMP")!=android.content.pm.PackageManager.PERMISSION_GRANTED)return null
+        val result=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){
+            var process:Process?=null
+            try {
+                process=ProcessBuilder("/system/bin/dumpsys","-t","8","activity","us.ana_pocket.ANAPocket/.views.home.HomeActivity").redirectErrorStream(true).start()
+                val out=StringBuilder();val buffer=CharArray(4096)
+                process.inputStream.bufferedReader().use{reader->
+                    while(true){val n=reader.read(buffer);if(n<0)break;if(out.length+n>524288)return@withContext null;out.append(buffer,0,n)}
+                }
+                val exit=process.waitFor()
+                if(exit!=0){Logger.w("OFFICIALID","ANA scoped diagnostic exit="+exit);null}
+                else OfficialChallengeBinding.parse(out.toString()).also{if(it==null)Logger.w("OFFICIALID","ANA active Fragment identity unavailable; timeout="+out.contains("DUMP TIMEOUT"))}
+            }catch(e:Exception){Logger.w("OFFICIALID","ANA identity diagnostic failed: "+e.javaClass.simpleName);null}finally{process?.destroy()}
+        }
+        refreshCache()
+        val stable=native()&&root()?.windowId==window
+        if(result!=null&&!stable)Logger.w("OFFICIALID","ANA window changed during identity read; observation discarded")
+        return result.takeIf{stable}
+    }
+
     /**
      * 所有窗口的根节点。
      *
@@ -123,6 +156,7 @@ class Ui(private val svc: AutoAccessibilityService) {
         baseline: DetailVisual? = null,
         includePng: Boolean = false
     ): UiVisualCapture {
+        MemoryTrace.imageRequested(includePng)
         if (Build.VERSION.SDK_INT < 30) {
             return UiVisualCapture(DetailVisual(error = "api<30"))
         }
@@ -142,19 +176,19 @@ class Ui(private val svc: AutoAccessibilityService) {
                         svc.mainExecutor,
                         object : AccessibilityService.TakeScreenshotCallback {
                             override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                                if (!cont.isActive) return
+                                val buffer=result.hardwareBuffer
+                                if(!cont.isActive){buffer.close();return}
                                 var bitmap: Bitmap? = null
                                 var hardware: Bitmap? = null
                                 try {
-                                    val buffer = result.hardwareBuffer
                                     hardware = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
                                     bitmap = hardware?.copy(Bitmap.Config.ARGB_8888, false)
-                                    buffer.close()
                                     val bmp = bitmap
                                     if (bmp == null) {
                                         cont.resume(UiVisualCapture(DetailVisual(error = "bitmapCopyFailed")))
                                         return
                                     }
+                                    MemoryTrace.bitmapAllocated(bmp.allocationByteCount)
                                     val visual = analyzeVisual(bmp, baseline)
                                     val png = if (includePng) {
                                         val stream = ByteArrayOutputStream()
@@ -167,6 +201,7 @@ class Ui(private val svc: AutoAccessibilityService) {
                                         cont.resume(UiVisualCapture(DetailVisual(error = t.javaClass.simpleName)))
                                     }
                                 } finally {
+                                    buffer.close()
                                     bitmap?.recycle()
                                     if (hardware != null && hardware != bitmap && !hardware.isRecycled) hardware.recycle()
                                 }
@@ -186,6 +221,31 @@ class Ui(private val svc: AutoAccessibilityService) {
                 }
             }
         } ?: UiVisualCapture(DetailVisual(error = "screenshotTimeout"))
+    }
+
+    /** On-demand recognition only. Consumer may return scalar/bounds data, never retain the bitmap. */
+    @RequiresApi(30)
+    suspend fun <T> inspectBitmap(onFailure:((Int)->Unit)?=null,inspect:(Bitmap)->T):T? {
+        if(Build.VERSION.SDK_INT<30)return null
+        MemoryTrace.imageRequested(false)
+        return withTimeoutOrNull(1800L){suspendCancellableCoroutine<T?>{cont->
+            try{svc.takeScreenshot(Display.DEFAULT_DISPLAY,svc.mainExecutor,object:AccessibilityService.TakeScreenshotCallback{
+                override fun onSuccess(result:AccessibilityService.ScreenshotResult){
+                    val buffer=result.hardwareBuffer;var hardware:Bitmap?=null;var bitmap:Bitmap?=null
+                    try{
+                        if(!cont.isActive)return
+                        hardware=Bitmap.wrapHardwareBuffer(buffer,result.colorSpace);bitmap=hardware?.copy(Bitmap.Config.ARGB_8888,false)
+                        val image=bitmap
+                        if(image==null){if(cont.isActive)cont.resume(null);return}
+                        MemoryTrace.bitmapAllocated(image.allocationByteCount)
+                        val value=inspect(image)
+                        if(cont.isActive)cont.resume(value)
+                    }catch(t:Exception){if(cont.isActive)cont.resume(null)}
+                    finally{bitmap?.recycle();hardware?.recycle();buffer.close()}
+                }
+                override fun onFailure(errorCode:Int){onFailure?.invoke(errorCode);if(cont.isActive)cont.resume(null)}
+            })}catch(t:Exception){if(cont.isActive)cont.resume(null)}
+        }}
     }
 
     private fun analyzeVisual(bitmap: Bitmap, baseline: DetailVisual?): DetailVisual {
@@ -529,6 +589,22 @@ class Ui(private val svc: AutoAccessibilityService) {
             guard++
         }
         return false
+    }
+
+    data class ObservedTapResult(val dispatched:Boolean,val completed:Boolean?,val detail:String)
+    suspend fun tapObserved(x:Int,y:Int):ObservedTapResult {
+        if(!AccountSafety.authorize(svc))return ObservedTapResult(false,false,"account_safety_blocked")
+        val gesture=GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(Path().apply{moveTo(x.toFloat(),y.toFloat())},0,60)).build()
+        var accepted=false
+        return withTimeoutOrNull(3000L){
+            suspendCancellableCoroutine<ObservedTapResult>{cont->
+                accepted=svc.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
+                    override fun onCompleted(d:GestureDescription?){refreshCache();if(cont.isActive)cont.resume(ObservedTapResult(true,true,"onCompleted"))}
+                    override fun onCancelled(d:GestureDescription?){refreshCache();if(cont.isActive)cont.resume(ObservedTapResult(true,false,"onCancelled"))}
+                },null)
+                if(!accepted&&cont.isActive)cont.resume(ObservedTapResult(false,false,"dispatch_rejected"))
+            }
+        }?:ObservedTapResult(accepted,null,"callback_timeout")
     }
 
     suspend fun tap(x: Int, y: Int): Boolean {

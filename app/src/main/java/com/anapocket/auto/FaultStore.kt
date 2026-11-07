@@ -12,7 +12,7 @@ import java.util.zip.ZipOutputStream
 
 /** Local, bounded evidence. No credentials, no automatic upload and no changes to task ledgers. */
 object FaultStore {
-    private fun root(c:Context)=File(c.getExternalFilesDir(null)?:c.filesDir,"faults").apply{mkdirs()}
+    private fun root(c:Context)=File(c.getExternalFilesDir(null)?:c.filesDir,"faults_h14").apply{mkdirs()}
     private fun recentLog():String = runCatching {
         RandomAccessFile(File(Logger.path()),"r").use { r ->
             val n=minOf(r.length(),512*1024L).toInt();r.seek(r.length()-n)
@@ -26,24 +26,17 @@ object FaultStore {
             .put("settings",JSONObject(Prefs.loadBlocking(c).toJson()))
             .put("checkinConfig",JSONObject().also{all->CheckinApp.entries.forEach{app->val s=CheckinStore(c,app);val cfg=s.config();all.put(app.name,JSONObject().put("enabled",cfg.enabled).put("hour",cfg.hour).put("minute",cfg.minute).put("generation",cfg.generation).put("dispatch",s.dispatchInfo(date)))}})
             .put("officialObservation",OfficialAdStore.observation(c,date))
-            .put("challengeScans",ChallengeScanStore.audit(c,date))
+            .put("challengeScans",ChallengeScanStore.audit(c,date)).put("maxBoostCompletions",MaxBoostCompletionStore.diagnostics(c,date))
             .put("dailyAttempts",org.json.JSONArray().also{a->DailyAdStore.allAttempts(c,date).forEach{a.put(it.toJson())}})
             .put("accountSafety",AccountSafetyStore.pending(c)).put("challenges",ChallengeStore.rows(c,date)).put("login",LoginBonusStore.read(c,date)).put("routine",RoutineStore.read(c,date))
     }
-    private fun prune(c:Context) {
-        val base=root(c).canonicalFile
-        var bytes=base.walkTopDown().filter{it.isFile}.sumOf{it.length()}
-        val dirs=base.listFiles()?.filter{it.isDirectory}?.sortedBy{it.lastModified()}.orEmpty()
-        var count=dirs.size
-        for(d in dirs){
-            if(count<=30&&bytes<=128L*1024*1024)break
-            if(d.canonicalFile.parentFile!=base)continue
-            val size=d.walkTopDown().filter{it.isFile}.sumOf{it.length()}
-            if(d.deleteRecursively()){bytes-=size;count--}
-        }
+    private fun hasCapacity(c:Context):Boolean {
+        val base=root(c);val dirs=base.listFiles()?.filter{it.isDirectory}.orEmpty()
+        return dirs.size<30&&base.walkTopDown().filter{it.isFile}.sumOf{it.length()}<128L*1024*1024
     }
     suspend fun capture(svc:AutoAccessibilityService,run:String,module:String,reason:String,attempt:String=""):String? {
         return try {
+            if(!hasCapacity(svc)){Logger.w("FAULT","H14 evidence budget reached; old files preserved");return null}
             val ui=Ui(svc);ui.refreshCache();val pkg=ui.currentPackage()
             val locked=(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
             val dir=File(root(svc),DiagnosticPrivacy.safeName(run+"_"+module+"_"+attempt+"_"+System.currentTimeMillis())).apply{mkdirs()}
@@ -56,7 +49,7 @@ object FaultStore {
                     "${n.className} id=${n.viewIdResourceName} enabled=${n.isEnabled} clickable=${n.isClickable} bounds=$b actions=${n.actionList.map{it.id}} label="+
                         (if(n.isPassword||n.isEditable)"[PASSWORD_REDACTED]" else DiagnosticPrivacy.redact(ui.label(n).take(500)))
                 }
-                val png=ui.captureVisual(includePng=true).png
+                val png=if(ScreenshotDiagnostics.reserve(svc))ui.captureVisual(includePng=true).png?.takeIf{ScreenshotDiagnostics.charge(svc,it.size)} else null
                 ui.refreshCache()
                 if(ui.currentPackage()==pkg){
                     File(dir,"nodes.txt").writeText(nodes)
@@ -65,10 +58,20 @@ object FaultStore {
                 }else metadata.put("screenshotOmitted","foreground_changed_during_capture")
             } else metadata.put("screenshotOmitted","unrelated_app_or_locked_screen")
             File(dir,"manifest.json").writeText(DiagnosticPrivacy.redact(metadata.toString(2)))
-            File(dir,"recent.log").writeText(recentLog());prune(svc)
+            File(dir,"recent.log").writeText(recentLog())
             Logger.i("FAULT","saved run=$run module=$module reason=$reason folder=${dir.name}")
             dir.absolutePath
         } catch(e:Exception){Logger.w("FAULT","capture unavailable: "+e.javaClass.simpleName);null}
+    }
+    /** Reserved, bounded text-only fallback; no old evidence is removed when the normal fault budget is full. */
+    @Synchronized fun maxBoostFailure(c:Context,run:String,reason:String,trace:String):String? {
+        return try {
+            val f=File(c.filesDir,"max_boost_failures.log")
+            val line=DiagnosticPrivacy.redact(JSONObject().put("phoneTime",TokyoDate.time()).put("run",run).put("reason",reason.take(500)).put("trace",trace.take(3000)).put("images",false).toString())+"\n"
+            val bytes=line.toByteArray()
+            if(!MaxBoostDialogPolicy.minimalFits(f.length(),bytes.size)){Logger.w("MAXBOOST","minimal text budget reached; failure remains in routine/log");return null}
+            f.appendBytes(bytes);Logger.w("MAXBOOST","text-only failure preserved reason=$reason");f.absolutePath
+        }catch(t:Exception){Logger.w("MAXBOOST","minimal text unavailable: "+t.javaClass.simpleName);null}
     }
     fun export(c:Context):File {
         check(!AutoAccessibilityService.isRunning&&CheckinRuntime.activeApp==null){"请先停止任务，再导出故障包"}
@@ -76,19 +79,30 @@ object FaultStore {
         val dst=File(out,"Tuffy_diagnostics_"+System.currentTimeMillis()+".zip")
         val base=root(c).canonicalFile
         ZipOutputStream(dst.outputStream().buffered()).use{z->
-            fun add(name:String,data:ByteArray){z.putNextEntry(ZipEntry(name));z.write(data);z.closeEntry()}
+            var imageBytes=0L
+            fun add(name:String,data:ByteArray){
+                if(name.endsWith(".png")){if(!ScreenshotDiagnostics.enabled(c)||imageBytes+data.size>ScreenshotBudget.MAX_BYTES)return;imageBytes+=data.size}
+                z.putNextEntry(ZipEntry(name));z.write(data);z.closeEntry()
+            }
             add("current_state.json",DiagnosticPrivacy.redact(state(c).toString(2)).toByteArray())
             add("recent.log",recentLog().toByteArray())
+            add("sqlite_journal_snapshot.json",DiagnosticPrivacy.redact(ReliableLedger.exportSnapshot(c).toString(2)).toByteArray())
+            val memory=File(c.filesDir,"h14_memory.jsonl")
+            if(memory.isFile&&memory.length()<=3L*1024*1024)add("h14/memory.jsonl",memory.readBytes())
+            val maxFailure=File(c.filesDir,"max_boost_failures.log")
+            if(maxFailure.isFile&&maxFailure.length()<=64L*1024)add("h14/max_boost_failures.log",maxFailure.readBytes())
             CheckinDiagnostics.append(c,::add)
             add("README.txt","故障现场来自实际手机。screen.png缺失原因见manifest.json；checkins含各新App最近最多10次记录，附件总量最多64MB。日志已脱敏，不含Telegram设置或密钥。截图可能含广告或会员页面，请确认后手动分享。".toByteArray())
-            for(f in base.walkTopDown().filter{it.isFile}){
-                if(!f.canonicalFile.toPath().startsWith(base.toPath()))continue
+            val legacy=File(c.getExternalFilesDir(null)?:c.filesDir,"faults").canonicalFile
+            for(f in (base.walkTopDown()+legacy.walkTopDown()).filter{it.isFile}){
+                if(!f.canonicalFile.toPath().startsWith(base.toPath())&&!f.canonicalFile.toPath().startsWith(legacy.toPath()))continue
                 if(f.extension !in setOf("json","txt","log","png"))continue
+                if(f.extension=="png"&&!ScreenshotDiagnostics.enabled(c))continue
                 val data=if(f.extension=="png")f.readBytes() else DiagnosticPrivacy.redact(f.readText()).toByteArray()
-                add("faults/"+f.relativeTo(base).invariantSeparatorsPath,data)
+                add((if(f.canonicalFile.toPath().startsWith(base.toPath()))"faults_h14/"+f.relativeTo(base).invariantSeparatorsPath else "faults/"+f.relativeTo(legacy).invariantSeparatorsPath),data)
             }
         }
-        out.listFiles()?.filter{it!=dst&&it.extension=="zip"}?.sortedByDescending{it.lastModified()}?.drop(2)?.forEach{it.delete()}
+        // Never rotate or delete the user's earlier diagnostic exports automatically.
         return dst
     }
 }

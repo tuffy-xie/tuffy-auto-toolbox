@@ -1,7 +1,6 @@
 package com.anapocket.auto
 
-/** The observed opaque ad has an unnamed clickable full-screen wrapper, not a CTA. */
+/** A clickable wrapper can be a full-screen store link even when its label is empty. */
 object ControlRevealTarget {
-    fun blocks(clickable: Boolean, containsPoint: Boolean, label: String, canvasAreaFraction: Double): Boolean =
-        clickable && containsPoint && (label.isNotBlank() || canvasAreaFraction < .8)
+    fun blocks(clickable: Boolean, containsPoint: Boolean): Boolean = clickable && containsPoint
 }

@@ -1,6 +1,7 @@
 package com.anapocket.auto
 object TaskFailureText {
  fun short(raw:String):String=when{
+  raw.contains("recorded_daily_receipt_")||raw.contains("原每日广告") -> "每日广告受阻：原观看的官方结果仍待确认；UNKNOWN保留，已停止且未重播"
   raw.contains("login_blank_or_original_scene_unconfirmed_no_replay")||raw.contains("startup_ad_timeout_300s") -> "签到广告黑屏或原现场未确认，记录已保留，未重复观看"
   raw.contains("existing_login_task_unavailable_no_replay") -> "原签到任务未能恢复，记录已保留，未重复观看"
   raw.contains("原广告界面") -> raw.substringAfterLast("；").let{if(it.contains("原广告界面"))it else raw}.take(150)

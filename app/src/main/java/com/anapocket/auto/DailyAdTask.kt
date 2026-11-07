@@ -58,13 +58,21 @@ data class AdAttempt(
     val officialBefore: Int = -1,
     val officialAfter: Int = -1,
     val evidence: String = "",
-    val startState: String = "AD_OPENING"
+    val startState: String = "AD_OPENING",
+    val dispatchPhase:String="",
+    val dispatchArmedAt:Long=0,
+    val dispatchCompletedAt:Long=0,
+    val adDepartureObserved:Boolean=false,
+    val officialBinding:String=""
 ) {
     val terminal: Boolean
         get() = finishedAt > 0L
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("startState", startState)
+        if(officialBinding.isNotBlank())put("officialBinding",JSONObject(officialBinding))
+        if(adDepartureObserved)put("adDepartureObserved",true)
+        if(dispatchPhase.isNotBlank()){put("dispatchPhase",dispatchPhase);put("dispatchArmedAt",dispatchArmedAt);put("dispatchCompletedAt",dispatchCompletedAt)}
         put("runId", runId)
         put("date", date)
         put("index", index)
@@ -93,7 +101,8 @@ data class AdAttempt(
             officialBefore = o.optInt("officialBefore", -1),
             officialAfter = o.optInt("officialAfter", -1),
             evidence = o.optString("evidence"),
-            startState = o.optString("startState", "AD_OPENING")
+            startState = o.optString("startState", "AD_OPENING"),
+            dispatchPhase=o.optString("dispatchPhase"),dispatchArmedAt=o.optLong("dispatchArmedAt"),dispatchCompletedAt=o.optLong("dispatchCompletedAt"),adDepartureObserved=o.optBoolean("adDepartureObserved"),officialBinding=o.optJSONObject("officialBinding")?.toString().orEmpty()
         )
     }
 }
@@ -382,8 +391,7 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
     private suspend fun evidence(runId: String, suffix: String, state: String) {
         val name = "ad_" + runId + "_" + suffix
         Evidence.write(svc, name + ".txt", "state=" + state + "\ndateJst=" + TokyoDate.of() + "\n" + ui.dump())
-        val cap = ui.captureVisual(includePng = true)
-        cap.png?.let { Evidence.writeBytes(svc, name + ".png", it) }
+        Evidence.capture(svc,ui,name+".png")
     }
     private suspend fun dismissKnownReceipt(): Boolean {
         val n = ui.foregroundNodes().firstOrNull {
@@ -403,6 +411,8 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
             val gate = StartupFlow(svc).prepare(runId + "_navigation", launch=false,allowLoginSubmission=!reviewOnly)
             if (!gate.ok) return false
             val l = labels()
+            if(MaxBoostCoordinator.visible(svc)||ChallengeSignals.dialog(l)||
+                ui.foregroundNodes().any{it.isVisibleToUser&&it.viewIdResourceName?.substringAfterLast('/') in setOf("title_join","title_count","button_see_ad")})return false
             if (AdSignals.receipt(l)) {
                 if (staleDismissals >= 2) return false
                 evidence(runId, "stale_receipt_" + staleDismissals, "preexisting_receipt_not_attributed")
@@ -487,6 +497,9 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                 closeDriver.restoreAdAfterStore()
                 ui.refreshCache()
                 val ls = labels()
+                // Persist a real receipt/counter before any optional visual recognition or diagnostics.
+                if(ui.currentPackage()==pkg&&AdSignals.receipt(ls))return AdFrame(true,entry(),AdSignals.watched(ls),receipt=true,blocked=blocked())
+                if(ui.currentPackage()==pkg&&entry()&&AdSignals.watched(ls)!=null)return AdFrame(true,true,AdSignals.watched(ls),blocked=blocked())
                 observedClose = identifyClose()
                 if (observedClose == null && closeDriver.revealIfNeeded()) observedClose = identifyClose()
                 return AdFrame(ui.currentPackage() == pkg, entry(), AdSignals.watched(ls),
@@ -502,6 +515,14 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                 val r = closeDriver.controlBounds(n) ?: return false
                 Logger.i("ADCLOSE", "run=" + runId + " #" + attempt.index + " store=" + observedStoreOverlay + " label=" + ui.label(n) + " bounds=" + r)
                 return if (closeDriver.observedTapOnly && r.width() > 0 && r.height() > 0) ui.tap(r.centerX(), r.centerY()) else ui.click(n)
+            }
+            override suspend fun receiptObserved(frame:AdFrame,before:Int) {
+                check(frame.anaForeground&&frame.receipt){"receipt_foreground_missing"}
+                OfficialAdStore.recordReceipt(svc,date,attempt,before)
+            }
+            override suspend fun completionObserved(frame:AdFrame,before:Int,reward:Boolean) {
+                if(reward&&frame.anaForeground&&frame.watched==before+1)
+                    OfficialAdStore.commitReceipt(svc,date,attempt,before,frame.watched!!)
             }
             override suspend fun dismissReceipt() {
                 dismissKnownReceipt()
@@ -523,7 +544,7 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
     private suspend fun recoverExisting(runId:String,date:String,original:AdAttempt):String? {
         val base=java.io.File(svc.getExternalFilesDir(null)?:svc.filesDir,"evidence")
         val departure=java.io.File(base,"ad_"+original.runId+"_"+original.index+"_AD_PLAYING.txt")
-        val departed=departure.isFile&&departure.readText().let{it.startsWith("state=AD_PLAYING")&&it.contains("dateJst="+date)}
+        val departed=original.adDepartureObserved||(departure.isFile&&departure.readText().let{it.startsWith("state=AD_PLAYING")&&it.contains("dateJst="+date)})
         suspend fun fail(why:String):String {
             evidence(runId,"recover_existing_"+original.index+"_blocked",why+";original_identity_preserved;no_new_start")
             Logger.w("ADRECOVER","run=$runId originalRun="+original.runId+" index="+original.index+" blocked="+why+" no_new_start=true")
@@ -588,23 +609,39 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
         val pm = svc.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ana:dailyads")
         try {
-            wake.acquire(3 * 60 * 60 * 1000L)
+            /* No multi-hour wake hold: native readiness and active UI ownership remain bounded. */
             DailyAdStore.reconcileInterrupted(svc, date)
             OfficialAdStore.reconcile(svc,date)
             val old = OfficialAdStore.attempts(svc,date)
             val runLimit = maxAttempts.coerceIn(1, DAILY_AD_LIMIT)
             overlay.show()
             val readiness=DeviceReady.ensure(svc,runId)
+            val independentIsolation=if(readiness.ready&&!blocked()&&!AutoAccessibilityService.stopRequested&&
+                Prefs.loadBlocking(svc).adEnabled&&AccountSafety.authorize(svc,"daily_ads_isolation")&&ChallengeStore.hasPending(svc,date)){
+                PendingInitialJoinStore.onlyIsolatedPending(svc,date)||ChallengeTaskController(svc).isolateForIndependentDaily(runId,date)
+            }else false
             if (!readiness.ready) { blockedReason=readiness.reason }
             else if (!AccountSafety.authorize(svc,"daily_ads")){blockedReason="account_safety_human_required"}
-            else if (ChallengeStore.hasPending(svc, date)) { blockedReason = "unfinished_challenge_blocks_daily_navigation" }
+            else if (PendingInitialJoinPolicy.blocksDailyNavigation(ChallengeStore.hasPending(svc,date),
+                independentIsolation)) { blockedReason = "unfinished_challenge_blocks_daily_navigation" }
             else if (!Prefs.loadBlocking(svc).adEnabled) { detail = "disabled" }
             else if (blocked()) { blockedReason = "accessibility_or_keyguard" }
             else {
                 overlay.show()
                 if(old.any{!it.completed||!it.rewardConfirmed}){
                     val original=old.lastOrNull()
-                    if(original!=null&&(OfficialAdRecoveryPolicy.mayBind(old,date,TokyoDate.of(),OfficialAdStore.counter(svc,date),true)||
+                    if(original!=null&&OfficialAdStore.hasRecordedReceipt(svc,date,original)){
+                        if(!navigate(runId,reviewOnly=true))return blockedResult(runId,date,"recorded_daily_receipt_page_unavailable")
+                        val fresh=refreshOfficialEntry(runId)
+                        if(fresh==null)return blockedResult(runId,date,"recorded_daily_receipt_counter_unconfirmed_no_replay")
+                        val savedCounter=OfficialAdStore.counter(svc,date)
+                        if(savedCounter!=null&&fresh<savedCounter)return blockedResult(runId,date,"official_counter_regressed")
+                        val reconciled=OfficialAdStore.reconcileRecordedReceipt(svc,date,original,fresh)
+                        // An observed counter is not a receipt for this UNKNOWN. Keep both facts separately.
+                        OfficialAdStore.observe(svc,date,fresh,runId,if(reconciled)"original_durable_receipt_fresh_exact_counter_no_new_start" else "recorded_receipt_review_counter_only_no_reward_inferred")
+                        if(!reconciled)return blockedResult(runId,date,"recorded_daily_receipt_counter_unconfirmed_no_replay")
+                        Logger.i("ADRECOVER","run=$runId originalRun="+original.runId+" index="+original.index+" recorded_receipt_committed no_new_start=true")
+                    }else if(original!=null&&(OfficialAdRecoveryPolicy.mayBind(old,date,TokyoDate.of(),OfficialAdStore.counter(svc,date),true)||
                         ReviewedAdRecoveryPolicy.mayBind(old,date,TokyoDate.of(),OfficialAdStore.counter(svc,date),true,OfficialAdStore.reviewedKeys(svc,date)))){
                         val recoveryFailure=recoverExisting(runId,date,original)
                         if(recoveryFailure!=null)return blockedResult(runId,date,recoveryFailure)
@@ -651,12 +688,21 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                         }
                         val port = interactionPort(runId,date,attempt)
                         DailyAdStore.setState(svc, AdState.AD_OPENING, date)
-                        val receipt = if (ui.click(watch)) AdInteraction(port).awaitReceipt(before)
-                            else AdReceipt(AdState.FAILED, reason = "watch_click_failed")
-                        evidence(runId, attempt.index.toString() + "_result", receipt.toString())
+                        val sent=AdDispatchProtocol.dispatch({phase->OfficialAdStore.fence(svc,date,attempt,phase)},
+                            {!blocked()&&!AutoAccessibilityService.stopRequested&&TokyoDate.of()==date&&ui.click(watch)})
+                        var receipt=try{if(sent)AdInteraction(port).awaitReceipt(before)
+                            else AdReceipt(AdState.UNCONFIRMED,reason="watch_dispatch_unconfirmed")}
+                        finally{observedClose=null;closeDriver.releaseVisualCache()}
+                        if(receipt.reward&&!receipt.completed&&receipt.reason=="completion_not_confirmed"&&
+                            !blocked()&&!AutoAccessibilityService.stopRequested&&TokyoDate.of()==date&&entry()&&!closeDriver.isRecoverableSurface()){
+                            val fresh=refreshOfficialEntry(runId)
+                            if(fresh!=null&&OfficialAdStore.reconcileRecordedReceipt(svc,date,attempt,fresh))
+                                receipt=AdReceipt(AdState.REWARD_CONFIRMED,completed=true,reward=true,after=fresh)
+                        }
                         OfficialAdStore.finish(svc, date, runId, attempt.index, receipt.state,
                             receipt.completed, receipt.reward, receipt.reason, before, receipt.after,
                             "ad_" + runId + "_" + attempt.index + "_result.txt")
+                        evidence(runId, attempt.index.toString()+"_result",receipt.toString())
                         active = null
                         DailyAdStore.setState(svc, receipt.state, date)
                         if (receipt.state != AdState.REWARD_CONFIRMED || !receipt.completed) {

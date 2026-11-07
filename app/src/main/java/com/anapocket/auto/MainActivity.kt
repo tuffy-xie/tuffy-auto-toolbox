@@ -69,6 +69,13 @@ class MainActivity:AppCompatActivity(){
   btn(R.id.btnLockPermission).setOnClickListener{try{startActivity(Intent().setComponent(ComponentName("com.miui.securitycenter","com.miui.permcenter.permissions.PermissionsEditorActivity")).putExtra("extra_pkgname",packageName))}catch(e:Exception){safeStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+packageName)))}}
   btn(R.id.btnSafety).setOnClickListener{showSafety()};btn(R.id.btnWakeTest).setOnClickListener{Scheduler.scheduleReadinessTest(this);toast("90秒后唤醒并检查打开ANA，不观看广告")}
   btn(R.id.btnSelfTest).setOnClickListener{Scheduler.scheduleSelfTest(this,90_000L);toast("90秒后检查本机通知，不启动任务")}
+  btn(R.id.btnToggleDiagnostics).text="运行诊断与导出（长按设置截图）"
+  btn(R.id.btnToggleDiagnostics).setOnLongClickListener{
+   android.app.AlertDialog.Builder(this).setTitle("临时截图诊断")
+    .setMessage("正式运行默认不保存截图。主动开启后有效10分钟，最多12张、总计32MiB；必要视觉识别仍按需执行。历史证据不会删除。")
+    .setPositiveButton("开启10分钟"){_,_->ScreenshotDiagnostics.start(this)}
+    .setNegativeButton("关闭截图"){_,_->ScreenshotDiagnostics.stop(this)}.setNeutralButton("取消",null).show();true
+  }
   btn(R.id.btnToggleDiagnostics).setOnClickListener{val v=findViewById<View>(R.id.diagnosticPanel);v.visibility=if(v.visibility==View.VISIBLE)View.GONE else View.VISIBLE};btn(R.id.btnExport).setOnClickListener{exportLog()};btn(R.id.btnRefresh).setOnClickListener{refresh()}
   scope.launch{current=Prefs.load(this@MainActivity);applySettings();applying=false;Scheduler.schedule(this@MainActivity);refresh()};showPage(0)
  }
@@ -112,19 +119,24 @@ class MainActivity:AppCompatActivity(){
  }
 
  private fun requestChallengeScan(resetOnly:Boolean){
-  val reason=ChallengeScanStore.resetBlock(this)
+  val preserving=!resetOnly&&ChallengeScanStore.pendingReviewAllowed(this)
+  val reason=if(preserving)null else ChallengeScanStore.resetBlock(this)
   if(reason!=null){toast(reason);return}
   if(!AutoAccessibilityService.isConnected()){toast("请先开启无障碍服务，扫描状态未改变");return}
-  AlertDialog.Builder(this).setTitle(if(resetOnly)"修复／重置出行扫描状态" else "重新扫描出行任务")
-   .setMessage(if(resetOnly)"只重置当天所选分类的扫描缓存及派生完成状态，保留历史、广告回执、签到和所有已提交记录。重置后可重新扫描。" else "读取当前所选分类和公里上限，重新核对官方参加中及参加可能任务，仅接取真正遗漏的项目。已完成的每日广告不会重看。")
-   .setPositiveButton(if(resetOnly)"重置扫描状态" else "重新扫描并继续"){_,_->
-    val blocked=ChallengeScanStore.resetBlock(this)
+  AlertDialog.Builder(this).setTitle(if(preserving)"核对未确认观看（仅出行）" else if(resetOnly)"修复／重置出行扫描状态" else "重新扫描出行任务")
+   .setMessage(if(preserving)"保留原账本与扫描状态，先核对旧观看和真实页面。只有安全隔离条件全部满足才继续独立出行项目；不会重播未确认广告，也不运行每日广告。无法核实时暂停并保留记录。" else if(resetOnly)"只重置当天所选分类的扫描缓存及派生完成状态，保留历史、广告回执、签到和所有已提交记录。重置后可重新扫描。" else "读取当前所选分类和公里上限，重新核对官方参加中及参加可能任务，仅接取真正遗漏的项目。已完成的每日广告不会重看。")
+   .setPositiveButton(if(preserving)"保留记录并核对" else if(resetOnly)"重置扫描状态" else "重新扫描并继续"){_,_->
+    val blocked=if(preserving&&ChallengeScanStore.pendingReviewAllowed(this))null else ChallengeScanStore.resetBlock(this)
     if(blocked!=null){toast(blocked);return@setPositiveButton}
     val svc=AutoAccessibilityService.instance
     if(svc==null){toast("无障碍未连接，未重置");return@setPositiveButton}
     val audit="SCANRESET"+java.util.UUID.randomUUID().toString()
     scope.launch{
      FaultStore.capture(svc,audit,"challenge_scan_reset","manual_reset_only="+resetOnly)
+     if(preserving){
+      if(!ChallengeScanStore.pendingReviewAllowed(this@MainActivity)){toast("页面或任务状态已变化，未启动核对");return@launch}
+      svc.startDailyRoutine("manual-challenge-rescan");return@launch
+     }
      if(ChallengeScanStore.resetBlock(this@MainActivity)!=null){toast("任务状态已变化，请稍后重试");return@launch}
      ChallengeScanStore.reset(this@MainActivity,TokyoDate.of(),audit);refresh()
      if(resetOnly)toast("扫描状态已重置，历史记录全部保留") else svc.startDailyRoutine("manual-challenge-rescan")
@@ -140,13 +152,61 @@ class MainActivity:AppCompatActivity(){
    .setNeutralButton("处理后复核"){_,_->val svc=AutoAccessibilityService.instance;if(svc==null)toast("请先开启无障碍") else if(AutoAccessibilityService.isRunning)toast("请等待当前任务停止") else svc.startSafetyReview()}
    .setNegativeButton("保持暂停",null).show()
  }
- private fun showChallenges(){AlertDialog.Builder(this).setTitle("今日出行任务").setMessage(ChallengeStore.summary(this)).setPositiveButton("关闭",null).show()}
+ private fun showChallenges(){
+  val date=TokyoDate.of();val rows=ChallengeStore.rows(this,date)
+  val pending=(0 until rows.length()).map{rows.getJSONObject(it)}.filter{NativeChallengeReceiptPolicy.pendingForReview(it.optString("state"),PendingInitialJoinStore.isolated(it,date))}
+  val row=pending.singleOrNull();val binding=row?.let{PendingInitialJoinStore.binding(it)}
+  val builder=AlertDialog.Builder(this).setTitle("今日出行任务").setMessage(ChallengeStore.summary(this)).setPositiveButton("关闭",null)
+  if(!AutoAccessibilityService.isRunning&&CheckinRuntime.activeApp==null&&binding!=null&&NativeChallengeReceiptPolicy.reviewableInitial(binding,date))
+   builder.setNeutralButton("核对原接取回执"){_,_->reviewInitialReceipt(binding)}
+  builder.show()
+ }
+ private fun reviewInitialReceipt(expected:PendingInitialJoin){
+  val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(8),dp(20),0)}
+  box.addView(TextView(this).apply{text=expected.key.substringAfter('|')+"\n任务日 "+expected.date+"\n\n仅用于已人工核实的原广告连续返回。金额、次数和最近任务不能证明身份。这里只保存复核证据，继续任务时仍会校验官方成功页面。"})
+  val checks=listOf("已核对原派发任务、日期及观看身份","原广告直接返回，ANA未重开且未观看其他广告","已观察官方接取成功及首次Boost面板").map{text->CheckBox(this).apply{this.text=text;box.addView(this)}}
+  val hash=EditText(this).apply{hint="核对证据SHA256（64位）";setSingleLine();inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;box.addView(this)}
+  val dialog=AlertDialog.Builder(this).setTitle("原接取回执人工复核").setView(box).setNegativeButton("取消",null).setPositiveButton("保存复核证据",null).create()
+  dialog.setOnShowListener{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+   val digest=hash.text.toString().trim().lowercase(java.util.Locale.ROOT)
+   if(checks.any{!it.isChecked}||!digest.matches(Regex("[0-9a-f]{64}"))){toast("请完成逐项核对并填写真实证据SHA256");return@setOnClickListener}
+   try{
+    check(!AutoAccessibilityService.isRunning&&CheckinRuntime.activeApp==null&&TokyoDate.of()==expected.date){"当前有任务运行或日期已变更"}
+    val now=System.currentTimeMillis();val installed=packageManager.getPackageInfo(packageName,0).lastUpdateTime
+    val saved=ReliableLedger.updateChallenge(this,expected.date,expected.key){row->
+     val current=PendingInitialJoinStore.binding(row)?:return@updateChallenge null
+     val all=ReliableLedger.challenges(this,expected.date)
+     if(current!=expected||!NativeChallengeReceiptPolicy.reviewableInitial(current,TokyoDate.of())||
+       (0 until all.length()).count{val r=all.getJSONObject(it);NativeChallengeReceiptPolicy.pendingForReview(r.optString("state"),PendingInitialJoinStore.isolated(r,expected.date))}!=1)return@updateChallenge null
+     val ad=row.getJSONArray("ads").getJSONObject(0)
+     if(ad.has("nativeRecoveryStartedAt")||ad.optInt("officialPromptResumeRequests")>0||ad.has("initialReceiptReview"))return@updateChallenge null
+     ad.put("initialReceiptReview",JSONObject().put("kind",NativeChallengeReceiptPolicy.REVIEW_KIND)
+      .put("date",current.date).put("key",current.key).put("runId",current.runId).put("startedAt",current.startedAt).put("index",current.index)
+      .put("reviewedAt",now).put("installedAt",installed).put("evidenceHash",digest))
+     row
+    }
+    check(saved!=null){"原记录已变化或已保存复核，请重新核对"}
+    dialog.dismiss();toast("已保存复核证据；请继续未完成任务核对官方页面");refresh()
+   }catch(e:Exception){toast("复核未保存："+e.message)}
+  }};dialog.show()
+ }
+
  private fun showAdHistory(){val date=TokyoDate.of();val official=OfficialAdStore.counter(this,date);val f=SimpleDateFormat("HH:mm:ss",Locale.US).apply{timeZone=TimeZone.getTimeZone("Asia/Tokyo")}
   val body="官方观看次数："+(official?.let{it.toString()+"/25"}?:"尚未核对")+"\n\n"+DailyAdStore.history(this,date,60).joinToString("\n\n"){"#"+it.index+" · "+f.format(Date(it.startedAt))+"\n"+(if(it.completed)"完成已确认" else "完成待核对")+" · "+(if(it.rewardConfirmed)"奖励回执已确认" else "奖励待核对")+(if(it.failureReason.isNotBlank())"\n"+TelegramText.reason(it.failureReason) else "")}
   AlertDialog.Builder(this).setTitle("今日广告记录").setMessage(body).setPositiveButton("关闭",null).show()
  }
- private fun refresh(){if(isFinishing)return;checkinPanel?.refresh();val date=TokyoDate.of();val running=AutoAccessibilityService.isRunning;val connected=AutoAccessibilityService.isConnected()
-  val c=runCatching{DailyAdStore.counters(this,date)}.getOrElse{return};val official=OfficialAdStore.counter(this,date)
+ private fun refresh(){
+  if(isFinishing)return
+  try{refreshAvailable()}catch(e:Exception){
+   Logger.e("LEDGER","cannot read durable state; business controls disabled",e)
+   findViewById<View>(R.id.homeNotice).visibility=View.VISIBLE
+   tv(R.id.tvHomeResult).text="任务账本暂不可用"
+   tv(R.id.tvHomeReason).text="未提交新广告。请保留现场并重新打开应用；如仍失败，请导出诊断核对存储状态。"
+   btn(R.id.btnStartRoutine).isEnabled=false;btn(R.id.btnRescanChallenges).isEnabled=false;btn(R.id.btnResetChallengeScan).isEnabled=false
+  }
+ }
+ private fun refreshAvailable(){checkinPanel?.refresh();val date=TokyoDate.of();val running=AutoAccessibilityService.isRunning;val connected=AutoAccessibilityService.isConnected()
+  val c=DailyAdStore.counters(this,date);val official=OfficialAdStore.counter(this,date)
   val a=ChallengeStore.rows(this,date);val items=(0 until a.length()).map{a.getJSONObject(it)};val routine=RoutineStore.read(this,date);val login=LoginBonusStore.read(this,date)?.optString("state").orEmpty()
   tv(R.id.tvPhoneDate).text=date.replace('-','/');tv(R.id.tvHomeTitle).text=if(routine?.has("finishedAt")==true)"今日结果" else "今日任务"
   for(t in tiles){val enabled=current.catOn(t.cat);val km=current.kmOf(t.cat);val catRows=items.filter{it.optString("cat")==t.cat.name};val unknown=catRows.any{it.optString("state") !in setOf("BOOST_MAX_CONFIRMED","BOOST_MAX_OBSERVED")}
@@ -168,8 +228,8 @@ class MainActivity:AppCompatActivity(){
    btn(R.id.btnSafety).text=if(safety==null)"账号保护：正常" else "账号保护：需要人工处理"
    val incomplete=hasTodayWork&&(modes.filter{current.catOn(it)}.any{!ChallengeScanStore.complete(this,date,it,current.kmOf(it))}||(current.adEnabled&&official!=25)||login in setOf("UNCONFIRMED","FAILED"))
   findViewById<View>(R.id.homeNotice).visibility=if(!running&&(safety!=null||failed||incomplete))View.VISIBLE else View.GONE
-  tv(R.id.tvHomeResult).text=if(safety!=null)"账号保护已暂停任务" else if(failed)"本次执行已停止" else "部分任务未完成"
-  tv(R.id.tvHomeReason).text=if(safety!=null)safety.optString("title") else if(failed)TaskFailureText.short(routine?.optString("detail").orEmpty()) else if(official!=25&&current.adEnabled)"每日广告尚未完成官方核对" else "未完成项目保留，可继续处理"
+  tv(R.id.tvHomeResult).text=if(safety!=null)"账号保护已暂停任务" else if(failed&&routine?.optString("state")=="BLOCKED")"任务受阻（BLOCKED）" else if(failed)"本次执行已停止" else "部分任务未完成"
+  tv(R.id.tvHomeReason).text=if(safety!=null)safety.optString("title") else if(failed)TaskFailureText.short(routine?.optString("detail").orEmpty()) else if(AnaProcessRecovery.describe(this)!=null)AnaProcessRecovery.describe(this) else if(official!=25&&current.adEnabled)"每日广告尚未完成官方核对" else "未完成项目保留，可继续处理"
   showResultsOnly=finished&&!failed&&!incomplete&&!running&&safety==null
   btn(R.id.btnStartRoutine).isEnabled=!applying;btn(R.id.btnStartRoutine).text=if(running)"■  停止任务" else if(safety!=null)"查看并处理账号保护" else if(hasTodayWork)"▶  继续未完成任务" else "▶  开始今日任务"
   btn(R.id.btnRescanChallenges).isEnabled=!running&&!applying
