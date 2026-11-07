@@ -1,5 +1,25 @@
 # 给Claude的执行提示词
 
+## 必须先理解：这是实体安卓手机上的APK项目
+
+**Tuffy是Android APK。Tuffy和ANA Pocket官方App安装在用户的同一台实体安卓手机上，广告、任务接取、Boost、奖励弹窗和官方计数均发生在这台手机里。不是Windows程序、网站、模拟器或GitHub上的演示。**
+
+- Windows电脑负责编辑Kotlin源码、Gradle编译、签名、备份及ADB诊断；APK更新后安装回实体手机。电脑中的APK文件是构建或备份产物，不能替代手机当前实装版本。
+- 目标是手机上的Tuffy通过原有Accessibility、ForegroundService、AlarmManager/WorkManager及原生Bot独立控制ANA Pocket；USB/电脑是调试工具，不能靠Claude或ADB长期逐个派发点击来冒充自主运行。
+- GitHub保存源码与交接材料，并不连接用户的手机。看过仓库、编译成功、JUnit通过或模拟器运行，都不等于真机验证。
+- 真机验收必须实际读取手机前台Activity/Window、包名、无障碍、正式Journal/账本及ANA官方结果，核对原广告attempt，再使用手机端生产入口运行；截图、按钮返回true或广告消失不能代替奖励结算。
+- 本机调试入口：工作区 C:/Users/xiejiatao/Documents/Codex/2026-11-03/tuffy-h14-sol-high-tuffy-auto；实际源码 H:/Tuffy_Archive/Tuffy_H12_2026-11-01T11-49-30-908Z/development；ADB C:/Users/xiejiatao/android-tools/platform-tools/adb.exe。先用adb devices -l确认实际设备及授权状态，不能默认连着模拟器或任意另一台设备。
+- Tuffy包名com.anapocket.auto；ANA官方包名us.ana_pocket.ANAPocket。先核对手机实装versionCode、APK SHA、证书及A11y Enabled+Bound，再决定是否需要部署，不能只看GitHub commit推断手机已更新。
+- 若你只能访问GitHub、不能访问用户电脑或这台手机的ADB，只完成能做的源码修复、构建与测试，真机部分明确NOT_TESTED，并提供交给本地执行端的补丁与验收步骤。不得宣称“手机已安装”“广告已完成”“Routine已恢复”。
+- 任何安装必须在无活跃SDK/不可中断操作、正式备份验证通过和原签名核验通过之后。同包覆盖，保留账本、配置与UNKNOWN，不卸载、不清数据、不为安装牺牲Boost资格。当前请求不授权重播UNKNOWN。
+- 使用当前手机JST和官方业务日。下文Nov7数量和a3d6137实装记录只是历史快照，当前已经进入Nov8，必须重新读取现场，不把旧日成果当今日成果。
+
+GitHub仓库现已公开：
+https://github.com/tuffy-xie/tuffy-auto-toolbox/tree/fix/h14-resume-category-scope-20261107
+
+必须从这个H14功能分支读取代码，默认main是H12稳定主线。初始交接基线630201d、代码快照9ee18a4对应本地a3d6137；若分支后来有新提交，先审查差异，不回退、不重置本地原开发历史。
+
+
 你是Tuffy H14的Android/Kotlin可靠性工程师。请基于现有真实证据继续最小优化，目标是实际无人值守业务恢复，不是重写项目、增加测试数量或放宽账本保护。
 
 我同时提供《H14_CURRENT_ISSUES_AND_CLAUDE_HANDOFF_20261107.md》和《H14_PENDING_INVENTORY_20261107.json》。请先完整阅读，区分：仍有实际故障、修复已安装待真机验证、历史问题、已通过能力、仅待调查的假设。
