@@ -38,3 +38,11 @@ object Evidence {
     }
     fun path(ctx: Context, name: String): String = File(dir(ctx), name).absolutePath
 }
+
+/** The evidence folder holds tens of thousands of files; never materialise all of them to find one run. */
+object EvidenceFiles {
+    fun withPrefix(ctx: Context, prefix: String): List<File>? {
+        val d = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "evidence")
+        return d.listFiles { _, name -> name.startsWith(prefix) }?.toList()
+    }
+}

@@ -12,5 +12,15 @@ class SelectionAndDispatchTest {
  @Test fun oldBusinessDateIsNeverDispatched(){assertFalse(CheckinDispatchPolicy.accepts(true,3,3,false))}
  @Test fun displayedPrizeDoesNotConfirmWalletCredit(){assertEquals("REWARD_DISPLAYED",RewardVerificationPolicy.stage(true,"1",false));assertEquals("CREDIT_PENDING",RewardVerificationPolicy.credit(false,true));assertEquals("CREDIT_UNCONFIRMED",RewardVerificationPolicy.credit(false,false));assertEquals("TASK_COMPLETED",RewardVerificationPolicy.stage(true,"0",false));assertEquals("REWARD_CONFIRMED",RewardVerificationPolicy.stage(true,"1",true))}
  @Test fun actualHyperOsUnlockedMarkerAndLockedCardAreDistinguished(){assertTrue(ManagedCleanupPolicy.card("いきなりステーキ,未加锁",setOf("いきなりステーキ")));assertFalse(ManagedCleanupPolicy.card("いきなりステーキ,已加锁",setOf("いきなりステーキ")));assertFalse(ManagedCleanupPolicy.card("Tuffy的自动百宝箱,未加锁",setOf("いきなりステーキ")))}
+ @Test fun clearOthersTakesEveryUnlockedCardButTuffyAndLockedOnes(){
+  val keep=setOf("Tuffy的自动百宝箱","Tuffy")
+  assertEquals("いきなりステーキ",ManagedCleanupPolicy.otherCard("いきなりステーキ,未加锁",keep))
+  assertEquals("ANA Pocket",ManagedCleanupPolicy.otherCard("ANA Pocket,未锁定",keep))
+  assertEquals("Chrome",ManagedCleanupPolicy.otherCard("Chrome，未锁定",keep))
+  assertNull(ManagedCleanupPolicy.otherCard("Tuffy的自动百宝箱,未加锁",keep))
+  assertNull(ManagedCleanupPolicy.otherCard("楽天PointClub,已加锁",keep))
+  assertNull(ManagedCleanupPolicy.otherCard("最近任务",keep))
+  assertNull(ManagedCleanupPolicy.otherCard(",未锁定",keep))
+ }
  @Test fun onlyExactUnlockedManagedCardCanBeRemoved(){assertTrue(ManagedCleanupPolicy.card("ANA Pocket,未锁定",setOf("ANA Pocket")));assertFalse(ManagedCleanupPolicy.card("Tuffy,未锁定",setOf("ANA Pocket")));assertFalse(ManagedCleanupPolicy.card("ANA Pocket,已锁定",setOf("ANA Pocket")));assertFalse(ManagedCleanupPolicy.card("ANA Pocket Plus,未锁定",setOf("ANA Pocket")))}
 }

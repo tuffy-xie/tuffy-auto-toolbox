@@ -552,7 +552,7 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
         }
         evidence(runId,"recover_existing_"+original.index+"_before",original.toJson().toString())
         if(!departed)return fail("original_ad_departure_proof_missing")
-        if(ui.currentPackage()!=pkg&&!AdTaskReturn.restore(svc,date,runId))return fail("original_ana_task_unavailable")
+        if(ui.currentPackage()!=pkg&&!AdTaskReturn.restoreOrRelaunchIfGone(svc,date,runId))return fail("original_ana_task_unavailable")
         ui.refreshCache();closeDriver.beginFlow()
         if(!closeDriver.isRecoverableSurface()&&!AdSignals.receipt(labels())){
             val token=CheckinRuntime.ownership.owner()
@@ -600,6 +600,24 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
         Logger.i("ADLOAD_REVIEW","run="+runId+" originalRun="+a.runId+" index="+a.index+" unchanged="+fresh+" originalFailedKept=true")
         return true
     }
+    /** Review one timed-out ad once its window is gone; no advertisement is opened by this method. */
+    private suspend fun reviewBlankStall(runId:String,date:String):Boolean {
+        val rows=OfficialAdStore.attempts(svc,date);val a=rows.lastOrNull()?:return false
+        if(!OfficialLoadFailurePolicy.blankStall(a)||OfficialLoadFailurePolicy.key(a) in OfficialAdStore.reviewedKeys(svc,date)||
+            AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))return false
+        fun live()=TokyoDate.of()==date&&!blocked()&&!AutoAccessibilityService.stopRequested&&AccountSafety.authorize(svc,"daily_blank_review")
+        val waitMs=(a.finishedAt+60_000L-System.currentTimeMillis()).coerceIn(0L,60_000L)
+        repeat(((waitMs+799L)/800L).toInt()){if(!live())return false;delay(800L)}
+        if(!live()||!navigate(runId,reviewOnly=true))return false
+        val fresh=refreshOfficialEntry(runId)?:return false
+        val adClosed=!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)
+        if(!live()||!OfficialAdStore.reviewBlankStall(svc,date,runId,fresh,adClosed)){
+            Logger.w("ADBLANK","run=$runId review_rejected originalRun="+a.runId+" index="+a.index+" before="+a.officialBefore+" fresh="+fresh);return false}
+        OfficialAdStore.observe(svc,date,fresh,runId,"blank_ad_review_fresh_unchanged_counter_original_unknown_kept")
+        evidence(runId,"blank_ad_"+a.index+"_reviewed",a.toJson().toString()+";freshOfficial="+fresh+";original_unconfirmed_preserved")
+        Logger.i("ADBLANK","run=$runId reviewed originalRun="+a.runId+" index="+a.index+" unchanged="+fresh+" originalUnconfirmedKept=true")
+        return true
+    }
     suspend fun run(runId: String, reason: String, maxAttempts: Int = DAILY_AD_LIMIT, manualNew: Boolean = false): DailyAdResult {
         val date = TokyoDate.of()
         var detail = ""
@@ -628,8 +646,9 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
             else if (blocked()) { blockedReason = "accessibility_or_keyguard" }
             else {
                 overlay.show()
+                reviewBlankStall(runId,date)
                 if(old.any{!it.completed||!it.rewardConfirmed}){
-                    val original=old.lastOrNull()
+                    val original=old.lastOrNull()?.takeIf{OfficialLoadFailurePolicy.key(it) !in OfficialAdStore.reviewedKeys(svc,date)}
                     if(original!=null&&OfficialAdStore.hasRecordedReceipt(svc,date,original)){
                         if(!navigate(runId,reviewOnly=true))return blockedResult(runId,date,"recorded_daily_receipt_page_unavailable")
                         val fresh=refreshOfficialEntry(runId)

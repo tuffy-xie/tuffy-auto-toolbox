@@ -8,7 +8,11 @@ data class CheckinConfig(val enabled:Boolean=false,val hour:Int,val minute:Int,v
 
 /** Never opens an ANA ledger, settings file or account safety preference. */
 class CheckinStore(private val ctx:Context,val app:CheckinApp) {
-    companion object {private val lock=Any()}
+    companion object {
+        private val lock=Any()
+        fun taskLabel(task:String)=when(task){"points"->"1ポイントミッション";"garagara_daily"->"ガラガラポン日课";"pickup"->"PICKUP";"bonus"->"三项达成额外抽奖";"lottery1"->"ガラガラポン①";"lottery2"->"ガラガラポン②";"checkin"->"14日连续签到";"claim"->"领取昨日解锁奖励";"unlock"->"解锁明日奖励";else->"每日飞镖"}
+        fun stateLabel(state:String?)=when(state){"SUCCESS"->"完成";"ALREADY_DONE"->"今日已完成";"UNCONFIRMED"->"待核对";"PREEMPTED"->"已让出给ANA";"NEEDS_USER_ACTION"->"需人工处理";"RUNNING"->"执行中";"BLOCKED"->"受阻";null->"未执行";else->"未完成"}
+    }
     private val prefs=ctx.getSharedPreferences("checkin_v1_"+app.name,Context.MODE_PRIVATE)
     fun config()=CheckinConfig(prefs.getBoolean("enabled",false),prefs.getInt("hour",app.defaultHour),prefs.getInt("minute",app.defaultMinute),prefs.getLong("generation",0))
     fun configure(c:CheckinConfig)=synchronized(lock){require(c.hour in 0..23&&c.minute in 0..59);val old=config();val changed=old.enabled!=c.enabled||old.hour!=c.hour||old.minute!=c.minute
@@ -21,7 +25,7 @@ class CheckinStore(private val ctx:Context,val app:CheckinApp) {
         // Preserve already proved results, including during cancellation and crash reconciliation.
         if(old?.optString("state") in setOf("SUCCESS","ALREADY_DONE"))return@synchronized old!!
         if(state==CheckinState.PREEMPTED&&old!=null&&old.optString("runId")!=run)return@synchronized old
-        val row=old?:JSONObject().put("appId",app.pkg).put("businessDate",date).put("taskId",task).put("startedAt",System.currentTimeMillis()).put("rewardType",if(app==CheckinApp.RAKUTEN)"楽天ポイント" else "肉マネークーポン（円）").put("rewardAmount",JSONObject.NULL).put("evidenceId","")
+        val row=old?:JSONObject().put("appId",app.pkg).put("businessDate",date).put("taskId",task).put("startedAt",System.currentTimeMillis()).put("rewardType",when(app){CheckinApp.RAKUTEN->"楽天ポイント";CheckinApp.TIKTOK->"TikTokポイント";else->"肉マネークーポン（円）"}).put("rewardAmount",JSONObject.NULL).put("evidenceId","")
         val history=row.optJSONArray("history")?:org.json.JSONArray()
         history.put(JSONObject().put("runId",run).put("at",System.currentTimeMillis()).put("state",state.name).put("reason",reason))
         row.put("history",org.json.JSONArray().also{a->for(i in maxOf(0,history.length()-80) until history.length())a.put(history.get(i))})
@@ -37,7 +41,7 @@ class CheckinStore(private val ctx:Context,val app:CheckinApp) {
         log(run,"TASK "+task+" "+state+" "+reason)
         row
     }
-    fun tasks()=if(app==CheckinApp.RAKUTEN)listOf("points","garagara_daily","pickup","bonus","lottery1","lottery2") else listOf("darts")
+    fun tasks()=when(app){CheckinApp.RAKUTEN->listOf("points","garagara_daily","pickup","bonus","lottery1","lottery2");CheckinApp.TIKTOK->TikTokCheckinPolicy.TASKS;else->listOf("darts")}
     fun olderTaskExists(task:String,date:String)=prefs.all.keys.any{k->
         k.startsWith("task:")&&k.endsWith(":"+task)&&k.substringAfter("task:").substringBefore(":").let{it.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))&&it<date}
     }
@@ -177,6 +181,6 @@ class CheckinStore(private val ctx:Context,val app:CheckinApp) {
     fun log(run:String,message:String){File(dir(run),"events.log").appendText(TokyoDate.time()+" "+message+"\n")}
     fun summary(date:String=TokyoDate.of()):String {
         val rows=all(date);if(rows.isEmpty())return "今日尚未执行"
-        return tasks().joinToString("\n"){task->val r=read(task,date);val label=when(task){"points"->"1ポイントミッション";"garagara_daily"->"ガラガラポン日课";"pickup"->"PICKUP";"bonus"->"三项达成额外抽奖";"lottery1"->"ガラガラポン①";"lottery2"->"ガラガラポン②";else->"每日飞镖"};val status=when(r?.optString("state")){"SUCCESS"->"完成";"ALREADY_DONE"->"今日已完成";"UNCONFIRMED"->"待核对";"PREEMPTED"->"已让出给ANA";"NEEDS_USER_ACTION"->"需人工处理";"RUNNING"->"执行中";"BLOCKED"->"受阻";null->"未执行";else->"未完成"};label+"："+status+(if(r?.optString("failureReason")?.endsWith("_no_prize")==true)" · 未中奖" else if(r!=null&&r.has("rewardAmount")&&!r.isNull("rewardAmount"))" · "+r.optString("rewardAmount")+" "+r.optString("rewardType")+(if(r.optBoolean("rewardConfirmed"))" 已到账" else " 待入账核对") else "")}
+        return tasks().joinToString("\n"){task->val r=read(task,date);taskLabel(task)+"："+stateLabel(r?.optString("state"))+(if(r?.optString("failureReason")?.endsWith("_no_prize")==true)" · 未中奖" else if(r!=null&&r.has("rewardAmount")&&!r.isNull("rewardAmount"))" · "+r.optString("rewardAmount")+" "+r.optString("rewardType")+(if(r.optBoolean("rewardConfirmed"))" 已到账" else " 待入账核对") else "")}
     }
 }

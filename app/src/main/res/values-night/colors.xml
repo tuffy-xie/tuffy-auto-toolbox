@@ -1,0 +1,31 @@
+<resources>
+<color name="bg">#000000</color>
+<color name="card">#1C1C1E</color>
+<color name="card2">#2C2C2E</color>
+<color name="fill">#2C2C2E</color>
+<color name="pressed">#3A3A3C</color>
+<color name="text">#F5F5F7</color>
+<color name="muted">#8D8D93</color>
+<color name="line">#38383A</color>
+<color name="brand">#0A84FF</color>
+<color name="brand_dark">#0070E0</color>
+<color name="brand_soft">#14284A</color>
+<color name="brand_disabled">#21456E</color>
+<color name="accent">#30D158</color>
+<color name="accent_soft">#12331C</color>
+<color name="warn">#FF9F0A</color>
+<color name="warn_soft">#3A2A10</color>
+<color name="danger">#FF453A</color>
+<color name="danger_dark">#E0362C</color>
+<color name="danger_soft">#3A1513</color>
+<color name="neutral_soft">#2C2C2E</color>
+<color name="tab_idle">#8D8D93</color>
+<color name="tab_bar">#F2161618</color>
+<color name="switch_off">#39393D</color>
+<color name="switch_thumb">#FFFFFF</color>
+<color name="hero_scrim">#F21C1C1E</color>
+<color name="hero_scrim_mid">#991C1C1E</color>
+<color name="ring_track_travel">#33FA2D55</color>
+<color name="ring_track_ads">#331E9BFF</color>
+<color name="ring_track_login">#3334C759</color>
+</resources>

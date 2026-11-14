@@ -35,6 +35,9 @@ object CheckinScheduler {
         val now=System.currentTimeMillis();val due=CheckinRuntime.anaDue()
         val protect=due-300_000
         if(protect<=now){CheckinRuntime.protect(ctx);register(ctx,"ANA_PROTECT",CheckinClock.next(now+300_000,c.hour,c.minute)-300_000)} else register(ctx,"ANA_PROTECT",protect)
+        // When the grace ends without an ANA run, wake whatever check-in waited for it.
+        val release=due+CheckinClock.START_GRACE_MS+5_000
+        if(release>now)register(ctx,"ANA_RELEASE",release)
     }
     fun restore(ctx:Context)=scope.launch{
         CheckinApp.entries.forEach{app->runCatching{
@@ -56,6 +59,7 @@ object CheckinScheduler {
 class CheckinAlarmReceiver:BroadcastReceiver(){
     override fun onReceive(ctx:Context,intent:Intent){val id=intent.getStringExtra("app")?:return
         if(id=="ANA_PROTECT"){CheckinRuntime.protect(ctx);CheckinScheduler.protection(ctx);return}
+        if(id=="ANA_RELEASE"){CheckinRuntime.resumePending(ctx);return}
         val app=CheckinApp.from(id)?:return
         val at=intent.getLongExtra("scheduledAt",0)
         val pending=goAsync();CheckinScheduler.dispatch(ctx,app,"alarm",at,intent.getLongExtra("generation",0)).invokeOnCompletion{pending.finish()}

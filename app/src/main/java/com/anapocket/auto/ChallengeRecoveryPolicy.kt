@@ -20,6 +20,16 @@ object ChallengeRecoveryPolicy {
         officialPrompt&&sameDate&&pendingCount==1&&!initial&&requests in 0..1&&boost in 0..4&&
             steps.size==5&&steps.all{it>0}&&before>0&&expected==before+steps[boost]&&
             canResume(taskState,adState,reason,confirmed,index,attempts,true)
+    /** The timed-out ad is gone and ANA's own Boost panel matches this attempt: its outcome can be read there, once per task. */
+    fun panelMaySettle(taskState:String,adState:String,reason:String,confirmed:Boolean,initial:Boolean,index:Int,attempts:Int,
+        pendingCount:Int,sameDate:Boolean,bound:Boolean,dispatchPhase:String,adSurface:Boolean,priorNoGain:Boolean,outcome:String?):Boolean =
+        !adSurface&&sameDate&&pendingCount==1&&!initial&&bound&&dispatchPhase=="DISPATCHED"&&!priorNoGain&&outcome!=null&&
+            (canResume(taskState,adState,reason,confirmed,index,attempts,true)||
+                // 11/13 CAR 30km: a Pangle end card went to the Play sheet and back; ANA's panel still offered the same Boost.
+                panelOnlyFailure(taskState,adState,reason,confirmed,index,attempts))
+    /** A finished ad whose return showed no receipt; it is never watched again, only read from ANA's own panel. */
+    fun panelOnlyFailure(taskState:String,adState:String,reason:String,confirmed:Boolean,index:Int,attempts:Int):Boolean =
+        !confirmed&&index==attempts&&attempts in 1..7&&taskState=="UNCONFIRMED"&&adState=="UNCONFIRMED"&&reason=="completion_not_confirmed"
     /** Only the authenticated debug operator-review path uses this; it never grants a new ad start. */
     fun reviewableFailure(reason: String, initial: Boolean): Boolean = if (initial) reason == "ad_timeout_95s" else
         reason in setOf("ad_timeout_95s", "ad_part_timeout_95s", "ad_timeout_300s", "completion_not_confirmed")

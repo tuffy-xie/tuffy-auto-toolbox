@@ -142,25 +142,6 @@ object TelegramNotifier {
             store.status("结果已排队，等待推送")
         } catch (_: Exception) { Logger.w("TELEGRAM", "notification enqueue failed; credentials not logged") }
     }
-    fun daily(ctx: Context, r: DailyAdResult) {
-        val own=DailyAdStore.allAttempts(ctx,r.date).filter{it.runId==r.runId}
-        val reason=if(r.blockedReason.isNotBlank()||r.stopped)TelegramText.reason(if(r.stopped)"user_stopped" else r.blockedReason) else if(!r.limitReached&&r.detail.isNotBlank())TelegramText.reason(r.detail) else ""
-        enqueue(ctx,r.runId,TelegramText.officialDaily(r.date,OfficialAdStore.counter(ctx,r.date),own.count{it.completed},r.unconfirmed,reason))
-    }
-    fun challenge(ctx: Context, runId: String, result: String) {
-        val date=TokyoDate.of();val rows=ChallengeStore.rows(ctx,date);val touched=mutableListOf<ChallengeRunItem>()
-        for(i in 0 until rows.length()){
-            val row=rows.getJSONObject(i);val ads=row.optJSONArray("ads")?:continue
-            val own=(0 until ads.length()).map{ads.getJSONObject(it)}.filter{it.optString("runId")==runId||it.optString("recoveryRunId")==runId}
-            if(own.isEmpty())continue
-            val cat=Cat.ofName(row.optString("cat"))?:continue
-            val unknown=own.any{it.optString("state")=="UNCONFIRMED"||!it.optBoolean("confirmed")&&!it.optBoolean("officialNoGain")}
-            val joined=row.optString("state") in setOf("BOOST_MAX_CONFIRMED","BOOST_MAX_OBSERVED","JOINED")
-            touched.add(ChallengeRunItem(cat.title+Dist.label(row.optInt("meters")),row.optInt("boost"),joined,unknown))
-        }
-        enqueue(ctx,runId,ChallengeRunMessage.render(date,touched))
-
-    }
 }
 class TelegramWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {

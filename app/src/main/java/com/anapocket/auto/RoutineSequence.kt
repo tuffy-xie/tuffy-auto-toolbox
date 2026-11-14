@@ -26,6 +26,8 @@ class RoutineSequence(private val port:RoutinePort) {
         }
         if(port.stopped())return RoutineOutcome("STOPPED","已按请求停止",results)
         if(!port.sameDate())return RoutineOutcome("BLOCKED","手机任务日期已变化，下次使用新日期",results)
+        // A stage may stop yet let a later, independent stage run (travel blocked, daily ads still done); the day stays unfinished.
+        results.values.firstOrNull{it.state=="BLOCKED"}?.let{return RoutineOutcome("BLOCKED",it.detail,results)}
         if(results.values.any{it.state=="PARTIALLY_COMPLETED"})return RoutineOutcome("PARTIALLY_COMPLETED","独立任务已处理；部分接取或Boost仍待核对，原回执保留",results)
         return RoutineOutcome("DONE","今日流程已处理",results)
     }

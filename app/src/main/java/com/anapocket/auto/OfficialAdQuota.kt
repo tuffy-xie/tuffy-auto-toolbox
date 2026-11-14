@@ -60,7 +60,8 @@ object OfficialAdStore {
             val p=a.getJSONObject(it);val row=rows.singleOrNull{r->OfficialLoadFailurePolicy.key(r)==p.getString("key")}
                 ?:error("load_review_binding_missing")
             check(p.getString("date")==date&&p.getInt("counter")==row.officialBefore&&
-                p.getString("source")=="native_load_failure_and_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.failedLoad(row)){"load_review_invalid"}
+                (p.getString("source")=="native_load_failure_and_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.failedLoad(row)||
+                    p.getString("source")=="timed_out_ad_closed_and_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.blankStall(row))){"load_review_invalid"}
             p.getString("key")
         };check(keys.distinct().size==keys.size){"duplicate_load_review"};return keys.toSet()
     }
@@ -86,6 +87,15 @@ object OfficialAdStore {
         val list=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));list.put(JSONObject().put("key",OfficialLoadFailurePolicy.key(a))
             .put("date",date).put("counter",counter).put("source","native_load_failure_and_fresh_unchanged_counter")
             .put("nativeFault",proof).put("reviewRunId",run).put("checkedAt",System.currentTimeMillis()))
+        check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
+        return true
+    }
+    @Synchronized fun reviewBlankStall(c:Context,date:String,run:String,counter:Int,adClosed:Boolean):Boolean{
+        val rows=attempts(c,date);val a=rows.lastOrNull()?:return false;val keys=reviewKeys(c,date,rows)
+        if(!OfficialLoadFailurePolicy.mayReviewBlank(rows,date,TokyoDate.of(),counter,adClosed,hasRecordedReceipt(c,date,a),System.currentTimeMillis()-a.finishedAt,keys))return false
+        val list=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));list.put(JSONObject().put("key",OfficialLoadFailurePolicy.key(a))
+            .put("date",date).put("counter",counter).put("source","timed_out_ad_closed_and_fresh_unchanged_counter")
+            .put("reviewRunId",run).put("checkedAt",System.currentTimeMillis()))
         check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
         return true
     }
@@ -131,7 +141,8 @@ object OfficialAdStore {
         val rows=attempts(c,date);val last=rows.lastOrNull()?:return false
         if(!hasRecordedReceipt(c,date,a)||TokyoDate.of()!=date)return false
         if(last.completed&&last.rewardConfirmed&&last.state==AdState.REWARD_CONFIRMED)return last.officialAfter==fresh
-        if(!OfficialAdRecoveryPolicy.recordedReceipt(rows,date,TokyoDate.of(),fresh,true))return false
+        val keys=reviewKeys(c,date,rows)
+        if(!OfficialAdRecoveryPolicy.recordedReceipt(rows.filterNot{OfficialLoadFailurePolicy.reviewable(it)&&OfficialLoadFailurePolicy.key(it) in keys},date,TokyoDate.of(),fresh,true))return false
         val next=last.copy(state=AdState.REWARD_CONFIRMED,completed=true,rewardConfirmed=true,finishedAt=System.currentTimeMillis(),
             officialAfter=fresh,failureReason="",evidence=last.evidence+";original_durable_native_receipt_and_fresh_exact_counter")
         save(c,date,rows.dropLast(1)+next) // Existing FULL transaction; original identity and all other attempts unchanged.

@@ -10,12 +10,14 @@ object GoogleDismissPolicy {
         google&&screenHeight>0&&ids.containsAll(setOf("app-interstitial-slot","playable-area-och-anchor"))&&
             id=="close-btn"&&top>=screenHeight*.25
 
+    /** The tracked window can be ANA's ComponentDialog while the Google interstitial is on screen; its slot id proves the ad. */
+    fun interstitialActivity(activity:String)=activity in setOf("com.google.android.gms.ads.AdActivity","androidx.activity.ComponentDialog")
     fun advanceControl(pkg:String?,activity:String,ids:Set<String>,nodeClass:String,clickable:Boolean,label:String)=
-        pkg=="us.ana_pocket.ANAPocket"&&activity=="com.google.android.gms.ads.AdActivity"&&
+        pkg=="us.ana_pocket.ANAPocket"&&interstitialActivity(activity)&&
             "app-interstitial-slot" in ids&&nodeClass=="android.widget.Button"&&clickable&&label.trim()=="Skip"
     fun noThanks(pkg:String?,activity:String,visibleIds:Set<String>,id:String?,nodeClass:String,
         clickable:Boolean,childLabels:List<String>):Boolean =
-        pkg=="us.ana_pocket.ANAPocket"&&activity=="com.google.android.gms.ads.AdActivity"&&
+        pkg=="us.ana_pocket.ANAPocket"&&interstitialActivity(activity)&&
             visibleIds.containsAll(setOf("app-interstitial-slot","mys-wrapper","dismiss-button"))&&
             id=="dismiss-button"&&nodeClass=="android.view.View"&&clickable&&
             childLabels.map{it.trim()}.filter{it.isNotEmpty()}==listOf("NO THANKS")

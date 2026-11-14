@@ -11,6 +11,12 @@ class DailyCardDeadlineTest {
         val c = Cards.fromTitle("元気にお出かけ💪1日5km歩こう🚶")!!
         assertEquals(Cat.WALK,c.cat); assertEquals(5000,c.meters)
     }
+    @Test fun endDateTaggedDailyWalkTitleIsRecognized() {
+        val c = Cards.fromTitle("【11/13終了】元気にお出かけ💪1日5km歩こう🚶")!!
+        assertEquals(Cat.WALK,c.cat); assertEquals(5000,c.meters)
+        assertFalse(UnknownDailyCardPolicy.mustReview("【11/13終了】元気にお出かけ💪1日5km歩こう🚶",true,1))
+        assertNull(Cards.fromTitle("【11/13終了】元気にお出かけ1週間で5km歩こう"))
+    }
     @Test fun nonstandardTitleObeysInclusiveKilometreLimit() {
         val c = Cards.fromTitle("元気にお出かけ💪1日5km歩こう🚶")!!
         assertEquals(1,Cards.select(listOf(c),Cat.WALK,5000).matched.size)

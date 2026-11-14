@@ -56,7 +56,7 @@ class AppTaskPolicyTest {
         assertEquals(at("2026-10-30 00:03:00"),CheckinClock.next(now,0,3))
         assertEquals(at("2026-10-30 09:15:00"),CheckinClock.next(now,9,15))
         assertEquals(at("2026-10-30 09:30:00"),CheckinClock.next(now,9,30))
-        assertEquals(2,CheckinApp.entries.map{it.pkg}.toSet().size)
+        assertEquals(3,CheckinApp.entries.map{it.pkg}.toSet().size)
     }
     @Test fun midnightProtectionStartsOnPreviousDate(){
         assertFalse(CheckinClock.protected(at("2026-10-29 23:57:59"),0,3,true,true))

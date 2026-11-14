@@ -11,7 +11,8 @@ object MBridgePlaybackPolicy {
     fun mayContinue(labels:List<String>,requests:Int)=warning(labels)&&requests in 0..1
     fun playableControl(id:String?,nodeClass:String,clickable:Boolean,left:Int,top:Int,width:Int,height:Int,
         screenWidth:Int,screenHeight:Int,density:Float,labels:List<String>):Boolean =
-        id in setOf("m-playable-skip","m-playable-close")&&nodeClass=="android.widget.TextView"&&clickable&&
+        // "close" is the end-card X (Nov 9, 630,78-690,140), a blank TextView beside the left-hand "privacyIcon".
+        id in setOf("m-playable-skip","m-playable-close","close")&&nodeClass=="android.widget.TextView"&&clickable&&
             !mustWait(labels)&&density>0&&width/density in 12f..64f&&height/density in 12f..64f&&
             left>=screenWidth*.6&&top>=0&&top<screenHeight*.2&&left+width<=screenWidth&&top+height<=screenHeight
 }

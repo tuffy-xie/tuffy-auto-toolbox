@@ -12,7 +12,10 @@ import java.util.Locale
  */
 object Logger {
     private val fmt = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
-    private val lines = ArrayList<String>(256)
+    /** In-memory tail for the diagnostics card and the file-less fallback only; the file keeps everything. */
+    private const val MEMORY_LINES = 500
+    private const val MEMORY_LINE_CHARS = 600
+    private val lines = ArrayDeque<String>(MEMORY_LINES)
 
     @Volatile
     private var file: File? = null
@@ -44,8 +47,8 @@ object Logger {
             else -> Log.i("AnaAuto", "$tag $msg")
         }
         synchronized(this) {
-            lines.add(line)
-            while (lines.size > 1500) lines.removeAt(0)
+            lines.addLast(if (line.length > MEMORY_LINE_CHARS) line.take(MEMORY_LINE_CHARS) + "…" else line)
+            while (lines.size > MEMORY_LINES) lines.removeFirst()
         }
         try {
             file?.appendText(line + "\n")

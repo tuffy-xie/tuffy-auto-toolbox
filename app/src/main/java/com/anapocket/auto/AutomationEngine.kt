@@ -144,7 +144,9 @@ class AutomationEngine(
         val unknown = today.filter { (title, fields) -> UnknownDailyCardPolicy.mustReview(ui.label(title),
             fields.any { it.viewIdResourceName == "$pkg:id/unit" && ui.label(it) in setOf("km", "m") },
             fields.count { it.viewIdResourceName == "$pkg:id/icon" }) }
-        check(unknown.isEmpty()) { "unsupported_same_day_distance_card:" + unknown.joinToString { ui.label(it.first) } }
+        // 11/12: a campaign card (【LIVE配信前に1km🚶で最大400pt】＋アンケート回答で3,000pt🎁) stopped the whole WALK category.
+        // An unknown card is never joined; it is logged and skipped so the known daily cards still run.
+        if(unknown.isNotEmpty())Logger.w("CHPLAN","unsupported_same_day_distance_card_skipped:"+unknown.joinToString{ui.label(it.first)})
         return Cards.dedupe(today.mapNotNull { Cards.fromTitle(ui.label(it.first))?.let{card->if(selectedCategory==null)card else card.copy(cat=selectedCategory)} })
     }
     private fun dailyPositionSignature(): String {
@@ -169,9 +171,44 @@ class AutomationEngine(
         val strip=Rect();(categoryRow()?:return "missing").getBoundsInScreen(strip)
         return ui.activeNodes(pkg=pkg,foregroundOnly=true).filter{val b=Rect();it.getBoundsInScreen(b);it.isVisibleToUser&&strip.contains(b)&&it.isClickable}.joinToString("|"){val b=Rect();it.getBoundsInScreen(b);ui.label(it)+"@"+b}
     }
+    private fun cornerCloseNode(nodes:List<AccessibilityNodeInfo>):AccessibilityNodeInfo? {
+        val m=svc.resources.displayMetrics
+        return nodes.firstOrNull{n->
+            val b=Rect();n.getBoundsInScreen(b);val parent=n.parent
+            n.viewIdResourceName==null&&n.isEnabled&&n.isClickable&&n.className?.toString()=="android.widget.ImageView"&&parent!=null&&run{
+                val p=Rect();parent.getBoundsInScreen(p)
+                CategoryOverlayPolicy.cornerClose(b.width()/m.density,b.height()/m.density,parent.isClickable,p.width().toFloat()/m.widthPixels,p.height().toFloat()/m.heightPixels,parent.childCount)&&
+                    nodes.any{c->val r=Rect();c.getBoundsInScreen(r);c.className?.toString()=="android.widget.Button"&&ui.label(c).isNotBlank()&&r.top>=b.bottom&&p.contains(r)}
+            }
+        }
+    }
+    /** Observed tutorial OK, promo X and completed-sheet X only. Never a CTA such as 挑戦する or 報酬を受け取る. */
+    private suspend fun dismissCategoryOverlay():Boolean {
+        ui.refreshCache()
+        if(AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))return false
+        val fg=ui.currentPackage();val nodes=ui.activeNodes(pkg=pkg,foregroundOnly=true).filter{it.isVisibleToUser}
+        val labels=nodes.map{ui.label(it)}
+        val ids=nodes.mapNotNull{it.viewIdResourceName?.takeIf{v->v.startsWith("$pkg:id/")}?.substringAfterLast('/')}.toSet()
+        fun byId(id:String)=nodes.firstOrNull{it.isEnabled&&it.viewIdResourceName=="$pkg:id/$id"}
+        val promo=StartupPolicy.nativePopup(fg,ids,StartupPolicy.loginContext(fg,labels),StartupPolicy.rewardReceipt(fg,labels,ids,false),false)
+        // A promo card can sit on top of a waiting tutorial, so the card closes first.
+        val kind:String;val target:AccessibilityNodeInfo
+        val corner=cornerCloseNode(nodes)
+        when{
+            corner!=null->{kind="promo_corner";target=corner}
+            promo&&byId("image_close")!=null->{kind="promo_image_close";target=byId("image_close")!!}
+            CategoryOverlayPolicy.tutorial(ids)&&byId("ok_button")!=null->{kind="tutorial_ok";target=byId("ok_button")!!}
+            CategoryOverlayPolicy.completedSheet(ids)&&byId("close")!=null->{kind="completed_sheet_close";target=byId("close")!!}
+            else->return false
+        }
+        val b=Rect();target.getBoundsInScreen(b);if(b.width()<=0||b.height()<=0)return false
+        Logger.i("CHSTRIP","category_overlay_dismiss kind="+kind+" bounds="+b)
+        val ok=ui.tap(b.centerX(),b.centerY());delay(1200);return ok
+    }
+    private suspend fun clearCategoryOverlays(){repeat(CategoryOverlayPolicy.MAX_DISMISSALS){if(!dismissCategoryOverlay())return}}
     private suspend fun awaitClearCategoryFrame() {
         val until=SystemClock.elapsedRealtime()+90_000L
-        val date=TokyoDate.of();var captured=false
+        val date=TokyoDate.of();var captured=false;var dismissed=0
         while(SystemClock.elapsedRealtime()<until){
             check(!stop&&TokyoDate.of()==date){"category_visibility_stopped_or_date_changed"}
             ui.refreshCache()
@@ -184,6 +221,7 @@ class AutomationEngine(
             }}?:error("category_icon_screenshot_unavailable")
             if(ready)return
             if(!captured){captured=true;Logger.w("CHSTRIP","category_visual_obscured no_navigation_gestures=true");FaultStore.capture(svc,AutoAccessibilityService.currentRunId,"category_visibility","native_category_frame_obscured_no_tap")}
+            if(dismissed<CategoryOverlayPolicy.MAX_DISMISSALS&&dismissCategoryOverlay()){dismissed++;continue}
             delay(1000)
         }
         error("category_visual_obscured_timeout")
@@ -212,7 +250,9 @@ class AutomationEngine(
         wakeScreen(); ensureForeground()
         if(MaxBoostCoordinator.visible(svc))MaxBoostCoordinator.refuseGenericNavigation(svc)
         check(StartupFlow(svc).prepare("NAV"+System.currentTimeMillis(),launch=false,allowLoginSubmission=allowLoginSubmission).ok) { "startup_popup_blocks_category_navigation" }
+        clearCategoryOverlays()
         check(ensureListPage() && ensureChallengeTab()) { "filtered_list_unreachable" }
+        clearCategoryOverlays()
         check(StartupFlow(svc).prepare("CATNAV"+System.currentTimeMillis(),launch=false,allowLoginSubmission=allowLoginSubmission).ok){"category_popup_blocks_navigation"}
         // A selected joinable tab does not expand its collapsed header when tapped again.
         check(scrollToTop()) { "filtered_navigation_top_not_verified" }
@@ -834,6 +874,7 @@ class AutomationEngine(
 
         // 冷启动后 App 停在「ホーム」页，顶部没有 チャレンジ tab，
         // 必须先点底部「ためる」（R18 实测：直接点顶部会 challenge_tab_unreachable）。
+        clearCategoryOverlays()
         if (!tabsVisible()) {
             Logger.i("CHAL", "challenge tab: not on earn page -> go earn first")
             goEarnTab()

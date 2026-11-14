@@ -21,17 +21,3 @@ object TaskFailureText {
   else->"任务已暂停，原因详见执行记录"
  }
 }
-data class ChallengeRunItem(val name:String,val boost:Int,val joined:Boolean,val unknown:Boolean)
-object ChallengeRunMessage {
- fun render(date:String,items:List<ChallengeRunItem>):String{
-  val done=items.filter{!it.unknown&&it.joined&&it.boost==5}.map{it.name}
-  val pending=items.filter{!it.unknown&&(!it.joined||it.boost<5)}.map{it.name+"（Boost "+it.boost+"/5）"}
-  val unknown=items.filter{it.unknown}.map{it.name}
-  val lines=mutableListOf("Tuffy｜ANA出行任务｜"+date)
-  if(done.isNotEmpty())lines.add("✅ 已接取并升满："+done.joinToString("、"))
-  if(pending.isNotEmpty())lines.add("⏳ 待完成："+pending.joinToString("、"))
-  if(unknown.isNotEmpty())lines.add("⚠ 待核对："+unknown.joinToString("、"))
-  if(items.isEmpty())lines.add("本次没有新增任务，详情见执行记录")
-  return lines.joinToString("\n")
- }
-}

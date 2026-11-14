@@ -8,6 +8,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 
+/** Longest real run on record was 96 min (Nov 3); three hours means something is stuck, not slow. */
+private const val ROUTINE_WATCHDOG_MS = 3 * 60 * 60 * 1000L
+
 /**
  * 常驻无障碍服务：系统绑定后保持存活，所有自动化动作都在此服务内执行。
  * 不依赖 PC / ADB，安装并授权后由系统闹钟即可独立运行。
@@ -52,6 +55,8 @@ class AutoAccessibilityService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     @Volatile private var lastSafetyScan=0L
+    /** One event-driven safety scan at a time; each scan walks every window, so overlapping ones only add garbage. */
+    private val safetyScanBusy=java.util.concurrent.atomic.AtomicBoolean(false)
 
     @Volatile
     var lastSummary: String = ""
@@ -72,6 +77,7 @@ class AutoAccessibilityService : AccessibilityService() {
         Logger.i("A11Y", "service connected")
         MemoryTrace.record(this,"service_connected",true)
         CheckinRuntime.serviceConnected(this)
+        DailyDigest.schedule(this)
         Notifier.serviceRestored(this)
         try {
             Scheduler.schedule(this)
@@ -98,8 +104,9 @@ class AutoAccessibilityService : AccessibilityService() {
             if (component.contains("Activity") || component.endsWith("Dialog") ||
                 AdSdkWindows.contains(component)) foregroundActivity = component
         }
-        if(isRunning && android.os.SystemClock.elapsedRealtime()-lastSafetyScan>500){
-            lastSafetyScan=android.os.SystemClock.elapsedRealtime();scope.launch{runCatching{AccountSafety.authorize(this@AutoAccessibilityService,"accessibility_event")}.onFailure{requestStop("safety_check_failed")}}
+        if(isRunning && android.os.SystemClock.elapsedRealtime()-lastSafetyScan>500 && safetyScanBusy.compareAndSet(false,true)){
+            lastSafetyScan=android.os.SystemClock.elapsedRealtime()
+            scope.launch{try{runCatching{AccountSafety.authorize(this@AutoAccessibilityService,"accessibility_event")}.onFailure{requestStop("safety_check_failed")}}finally{safetyScanBusy.set(false)}}
         }
         // 保留分阶段轮询，事件仅作窗口/内容更新遥测，避免事件风暴直接驱动状态迁移。
         if (event?.packageName?.toString() != "us.ana_pocket.ANAPocket") return
@@ -235,10 +242,12 @@ class AutoAccessibilityService : AccessibilityService() {
         val mode=RoutineRunModes.choose(reason,originalMode)
         val run="RT"+java.util.UUID.randomUUID().toString()
         currentRunId=run;stopRequested=false;isRunning=true
-        scope.launch{
+        val main=scope.launch{
+            var endState="BLOCKED";var endDetail=""
             try{
                 AnaProcessRecovery.controllerStarting(this@AutoAccessibilityService,run,mode)
                 if(!RunForegroundService.ensure(this@AutoAccessibilityService,"每日流程执行中")){
+                    endState="DEFERRED" // AnaProcessRecovery owns this restart
                     if(reason.startsWith("persistent_"))AnaProcessRecovery.defer(this@AutoAccessibilityService,"foreground_start_temporarily_disallowed")
                     else AnaProcessRecovery.deferUnstarted(this@AutoAccessibilityService,run)
                     return@launch
@@ -246,6 +255,7 @@ class AutoAccessibilityService : AccessibilityService() {
                 Logger.i("ROUTINE","START run=$run reason=$reason")
                 scope.launch{while(isRunning&&currentRunId==run){MemoryTrace.record(this@AutoAccessibilityService,"routine_active");kotlinx.coroutines.delay(60_000)}}
                 val (outcome,summary)=DailyRoutineController(this@AutoAccessibilityService).run(run,mode.manual,mode.challengesOnly)
+                endState=outcome.state;endDetail=outcome.detail
                 AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,outcome.state)
                 lastSummary=summary
                 RunStore.appendHistory(this@AutoAccessibilityService,run,summary)
@@ -253,8 +263,21 @@ class AutoAccessibilityService : AccessibilityService() {
                 Logger.i("ROUTINE","END run=$run state="+outcome.state)
                 if(outcome.state!="DONE")FaultStore.capture(this@AutoAccessibilityService,run,"routine",outcome.detail)
                 TaskExit.finish(this@AutoAccessibilityService,run,outcome.state in setOf("DONE","PARTIALLY_COMPLETED"))
-            }catch(e:Exception){runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"BLOCKED")};Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}
-            finally{if(currentRunId==run){isRunning=false;stopRequested=false;RunStore.setLastRunAt(this@AutoAccessibilityService,System.currentTimeMillis());RunForegroundService.stop(this@AutoAccessibilityService)}}
+            }catch(e:Exception){endDetail=e.message.orEmpty();runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"BLOCKED")};Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");runCatching{FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}}
+            finally{
+                if(currentRunId==run){isRunning=false;stopRequested=false;RunStore.setLastRunAt(this@AutoAccessibilityService,System.currentTimeMillis());RunForegroundService.stop(this@AutoAccessibilityService)}
+                RoutineRetry.afterRun(this@AutoAccessibilityService,run,endState,endDetail)
+                DailyDigest.evaluate(this@AutoAccessibilityService)
+            }
+        }
+        // Each step has its own bound, the run had none: a hang would hold the phone and every check-in.
+        scope.launch{
+            kotlinx.coroutines.delay(ROUTINE_WATCHDOG_MS)
+            if(!isRunning||currentRunId!=run)return@launch
+            Logger.w("ROUTINE","watchdog run=$run exceeded "+ROUTINE_WATCHDOG_MS/60_000+"min; safe stop")
+            RoutineRetry.watchdogRun=run;requestStop("watchdog")
+            kotlinx.coroutines.delay(10*60_000L)
+            if(isRunning&&currentRunId==run){Logger.w("ROUTINE","watchdog run=$run still active after stop; cancelling");main.cancel()}
         }
     }
 

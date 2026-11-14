@@ -66,7 +66,6 @@ object Notifier {
         val text="ANA任务结果已保存，已退出前台；自动锁屏未确认，请检查手机。"
         ensureChannel(ctx)
         if(canNotify(ctx))runCatching{NotificationManagerCompat.from(ctx).notify(9005,base(ctx,"任务收尾需要检查",text).build())}
-        TelegramNotifier.enqueue(ctx,"EXIT_"+run,text)
     }
 
     fun safetyPause(ctx:Context,row:org.json.JSONObject){
@@ -96,7 +95,7 @@ object Notifier {
     }
 
     fun dailyAdSummary(ctx: Context, r: DailyAdResult) {
-        runCatching { TelegramNotifier.daily(ctx, r) }
+        DailyDigest.evaluate(ctx)
         ensureChannel(ctx)
         if (!canNotify(ctx)) return
         val title = when {
@@ -116,15 +115,16 @@ object Notifier {
         }
     }
 
+    /** Every run, retry and resume posts here; Telegram only hears about the day through DailyDigest. */
     fun routineSummary(ctx:Context,runId:String,text:String){
-        TelegramNotifier.enqueue(ctx,runId,text)
+        DailyDigest.evaluate(ctx)
         ensureChannel(ctx)
         if(canNotify(ctx))NotificationManagerCompat.from(ctx).notify(ID_SUMMARY,base(ctx,"每日流程执行结果",text).build())
         Logger.i("NOTIFY","routine summary posted run="+runId)
     }
 
     fun challengeSummary(ctx: Context, runId: String, result: String) {
-        runCatching { TelegramNotifier.challenge(ctx, runId, result) }
+        DailyDigest.evaluate(ctx)
         ensureChannel(ctx)
         if (!canNotify(ctx)) return
         NotificationManagerCompat.from(ctx).notify(ID_SUMMARY,
@@ -149,9 +149,10 @@ object Notifier {
     fun serviceRestored(ctx:Context){runCatching{NotificationManagerCompat.from(ctx).cancel(ID_SERVICE)}}
 
     fun needService(ctx: Context) {
+        val text = "定时任务已触发，但无障碍服务未连接，无法操作界面。请打开应用并确认无障碍服务处于开启状态。"
+        DailyDigest.alert(ctx, "ACCESSIBILITY", "⚠️ Tuffy｜需要你处理\n$text")
         ensureChannel(ctx)
         if (!canNotify(ctx)) return
-        val text = "定时任务已触发，但无障碍服务未连接，无法操作界面。请打开应用并确认无障碍服务处于开启状态。"
         try {
             NotificationManagerCompat.from(ctx)
                 .notify(ID_SERVICE, base(ctx, "需要开启无障碍服务", text).build())

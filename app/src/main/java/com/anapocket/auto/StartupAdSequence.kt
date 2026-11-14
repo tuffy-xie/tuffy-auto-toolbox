@@ -18,10 +18,12 @@ interface StartupAdPort {
 }
 /** Startup dismissal is navigation evidence only; a login reward needs a new official receipt after an observed ad. */
 class StartupAdSequence(private val p:StartupAdPort){
+    // 11/10 Ogury closed at 7 s and 11/12 closed at 35 s both forfeited the login bonus; 11/08 credited after ~70 s.
+    companion object { const val REWARD_VIEW_MS=90_000L }
     suspend fun run(requireReward:Boolean):StartupAdOutcome{
         val diagnostic=DiagnosticCapturePolicy()
         val start=p.now();var departed=false;var nativeClosed=0;var advanceClosed=0;var storeClosed=0;var lastClose=-100_000L
-        var part:AdPart?=null;var returned:Long?=null;var stable=0;var popupCloses=0
+        var part:AdPart?=null;var returned:Long?=null;var stable=0;var popupCloses=0;var adSince:Long?=null
         while(p.now()-start<300_000L){
             if(p.stopped())return StartupAdOutcome("UNCONFIRMED","user_stopped")
             if(!p.sameDate())return StartupAdOutcome("UNCONFIRMED","phone_date_changed")
@@ -33,7 +35,7 @@ class StartupAdSequence(private val p:StartupAdPort){
                 if(popupCloses>=6||!p.dismissPopup())return StartupAdOutcome("UNCONFIRMED","native_popup_not_dismissed")
                 popupCloses++;p.pause(750);continue
             }
-            if(f.ad&&!departed){departed=true;p.observedAd()}
+            if(f.ad&&!departed){departed=true;adSince=p.now();p.observedAd()}
             if(StartupPolicy.loginConfirmed(requireReward,departed,f.receipt,p.sameDate())){p.confirmedReceipt();return StartupAdOutcome("REWARD_CONFIRMED")}
             if(!requireReward&&!f.ad&&!f.store&&(f.normal||f.login)){
                 if(++stable>=3)return StartupAdOutcome("DISMISSED")
@@ -46,7 +48,10 @@ class StartupAdSequence(private val p:StartupAdPort){
             if(next!=null&&(part==null||next.total==part!!.total&&next.current>part!!.current)){
                 part=next;nativeClosed=0;advanceClosed=0;storeClosed=0
             }
-            if(f.close&&!f.login&&!f.receipt&&p.now()-lastClose>=2000L&&(if(f.store)storeClosed<2 else if(f.advanceControl)advanceClosed<3 else nativeClosed<3)){
+            // 11/10: Ogury shows its close at once; tapping it 7 s in forfeited the login video bonus.
+            // A reward video's own plain close waits until a full video could have played.
+            val early=requireReward&&!f.store&&!f.advanceControl&&f.part==null&&adSince!=null&&p.now()-adSince!!<REWARD_VIEW_MS
+            if(f.close&&!early&&!f.login&&!f.receipt&&p.now()-lastClose>=2000L&&(if(f.store)storeClosed<2 else if(f.advanceControl)advanceClosed<3 else nativeClosed<3)){
                 if(f.store)storeClosed++ else if(f.advanceControl)advanceClosed++ else nativeClosed++
                 lastClose=p.now();p.close()
             }

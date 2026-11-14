@@ -2,6 +2,31 @@ package com.anapocket.auto
 
 import kotlinx.coroutines.delay
 
+/** Moloco's fullscreen ad exposes a labelled corner Skip that leads to its labelled Close. Observed on the real phone. */
+object MolocoClosePolicy {
+    fun skip(activity:String,className:String,label:String,clickable:Boolean,left:Int,top:Int,width:Int,height:Int)=
+        activity.startsWith("com.moloco.sdk.")&&className=="android.widget.Button"&&clickable&&label.trim()=="Skip"&&
+            left>=width*.7&&top<=height*.15
+}
+
+/**
+ * AppLovin's end-card close is a blank clickable FrameLayout wrapping one blank View (Nov 9, 626,133-680,187).
+ * Shape alone never authorizes a tap: the caller still needs the painted cross inside these bounds.
+ */
+object AppLovinClosePolicy {
+    fun isActivity(name:String)=name.startsWith("com.applovin.adview.AppLovinFullscreen")
+    fun wrapper(activity:String,className:String,label:String,clickable:Boolean,childCount:Int,left:Int,top:Int,screenWidth:Int,screenHeight:Int)=
+        isActivity(activity)&&className in setOf("android.widget.FrameLayout","android.view.View")&&clickable&&label.isBlank()&&childCount==1&&
+            left>=screenWidth*.5&&top<=screenHeight*.25
+    /**
+     * The video's top-left skip control, a blank View (Nov 9, 22,63-88,129). It only leads to the end card with the real close,
+     * so it is tried after the close and never confirms a reward.
+     */
+    fun skip(activity:String,className:String,label:String,clickable:Boolean,left:Int,top:Int,width:Int,height:Int,screenWidth:Int,screenHeight:Int,density:Float)=
+        isActivity(activity)&&className=="android.view.View"&&clickable&&label.isBlank()&&left<screenWidth*.2&&top<screenHeight*.12&&
+            density>0&&width/density in 24f..44f&&height/density in 24f..44f
+}
+
 /** Only foreground ANA receipt text and its explicitly labelled watched counter are trusted. */
 object AdSignals {
     fun closeLabel(value: String): Boolean = value.trim().lowercase(java.util.Locale.ROOT) in setOf(
@@ -107,6 +132,8 @@ class AdInteraction(private val port: AdInteractionPort) {
         var stallKey:String? = null
         var stallQuietSince=0L
         var lastClose = Long.MIN_VALUE / 2
+        var lastReceiptDismiss = Long.MIN_VALUE / 2
+        var receiptDismissRetries = 0
         suspend fun emit(s: AdState) {
             if (lastState != s) { lastState = s; port.state(s) }
         }
@@ -119,6 +146,13 @@ class AdInteraction(private val port: AdInteractionPort) {
                 port.receiptObserved(f,before)
                 reward = true
                 emit(AdState.REWARD_CONFIRMED)
+                port.dismissReceipt()
+                lastReceiptDismiss = port.now()
+            } else if (reward && !f.blocked && !f.error && f.anaForeground && f.receipt &&
+                receiptDismissRetries < 5 && port.now() - lastReceiptDismiss >= 2000L) {
+                // The official counter stays hidden behind this dialog, so one missed tap must not end in a timeout.
+                receiptDismissRetries++
+                lastReceiptDismiss = port.now()
                 port.dismissReceipt()
             }
             if(!f.receipt && diagnostic.shouldCapture(port.now()-start,f.adSurface,!f.entry&&!f.receipt&&!f.closeAvailable)) port.diagnostic("slow_or_unrecognized_ad")

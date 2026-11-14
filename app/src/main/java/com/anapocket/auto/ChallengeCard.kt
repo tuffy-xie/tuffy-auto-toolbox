@@ -48,7 +48,8 @@ object Cards {
         val m = strictRe.find(t)
         if (m == null) {
             // Observed under WALK with a same-day native deadline. Never accept weekly/compound titles.
-            val dailyWalk = Regex("^元気にお出かけ.*?1日\\s*(\\d+(?:\\.\\d+)?)\\s*(km|m)\\s*歩こう").find(t) ?: return null
+            // 11/11: ANA prefixed the same card with an end-date tag, e.g. "【11/13終了】元気にお出かけ💪1日5km歩こう🚶".
+            val dailyWalk = Regex("^(?:【[^】]{1,20}】\\s*)?元気にお出かけ.*?1日\\s*(\\d+(?:\\.\\d+)?)\\s*(km|m)\\s*歩こう").find(t) ?: return null
             val value = dailyWalk.groupValues[1].toDoubleOrNull() ?: return null
             val meters = Math.round(value * if (dailyWalk.groupValues[2] == "km") 1000.0 else 1.0).toInt()
             return ChallengeCard(Cat.WALK, t, meters.takeIf { it > 0 }, raw.trim())

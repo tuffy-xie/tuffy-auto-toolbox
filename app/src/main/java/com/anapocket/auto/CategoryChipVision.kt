@@ -29,6 +29,18 @@ object CategoryChipVision {
     }>pixels.size*.5||Cat.values().any{selectedBackground(it,pixels)})
 }
 
+/** ANA stacks tutorials and promo cards over the list on a cold start. Only their own close controls are ever tapped. */
+object CategoryOverlayPolicy {
+    const val MAX_DISMISSALS=6
+    /** day_filter_tutorial and type_filter_tutorial, each with its own ok_button. */
+    fun tutorial(ids:Set<String>)="ok_button" in ids&&ids.any{it.endsWith("_tutorial_balloon")}
+    /** The completed-challenge sheet: its X keeps the reward unclaimed. */
+    fun completedSheet(ids:Set<String>)="design_bottom_sheet" in ids&&"close" in ids&&"button_receive" in ids
+    /** The id-less 42dp corner image of a promo card, directly under a full-screen clickable root with one card. */
+    fun cornerClose(widthDp:Float,heightDp:Float,parentClickable:Boolean,parentWidthRatio:Float,parentHeightRatio:Float,parentChildren:Int)=
+        widthDp in 30f..50f&&heightDp in 30f..50f&&parentClickable&&parentWidthRatio>=.95f&&parentHeightRatio>=.8f&&parentChildren==2
+}
+
 object CategoryRunSelection {
     // The already verified icon owns the category. This plan filters distance only.
     fun plan(cards:List<ChallengeCard>,maxMeters:Int):List<ChallengeCard> =

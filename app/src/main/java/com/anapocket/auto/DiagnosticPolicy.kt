@@ -20,6 +20,44 @@ object DiagnosticPrivacy {
     fun safeName(value:String)=value.replace(Regex("[^A-Za-z0-9_.-]"),"_").take(100).trim('.') .ifBlank{"unknown"}
 }
 
+data class FaultDir(val name:String,val date:String,val modified:Long,val bytes:Long)
+
+/**
+ * One busy day must not silence later days. Total size stays bounded; when it is full the oldest fault
+ * folders make room (11/10: the folder had been full since earlier days, so the 40km stall left no evidence).
+ */
+object FaultBudgetPolicy {
+    /**
+     * 11/11: the cap of 60 was used up by 02:56 and every later failure of the night (walk stalls, TikTok) left
+     * nothing. The cap is now a ring: at the cap today's own oldest folder makes room, so the newest failure is
+     * always kept and earlier days are not touched by one busy night.
+     */
+    const val MAX_DIRS_PER_DAY=200
+    const val MAX_TOTAL_BYTES=256L*1024*1024
+    /** Room kept free for the capture about to be written (log tail, nodes, manifest, one screenshot). */
+    const val CAPTURE_RESERVE_BYTES=8L*1024*1024
+    /** Log tail per fault folder; the full 512 KB tail is still in every export and on the phone's own log. */
+    const val CAPTURE_LOG_BYTES=192L*1024
+    fun hasRoom(dirDates:List<String>,today:String,totalBytes:Long)=
+        dirDates.count{it==today}<MAX_DIRS_PER_DAY&&totalBytes<MAX_TOTAL_BYTES
+    /**
+     * Folders to delete so a new capture fits. First today's oldest ones while today is at its cap, then by total
+     * size: oldest first, today's folders only after every older day's.
+     */
+    fun evict(dirs:List<FaultDir>,today:String,looseBytes:Long=0):List<FaultDir> {
+        val out=mutableListOf<FaultDir>()
+        val todays=dirs.filter{it.date==today}.sortedWith(compareBy<FaultDir>{it.modified}.thenBy{it.name})
+        val over=todays.size-(MAX_DIRS_PER_DAY-1)
+        if(over>0)out.addAll(todays.take(over))
+        var total=looseBytes+dirs.sumOf{it.bytes}-out.sumOf{it.bytes}
+        for(d in dirs.filter{it !in out}.sortedWith(compareBy<FaultDir>{it.date==today}.thenBy{it.modified}.thenBy{it.name})){
+            if(total<=MAX_TOTAL_BYTES-CAPTURE_RESERVE_BYTES)break
+            out.add(d);total-=d.bytes
+        }
+        return out
+    }
+}
+
 object TaskExitPolicy {
     fun canLock(returnedHome:Boolean,stopped:Boolean,pending:Boolean,sameRun:Boolean)=returnedHome&&!stopped&&!pending&&sameRun
     fun lockConfirmed(screenOff:Boolean,keyguardLocked:Boolean)=screenOff&&keyguardLocked

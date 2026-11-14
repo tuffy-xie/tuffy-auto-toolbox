@@ -82,7 +82,9 @@ object ChallengeScanStore {
     fun resetBlock(c:Context):String? {
         if(AutoAccessibilityService.isRunning||CheckinRuntime.activeApp!=null)return "请等待当前任务停止后再扫描"
         val date=TokyoDate.of()
-        if(TravelSelection.hasUnresolvedAd(c,date)||OfficialAdStore.attempts(c,date).any{!it.terminal||it.state==AdState.UNCONFIRMED})return "当前仍有未确认的广告提交，请先核对原观看"
+        // A finished daily ad that stayed unconfirmed is history, not an open submission: resetting the travel
+        // scan never touches the daily ledger. It blocked every rescan on Nov 8 after one black-screen ad.
+        if(TravelSelection.hasUnresolvedAd(c,date)||OfficialAdStore.attempts(c,date).any{!it.terminal})return "当前仍有未确认的广告提交，请先核对原观看"
         val sdk=AutoAccessibilityService.instance?.let{AdUiClose(it).isRecoverableSurface()}==true
         if(sdk)return "当前仍在广告窗口，不能重置扫描"
         if(AccountSafetyStore.pending(c)!=null)return "请先处理账号保护"

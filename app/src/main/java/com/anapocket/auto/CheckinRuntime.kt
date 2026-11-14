@@ -202,7 +202,9 @@ object CheckinRuntime {
         nm.createNotificationChannel(NotificationChannel("checkin_results","各App执行结果",NotificationManager.IMPORTANCE_DEFAULT))
         val pi=PendingIntent.getActivity(ctx,9300+app.ordinal,Intent(ctx,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         runCatching{nm.notify(9300+app.ordinal,NotificationCompat.Builder(ctx,"checkin_results").setSmallIcon(R.drawable.ic_stat_ana).setContentTitle(app.title+" · "+date+" · "+status).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setContentIntent(pi).setAutoCancel(true).build())}
-        TelegramNotifier.enqueue(ctx,"checkin_"+app.name+"_"+id,app.title+" · "+date+"\n"+body,app.name,expectedGeneration,date)
+        // Per-run results stay on the phone. Telegram gets the daily report, plus one alert when the app needs a person.
+        if(store.hold().isNotBlank())DailyDigest.alert(ctx,"CHECKIN_HOLD_"+app.name,"⚠️ Tuffy｜"+app.title+"需要你处理\n出现验证或账号提示，已暂停此App。请在手机上处理后，回Tuffy的「日程与记录」解除暂停。")
+        scope.launch{delay(2000);DailyDigest.evaluate(ctx)} // after the run releases the app
     }
 
 }
@@ -243,6 +245,8 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
     }
     suspend fun back(){action{svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)};delay(700);awaitForeground()}
     suspend fun tap(x:Int,y:Int)=action{val path=Path().apply{moveTo(x.toFloat(),y.toFloat())};svc.dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path,0,55)).build(),null,null)}
+    /** Slow vertical scroll at the screen edge, away from page controls. */
+    suspend fun swipe(fromY:Int,toY:Int,duration:Long){action{val path=Path().apply{moveTo(12f,fromY.toFloat());lineTo(12f,toY.toFloat())};svc.dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path,0,duration)).build(),null,null)};delay(duration+700)}
     private fun nodes():List<AccessibilityNodeInfo> {
         val out=mutableListOf<AccessibilityNodeInfo>();fun walk(n:AccessibilityNodeInfo?,depth:Int){if(n==null||depth>24||out.size>1000)return;out.add(n);for(i in 0 until n.childCount)walk(n.getChild(i),depth+1)};walk(svc.rootInActiveWindow,0);return out
     }
@@ -257,6 +261,25 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
         if(rect.width()<=0||rect.height()<=0)return false
         if(beforeDispatch!=null&&!beforeDispatch())return false
         tap(rect.centerX(),rect.centerY());delay(600);return true
+    }
+    /** Visible ids and labels of the current window, WebView children included (their ids carry no package prefix). */
+    suspend fun webView():Pair<Set<String>,List<String>> {
+        assertOwn()
+        return (withTimeoutOrNull(2000){withContext(Dispatchers.IO){
+            refreshNodes();if(pkg()!=app.pkg)return@withContext null
+            val v=nodes().filter{it.isVisibleToUser&&!it.isPassword&&!it.isEditable}
+            v.mapNotNull{it.viewIdResourceName}.toSet() to v.mapNotNull{it.text?.toString()}
+        }}?:(emptySet<String>() to emptyList())).also{assertOwn()}
+    }
+    /** Taps the visible node whose resource id is exactly [id] (WebView ids have no package prefix). */
+    suspend fun webNode(id:String):Boolean {
+        assertOwn()
+        val rect=withTimeoutOrNull(2000){withContext(Dispatchers.IO){
+            refreshNodes();if(pkg()!=app.pkg)return@withContext null
+            nodes().firstOrNull{it.isVisibleToUser&&it.viewIdResourceName==id}?.let{android.graphics.Rect().also{r->it.getBoundsInScreen(r)}}
+        }}?:return false
+        if(rect.width()<=0||rect.height()<=0)return false
+        tap(rect.centerX(),rect.centerY());delay(800);return true
     }
     suspend fun nativeText():String {assertOwn();return withContext(Dispatchers.IO){refreshNodes();nodes().filter{!it.isPassword&&!it.isEditable}.joinToString("\n"){it.text?.toString().orEmpty()}}.also{assertOwn()}}
     suspend fun hasNativeNode(suffix:String):Boolean {
@@ -355,7 +378,8 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
         val store=CheckinStore(svc,app);val proof=org.json.JSONObject().put("runId",token.run).put("forcedProcessTermination",false).put("startedAt",System.currentTimeMillis())
         fun save(){store.dir(token.run).resolve("exit.json").writeText(proof.toString(2))}
         if(pkg()!=app.pkg){proof.put("returnedHome",false).put("reason","foreground_not_owned_app");save();return}
-        proof.put("cleanup",ManagedAppCleanup.run(svc,app.pkg,{owns()},{block->if(!owns())false else CheckinRuntime.ownership.action(token,SystemClock.elapsedRealtime(),CheckinRuntime.protected(svc),block)}));save()
+        // 11/10 user request: when a task is done, close every app except Tuffy, then lock.
+        proof.put("cleanup",ManagedAppCleanup.clearOthers(svc,{owns()},{block->if(!owns())false else CheckinRuntime.ownership.action(token,SystemClock.elapsedRealtime(),CheckinRuntime.protected(svc),block)}));save()
         if(!owns())return
         action(null){svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)}
         val homeIntent=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)

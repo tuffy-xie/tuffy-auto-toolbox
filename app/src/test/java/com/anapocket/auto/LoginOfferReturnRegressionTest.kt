@@ -21,7 +21,7 @@ class LoginOfferReturnRegressionTest {
         assertEquals("UNCONFIRMED",result.state)
         assertEquals("login_reward_not_confirmed_after_offer_return",result.reason)
         assertTrue(port.time>=12_000L&&port.time<20_000L)
-        assertEquals(1,port.closes)
+        assertEquals(0,port.closes) // the ad left by itself; its early plain close is never tapped
     }
     @Test fun freshReceiptWhileWaitingOnReturnedOfferStillConfirms()=runBlocking {
         val port=Port(listOf(StartupAdFrame(ad=true,close=true))+List(5){StartupAdFrame(login=true)}+StartupAdFrame(receipt=true))

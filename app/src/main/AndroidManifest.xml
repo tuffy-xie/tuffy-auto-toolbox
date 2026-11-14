@@ -21,6 +21,7 @@
         <package android:name="us.ana_pocket.ANAPocket" />
         <package android:name="jp.co.rakuten.pointclub.android" />
         <package android:name="jp.co.pepperfs.android" />
+        <package android:name="com.ss.android.ugc.tiktok.lite" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
     </queries>
 

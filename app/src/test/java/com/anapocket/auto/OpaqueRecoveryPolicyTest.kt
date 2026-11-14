@@ -6,6 +6,23 @@ class OpaqueRecoveryPolicyTest {
  @Test fun officialDisplayFailureIsNotARewardOrAnUnknownTimeout() { val l=listOf("広告表示に失敗しました。", "恐れ入りますが、アプリの再起動をお試しください。");assertTrue(AdSignals.loadFailure(l));assertTrue(AdSignals.error(l));assertFalse(AdSignals.receipt(l)) }
  @Test fun boundOfficialLoadFailureMayRebuildButNeverUnboundInitialOrRepeated() { val s=listOf(50,50,50,100,100);assertTrue(OpaqueRecoveryPolicy.mayRecoverLoadFailure(false,true,true,false,0,0,s));assertFalse(OpaqueRecoveryPolicy.mayRecoverLoadFailure(true,true,true,false,0,0,s));assertFalse(OpaqueRecoveryPolicy.mayRecoverLoadFailure(false,true,false,false,0,0,s));assertFalse(OpaqueRecoveryPolicy.mayRecoverLoadFailure(false,true,true,true,0,0,s));assertFalse(OpaqueRecoveryPolicy.mayRecoverLoadFailure(false,true,true,false,1,0,s)) }
  @Test fun genericNetworkOrAdvertisingTextDoesNotAuthorizeSessionRemoval() { assertFalse(AdSignals.loadFailure(listOf("通信エラー")));assertFalse(AdSignals.loadFailure(listOf("広告表示に関するご案内"))) }
+ @Test fun stallProbeNamesFirstFailedPreconditionAndKeepsTheSameGate() {
+  val ana="us.ana_pocket.ANAPocket";val playable=setOf("playable","application-canvas");val applovin="com.applovin.adview.AppLovinFullscreenActivity"
+  assertEquals("sdk_below_30",OpaqueRecoveryPolicy.stallProbeFailure(29,ana,ana,"",playable))
+  assertEquals("foreground_root_missing",OpaqueRecoveryPolicy.stallProbeFailure(34,null,ana,"",playable))
+  assertEquals("foreground_not_ana",OpaqueRecoveryPolicy.stallProbeFailure(34,"com.android.vending",ana,"",playable))
+  assertEquals("surface_shape_mismatch",OpaqueRecoveryPolicy.stallProbeFailure(34,ana,ana,"x.Other",setOf("root","image")))
+  assertNull(OpaqueRecoveryPolicy.stallProbeFailure(34,ana,ana,"",playable))
+  assertNull(OpaqueRecoveryPolicy.stallProbeFailure(34,ana,ana,applovin,setOf("root","image")))
+ }
+ @Test fun stallShapeIsBoundedAndKeepsUnrelatedAppsAnonymous() {
+  val windows=List(9){"1:AF"};val ids=(1..40).map{"us.ana_pocket.ANAPocket:id/n"+"x".repeat(60)+it}.toSet()+"root"
+  val shape=OpaqueRecoveryPolicy.stallShape("us.ana_pocket.ANAPocket",true,"a".repeat(200),ids,windows)
+  assertTrue(shape,shape.contains("root=true")&&shape.contains("playable=false")&&shape.contains("ids=41[")&&shape.contains("windows=9["))
+  assertFalse(shape,shape.contains("ANAPocket:id/"))
+  assertTrue(shape,shape.length<800)
+  assertEquals("fg=unrelated_or_locked windows=1[1:AF]",OpaqueRecoveryPolicy.stallShape("com.other.app",false,"com.other.Secret",setOf("secret_id"),listOf("1:AF")))
+ }
  private val steps = listOf(50,50,50,100,100)
  private fun labels(next: Int?, points: Int) = listOfNotNull(next?.let { "${it}回目のブーストをしますか？" }, "現在のチャレンジ達成後の報酬：${points}pt") + steps.map { "+${it}" }
  @Test fun triangleAndGooglePlayHintCannotAuthorizeTap() { assertFalse(CanvasControlPolicy.canTap("SKIP")); assertFalse(CanvasControlPolicy.canTap("Google Play")); assertTrue(CanvasControlPolicy.canTap("CLOSE")) }

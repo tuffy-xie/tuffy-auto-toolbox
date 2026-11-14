@@ -9,7 +9,8 @@ import java.util.UUID
 
 enum class CheckinApp(val pkg:String,val title:String,val defaultHour:Int,val defaultMinute:Int) {
     RAKUTEN("jp.co.rakuten.pointclub.android","楽天PointClub",9,15),
-    STEAK("jp.co.pepperfs.android","いきなり！ステーキ",9,30);
+    STEAK("jp.co.pepperfs.android","いきなり！ステーキ",9,30),
+    TIKTOK("com.ss.android.ugc.tiktok.lite","TikTok Lite",7,30);
     companion object { fun from(id:String?)=entries.firstOrNull{it.name==id} }
 }
 enum class CheckinState { RUNNING,SUCCESS,ALREADY_DONE,UNCONFIRMED,FAILED,BLOCKED,NEEDS_USER_ACTION,PREEMPTED }
@@ -61,7 +62,13 @@ object CheckinClock {
         if(now>=due&&!deliveredToday)return true
         return next(now,h,m)-now<=5*60_000L
     }
-    fun registeredProtection(now:Long,due:Long,handled:Long,enabled:Boolean)=enabled&&due>0&&now>=due-300_000&&handled<due
+    /** How long check-ins wait for an ANA run that has not started; a started run holds them by itself. */
+    const val START_GRACE_MS=15*60_000L
+    /**
+     * From five minutes before the ANA schedule until that run is handled, or until the start grace passes:
+     * if the run never starts (service off, phone restarted, alarm lost) check-ins are not held all day.
+     */
+    fun registeredProtection(now:Long,due:Long,handled:Long,enabled:Boolean)=enabled&&due>0&&now>=due-300_000&&now<due+START_GRACE_MS&&handled<due
 }
 
 object CheckinReceiptPolicy {
@@ -98,7 +105,8 @@ object CheckinReceiptPolicy {
     fun greenCompletionCandidate(text:String):Boolean {val t=text.replace(Regex("\\s"),"");return !Regex("未|不|非|無").containsMatchIn(t)&&Regex("^.{0,2}達成(?:済み?)?$").matches(t)}
     fun bonusEntry(lines:List<CheckinLine>):CheckinLine? {
         val heading=lines.firstOrNull{it.text.replace(Regex("\\s"),"").let{t->t.contains("今日")&&t.contains("くじ")}}?:return null
-        return lines.firstOrNull{it.top>heading.bottom&&it.top-heading.bottom<250&&Regex("抽選|1[,，]?000").containsMatchIn(it.text)}
+        // "本日分は抽選済みです" sits where the entry was and is not a control.
+        return lines.firstOrNull{it.top>heading.bottom&&it.top-heading.bottom<250&&Regex("抽選|1[,，]?000").containsMatchIn(it.text)&&!it.text.contains("抽選済")}
     }
     fun pointsDone(lines:List<CheckinLine>):Boolean {
         val anchor=pointsEntry(lines)?:return false

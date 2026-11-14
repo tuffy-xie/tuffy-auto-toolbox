@@ -11,7 +11,10 @@ class AlarmReceiver : BroadcastReceiver() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launchAlarm {
             try {
                 Logger.init(context)
-                if(intent?.getBooleanExtra("readinessSelftest",false)==true){
+                if(intent?.getBooleanExtra("routineRetry",false)==true){
+                    Logger.i("ALARM","routine retry fired")
+                    RoutineRetry.fire(context)
+                }else if(intent?.getBooleanExtra("readinessSelftest",false)==true){
                     Logger.i("ALARM","readiness selftest fired")
                     val svc=AutoAccessibilityService.instance
                     if(svc!=null)svc.startReadinessCheck() else Notifier.needService(context)

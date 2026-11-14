@@ -5,7 +5,27 @@ object OpaqueRecoveryPolicy {
     /** Exact SDK + node shape grants observation, never a click or receipt. */
     fun stallSurface(activity:String,visibleIds:Set<String>):Boolean =
         setOf("playable","application-canvas").all{it in visibleIds} ||
-            activity=="com.applovin.adview.AppLovinFullscreenActivity"&&setOf("root","image").all{it in visibleIds}
+            setOf("root","interactive-html-stage").all{it in visibleIds} ||
+            activity=="com.applovin.adview.AppLovinFullscreenActivity"&&setOf("root","image").all{it in visibleIds} ||
+            // 11/11 03:55: Unity web end card with only store CTAs, no close, ignoring Back for 50+ min.
+            activity=="com.unity3d.ads.adplayer.FullScreenWebViewDisplay"&&setOf("root","pixiview").all{it in visibleIds}
+    /** First failed probe precondition, for the log only. Same gate as before; it authorizes nothing. */
+    fun stallProbeFailure(sdk:Int,foreground:String?,expected:String,activity:String,visibleIds:Set<String>):String? = when {
+        sdk<30->"sdk_below_30"
+        foreground==null->"foreground_root_missing"
+        foreground!=expected->"foreground_not_ana"
+        !stallSurface(activity,visibleIds)->"surface_shape_mismatch"
+        else->null
+    }
+    /** One bounded line of ids and window flags, never labels. Unrelated apps and locked screens stay anonymous. */
+    fun stallShape(foreground:String?,capturable:Boolean,activity:String,visibleIds:Set<String>,windows:List<String>):String {
+        val w="windows="+windows.size+"["+windows.take(6).joinToString(",")+"]"
+        if(!capturable)return "fg=unrelated_or_locked "+w
+        val ids=visibleIds.map{it.substringAfterLast('/')}.toSet()
+        val required=listOf("playable","application-canvas","root","image").joinToString(","){it+"="+(it in ids)}
+        return "fg="+foreground+" activity="+activity.take(80)+" required["+required+"] ids="+ids.size+"["+
+            ids.sorted().take(12).joinToString(","){it.take(32)}+"] "+w
+    }
     // Android rejects screenshot requests <=333ms apart. Only the exception probe waits.
     fun stallCaptureDelay(lastVisualRequestAt:Long,now:Long):Long =
         if(lastVisualRequestAt<=0||now<lastVisualRequestAt)0L else (350L-(now-lastVisualRequestAt)).coerceAtLeast(0L)

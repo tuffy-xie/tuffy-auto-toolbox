@@ -55,6 +55,8 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 if(OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED})
                     return RoutineStepResult("DEFERRED","先核对已预留的每日广告，未重新打开观看")
                 val result=StartupFlow(svc).prepare(run)
+                // Monthly badge video: once a day, bounded, never fails the startup step.
+                if(result.ok)MedalVideoTask(svc).runOnce(run)
                 return RoutineStepResult(if(result.ok)result.loginState else "BLOCKED",if(result.ok)LoginBonusStore.label(svc,date) else result.reason,result.ok)
             }
             override suspend fun challenges():RoutineStepResult{
@@ -71,7 +73,8 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 val selected=configured.filterNot{it in reused}
                 if(reused.isNotEmpty())Logger.i("ROUTINERESUME","run=$run same_day_reused_categories="+reused.joinToString(","){it.name+":"+proofs[it]}+" skip_reused_category_ui=true remaining="+selected.joinToString(","){it.name})
                 Cat.values().filter{!latest.catOn(it)}.forEach{TravelSelection.audit(svc,date,run,it)}
-                if(Cat.values().none{latest.catOn(it)}&&!TravelSelection.hasUnresolvedAd(svc,date)&&!completionPending)return RoutineStepResult("DISABLED_BY_USER","出行分类全部取消；签到与每日广告按原设置继续")
+                if(RoutinePolicy.travelYieldsToAds(Cat.values().any{latest.catOn(it)},completionPending))
+                    return RoutineStepResult("DISABLED_BY_USER","出行分类全部取消；签到与每日广告按原设置继续"+if(TravelSelection.hasUnresolvedAd(svc,date))"；原出行观看保持待核对，未重播" else "")
                 if(selected.isEmpty()&&!pending){
                     if(partialReuse&&!ChallengeTaskController(svc).isolateForIndependentDaily(run+"_reuse_isolated",date))
                         return RoutineStepResult("BLOCKED","已隔离的出行观看仍需安全原生页面；未重播广告",false)
@@ -80,8 +83,11 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 }
                 val child="CH"+java.util.UUID.randomUUID().toString()
                 val result=ChallengeTaskController(svc).run(child,selected,allCards=true,reuseCompleted=!challengesOnly)
-                if(!result.continueRun||ChallengeStore.blocksIndependentNavigation(svc,date)||MaxBoostDialogPolicy.blocksRoutine(result.detail,MaxBoostCoordinator.hasPending(svc,date)||MaxBoostCoordinator.visible(svc)))
-                    return RoutineStepResult("BLOCKED",result.detail,false)
+                val maxBoost=MaxBoostDialogPolicy.blocksRoutine(result.detail,MaxBoostCoordinator.hasPending(svc,date)||MaxBoostCoordinator.visible(svc))
+                val independent=ChallengeStore.blocksIndependentNavigation(svc,date)
+                if(!result.continueRun||independent||maxBoost)
+                    return RoutineStepResult("BLOCKED",result.detail,
+                        RoutinePolicy.adsAfterBlockedTravel(TravelSelection.hasUnresolvedAd(svc,date),independent,maxBoost,latest.adEnabled))
                 return if(partialReuse&&result.state in setOf("DONE","ALREADY_DONE"))result.copy(state="PARTIALLY_COMPLETED") else result
 
             }
@@ -114,15 +120,19 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
             if(!readiness.ready)result=RoutineOutcome("BLOCKED",if(safety!=null)AccountSafety.message(svc) else readiness.reason,emptyMap())
             else {
                 /* No multi-hour wake hold: native readiness and active UI ownership remain bounded. */
+                StalledAdRestart.recoverBlankDaily(svc,date,run)
                 var outcome=RoutineSequence(port).run();var restarts=0
                 while(outcome.state=="BLOCKED"&&!AutoAccessibilityService.stopRequested&&restarts<3){
-                    val stage=if(outcome.detail.contains("MAX_BOOST_"))"MAX_BOOST" else outcome.steps.keys.lastOrNull()?:break
-                    if(!StalledAdRestart.recover(svc,date,run,stage))break
+                    // The stage that stopped, not the last one run: travel can stop while ads still ran after it.
+                    val stage=if(outcome.detail.contains("MAX_BOOST_"))"MAX_BOOST" else outcome.steps.entries.firstOrNull{it.value.state=="BLOCKED"}?.key?:outcome.steps.keys.lastOrNull()?:break
+                    if(!StalledAdRestart.recoverBlankDaily(svc,date,run)&&!StalledAdRestart.recover(svc,date,run,stage))break
                     restarts++
                     // Re-evaluate persisted tasks. Unknown rows and official resume proofs retain their original identity.
                     previous=RoutineStore.read(svc,date)
                     outcome=RoutineSequence(port).run()
                 }
+                // A day resumed by retries defers the startup step, so the badge video gets its one chance here, after everything else.
+                if(outcome.state!="BLOCKED"&&!AutoAccessibilityService.stopRequested&&TokyoDate.of()==date)MedalVideoTask(svc).runOnce(run)
                 result=outcome
             }
         }catch(e:Exception){

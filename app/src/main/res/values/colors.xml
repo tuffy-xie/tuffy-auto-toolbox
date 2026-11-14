@@ -1,6 +1,45 @@
 <resources>
-<color name="bg">#FFFCF8</color><color name="card">#FFFFFF</color><color name="card2">#EDF1F8</color>
-<color name="text">#132759</color><color name="muted">#63718B</color><color name="brand">#2959ED</color><color name="brand_dark">#183CA9</color>
-<color name="accent">#17836B</color><color name="danger">#C54661</color><color name="warn">#AC7418</color>
-<color name="line">#E1E7F0</color><color name="brand_soft">#EBF0FF</color><color name="hero_text">#D6E0FF</color>
+<!-- iOS-like semantic palette; values-night/colors.xml carries the dark variants. -->
+<color name="bg">#F2F2F7</color>
+<color name="card">#FFFFFF</color>
+<color name="card2">#EFEFF4</color>
+<color name="fill">#E9E9EE</color>
+<color name="pressed">#E3E3E8</color>
+<color name="text">#111114</color>
+<color name="muted">#8A8A8E</color>
+<color name="line">#DCDCE1</color>
+<color name="brand">#007AFF</color>
+<color name="brand_dark">#0062CC</color>
+<color name="brand_soft">#E6F0FF</color>
+<color name="brand_disabled">#A8C9F5</color>
+<color name="accent">#28A745</color>
+<color name="accent_soft">#E3F6E8</color>
+<color name="warn">#E08600</color>
+<color name="warn_soft">#FFF3E0</color>
+<color name="danger">#FF3B30</color>
+<color name="danger_dark">#D63027</color>
+<color name="danger_soft">#FFEBEA</color>
+<color name="neutral_soft">#EFEFF4</color>
+<color name="tab_idle">#9A9AA0</color>
+<color name="tab_bar">#F7F9F9FB</color>
+<color name="switch_off">#E4E4E9</color>
+<color name="switch_thumb">#FFFFFF</color>
+<color name="hero_scrim">#F5FFFFFF</color>
+<color name="hero_scrim_mid">#B3FFFFFF</color>
+<color name="ring_travel">#FA2D55</color>
+<color name="ring_ads">#1E9BFF</color>
+<color name="ring_login">#34C759</color>
+<color name="ring_track_travel">#26FA2D55</color>
+<color name="ring_track_ads">#261E9BFF</color>
+<color name="ring_track_login">#2634C759</color>
+<color name="mode_walk">#FF9500</color>
+<color name="mode_bike">#F2B705</color>
+<color name="mode_car">#007AFF</color>
+<color name="mode_any">#30B158</color>
+<color name="mode_shinkansen">#5856D6</color>
+<color name="mode_flight">#FF2D55</color>
+<color name="icon_login">#FF9500</color>
+<color name="icon_ads">#007AFF</color>
+<color name="icon_checkin">#AF52DE</color>
+<color name="hero_text">#D6E0FF</color>
 </resources>

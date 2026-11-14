@@ -51,7 +51,10 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
     suspend fun execute(){
         if(store.hold().isNotBlank())return
         try{
-            awaitFrame("app_content",35_000){f->if(ui.app==CheckinApp.RAKUTEN)Regex("楽天|PointClub|ログイン|ザクザク|もらう|ピックアップ").containsMatchIn(f.text)else Regex("いきなり|ダーツ|肉マネー|ホーム|ログイン|クーポン").containsMatchIn(f.text)}
+            awaitFrame("app_content",35_000){f->when(ui.app){
+                CheckinApp.RAKUTEN->Regex("楽天|PointClub|ログイン|ザクザク|もらう|ピックアップ").containsMatchIn(f.text)
+                CheckinApp.TIKTOK->TikTokCheckinPolicy.loaded(f.lines)
+                else->Regex("いきなり|ダーツ|肉マネー|ホーム|ログイン|クーポン").containsMatchIn(f.text)}}
         }catch(e:IllegalStateException){
             val row=store.read("darts",date)
             val unsubmitted=row?.optString("phase")=="ENTRY_RESERVED"||store.mayLocateUnissuedDartsStart(date)
@@ -85,7 +88,8 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             if(done("lottery1")&&!done("lottery2")&&store.hold().isBlank())task("lottery2"){rakutenLottery()}
             if(!pickupLive&&store.hold().isBlank())task("pickup"){rakutenPickup()}
             if(store.hold().isBlank())task("bonus"){rakutenBonus()}
-        }else task("darts"){steak()}
+        }else if(ui.app==CheckinApp.TIKTOK)tiktok()
+        else task("darts"){steak()}
         store.tasks().forEach{if(store.read(it,date)?.optString("state")=="RUNNING")set(it,CheckinState.UNCONFIRMED,"controller_finished_without_receipt")}
     }
     private suspend fun awaitFrame(label:String,timeout:Long=45_000,predicate:suspend(CheckinFrame)->Boolean):CheckinFrame {
@@ -198,8 +202,7 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
         set("points",CheckinState.UNCONFIRMED,"no_fresh_official_point_receipt",capture("points_unconfirmed"))
     }
     private suspend fun rakutenLottery(resumeLive:Boolean=false){
-        if(done("lottery1")&&done("lottery2"))return
-        val task=if(done("lottery1"))"lottery2" else "lottery1"
+        val task=RakutenLotteryPolicy.next(done("lottery1"),reserved("lottery1"),store.read("lottery1",date)?.optString("phase").orEmpty(),done("lottery2"))?:return
         val old=store.read(task,date)
         val legacy=old?.optString("failureReason")=="official_remaining_chances_not_readable"&&old.optString("phase").isBlank()
         if(!resumeLive){
@@ -225,14 +228,27 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
         // Current official page exposes an available Start control, but no numeric remaining count.
         // Do not invent a remaining value from the campaign maximum. Process this bound opportunity only.
         store.log(run,"LOTTERY availableStart=true officialRemaining=NOT_DISPLAYED officialMax=2 resumeSameEntry="+resumeLive)
+        // 11/02 and 11/12: Start was tapped while the page's loading panda (panda_load) was still shown; the tap was
+        // dropped (Start stayed on screen, no result for 45 s) and the draw could not be repeated. Wait for it to go.
+        val loadUntil=SystemClock.elapsedRealtime()+12_000
+        while(ui.nativeLabel("panda_load")!=null&&SystemClock.elapsedRealtime()<loadUntil)delay(500)
+        store.log(run,"LOTTERY loadingGone="+(ui.nativeLabel("panda_load")==null))
         val start=ui.nativeLabel("start")?:error("official_start_control_missing")
         set(task,CheckinState.RUNNING,"same_reserved_opportunity")
         check(submitNative(task,"start",legacy)){"lottery_start_changed_before_dispatch"}
         val before=f.text
         var result:CheckinFrame?=null
-        val until=SystemClock.elapsedRealtime()+45_000
+        var until=SystemClock.elapsedRealtime()+45_000
+        var reviewCloses=0
         while(result==null&&SystemClock.elapsedRealtime()<until){
-            delay(900);val next=frame()
+            delay(900)
+            val (ids,labels)=ui.webView()
+            if(RakutenReviewModalPolicy.mayClose(ids,labels,reviewCloses)){
+                reviewCloses++;capture("lottery_review_modal")
+                if(ui.webNode(RakutenReviewModalPolicy.CLOSE_ID)){store.log(run,"LOTTERY review_modal_closed=$reviewCloses");until=maxOf(until,SystemClock.elapsedRealtime()+15_000)}
+                continue
+            }
+            val next=frame()
             if(already(next.text)){set(task,CheckinState.ALREADY_DONE,"official_already_participated",capture("lottery_no_chance"));return}
             val fresh=next.lines.any{Regex("当選|当たり|あたり|はずれ|ハズレ|残念|参加賞").containsMatchIn(it.text)&&!before.contains(it.text)}
             if(fresh&&CheckinReceiptPolicy.realReceipt(true,false,true,next.text))result=next
@@ -302,16 +318,34 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             rakutenBonus(false);return
         }
         if(!resumeLive){
-        val home=earn()
-        val points=CheckinReceiptPolicy.pointsDone(home.lines)
-        val lottery=CheckinReceiptPolicy.cardDone(home.lines,CheckinReceiptPolicy.lotteryEntry(home.lines))
-        val pickup=CheckinReceiptPolicy.cardDone(home.lines,CheckinReceiptPolicy.pickupEntry(home.lines))
+        var home=earn()
+        fun cards(f:CheckinFrame)=Triple(CheckinReceiptPolicy.pointsDone(f.lines),
+            CheckinReceiptPolicy.cardDone(f.lines,CheckinReceiptPolicy.lotteryEntry(f.lines)),
+            CheckinReceiptPolicy.cardDone(f.lines,CheckinReceiptPolicy.pickupEntry(f.lines)))
+        // The card art appears before the 達成 labels under it; a freshly opened app needs a moment.
+        val statusUntil=SystemClock.elapsedRealtime()+15_000
+        while(cards(home).toList().any{!it}&&SystemClock.elapsedRealtime()<statusUntil){delay(1000);home=frame()}
+        val (points,lottery,pickup)=cards(home)
         if(lottery)set("garagara_daily",CheckinState.ALREADY_DONE,"official_daily_card_done_draw_count_not_inferred",capture("bonus_daily_prerequisites"))
-        if(!points||!lottery||!pickup){set("bonus",CheckinState.BLOCKED,"three_official_daily_cards_not_all_done",capture("bonus_not_yet_eligible"));return}
+        // 11/10-11/12: the 1ポイントミッション card read 達成 after the visit although the local task was BLOCKED
+        // (no +1 offer loaded), and the bonus then stopped on bonus_official_prerequisite_records_missing.
+        // Rakuten's own 達成 mark is the record; it is copied, nothing is tapped and no point is inferred.
+        if(points&&!done("points"))set("points",CheckinState.ALREADY_DONE,"official_daily_card_done_points_not_inferred",capture("bonus_points_card_done"))
+        if(pickup&&!done("pickup"))set("pickup",CheckinState.ALREADY_DONE,"official_pickup_card_done",capture("bonus_pickup_card_done"))
         val old=store.read("bonus",date)
-        if(reserved("bonus")&&old?.optString("phase")!="ENTRY_RESERVED"){set("bonus",CheckinState.UNCONFIRMED,"prior_bonus_submission_review_no_replay",capture("bonus_review"));return}
+        if(CheckinBonusPolicy.drawnToday(home.lines)){
+            when(CheckinBonusPolicy.drawnState(reserved("bonus"),old?.optString("phase").orEmpty())){
+                CheckinState.SUCCESS->{set("bonus",CheckinState.SUCCESS,"bonus_official_drawn_marker_after_submitted_draw",capture("bonus_official_drawn_marker"),"楽天ポイント",null,false);return}
+                CheckinState.ALREADY_DONE->{set("bonus",CheckinState.ALREADY_DONE,"bonus_official_drawn_marker",capture("bonus_official_drawn_marker"));return}
+                else->{}
+            }
+        }
+        val decision=CheckinBonusPolicy.entry(points&&lottery&&pickup,reserved("bonus"),old?.optString("phase").orEmpty())
+        if(decision==CheckinBonusPolicy.Entry.BLOCKED){set("bonus",CheckinState.BLOCKED,"three_official_daily_cards_not_all_done",capture("bonus_not_yet_eligible"));return}
+        if(decision==CheckinBonusPolicy.Entry.KEEP_UNCONFIRMED){set("bonus",CheckinState.UNCONFIRMED,"prior_bonus_submission_review_no_replay",capture("bonus_review"));return}
         val entry=CheckinReceiptPolicy.bonusEntry(home.lines)?:error("bonus_current_entry_missing")
-        if(!reserved("bonus"))check(mutate {store.reserve("bonus",run,date)}){"bonus_already_reserved"}
+        if(decision==CheckinBonusPolicy.Entry.REVIEW_SUBMITTED)store.log(run,"BONUS_REVIEW reopen_submitted_draw_read_only no_start")
+        else if(!reserved("bonus"))check(mutate {store.reserve("bonus",run,date)}){"bonus_already_reserved"}
         check(ui.click(home,entry)){"bonus_entry_changed"}
         }
         awaitFrame("bonus_page"){ui.nativeLabel("今日のボーナスくじ")!=null}
@@ -339,7 +373,7 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             if(result!=null){
                 val lost=result=="LOST"
                 set("bonus",CheckinState.SUCCESS,if(lost)"bonus_draw_completed_no_prize" else "bonus_draw_completed_credit_due_next_day",
-                    capture("bonus_official_result"),"楽天ポイント",if(lost)"0" else CheckinReceiptPolicy.rewardAmount(f.lines,"ポイント"),false)
+                    capture("bonus_official_result"),"楽天ポイント",if(lost)"0" else CheckinReceiptPolicy.rewardAmount(CheckinBonusPolicy.aboveFooter(f.lines),"ポイント"),false)
                 return
             }
             if(already(f.text)){set("bonus",CheckinState.ALREADY_DONE,evidence=capture("bonus_official_already_done"));return}
@@ -435,5 +469,147 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             if(already(f.text)){set("darts",CheckinState.ALREADY_DONE,evidence=capture("darts_done"));return}
         }
         set("darts",CheckinState.UNCONFIRMED,"darts_reward_not_confirmed",capture("darts_unknown"))
+    }
+
+    // ---- TikTok Lite: 14-day check-in, yesterday's unlocked reward, today's unlock ----
+    private val screenHeight get()=ui.svc.resources.displayMetrics.heightPixels
+    /** Taps stay in the upper part of the page, clear of the floating bottom campaign banner. */
+    private fun reachable(l:CheckinLine?)=l!=null&&l.bottom<screenHeight*.78&&l.top>screenHeight*.1&&TikTokCheckinPolicy.safeTarget(l)
+    private fun closeX(f:CheckinFrame,fromY:Int):Pair<Int,Int>? {
+        val bmp=android.graphics.BitmapFactory.decodeByteArray(f.png,0,f.png.size)?:return null
+        try{
+            val w=bmp.width;val h=bmp.height
+            return TikTokCheckinPolicy.closeButton({x,y->if(x<0||y<0||x>=w||y>=h)0 else {val c=bmp.getPixel(x,y);((c shr 16 and 255)*299+(c shr 8 and 255)*587+(c and 255)*114)/1000}},
+                w,h,fromY,h-120,f.lines.filter{!TikTokCheckinPolicy.safeTarget(it)})
+        }finally{bmp.recycle()}
+    }
+    /** OK when the popup has one, otherwise the round ✕ under it. Never a popup's own action button. */
+    private suspend fun tiktokClosePopup(f:CheckinFrame,fromY:Int):Boolean {
+        val ok=TikTokCheckinPolicy.okButton(f.lines)
+        if(ok!=null&&ui.click(f,ok)){delay(900);return true}
+        val (x,y)=closeX(f,fromY)?:return false
+        if(!ui.click(f,CheckinLine("close",x-20,y-20,x+20,y+20)))return false
+        delay(900);return true
+    }
+    private suspend fun tiktokSettle(start:CheckinFrame,allowBack:Boolean=false):CheckinFrame {
+        var f=start
+        var backTried=false
+        repeat(4){
+            val top=(screenHeight*.2).toInt()
+            if(!TikTokCheckinPolicy.popup(f.lines))return f
+            if(TikTokCheckinPolicy.okButton(f.lines)==null&&closeX(f,top)==null){
+                // 11/13 07:30: the 14日連続 popup over the feed had no ✕ the pixel finder could see and hid the ギフト tab for
+                // 90 s. One system Back is tried (no popup button is ever pressed); if it stays, the old path goes on.
+                if(!allowBack||backTried||!TikTokCheckinPolicy.backDismissible(f.lines))return f
+                backTried=true;capture("tiktok_popup_back");ui.back();f=frame();return@repeat
+            }
+            capture("tiktok_popup_close")
+            if(!tiktokClosePopup(f,top))delay(800)
+            f=frame()
+        }
+        return f
+    }
+    private suspend fun tiktokTop(){repeat(6){ui.swipe((screenHeight*.21).toInt(),(screenHeight*.88).toInt(),300)}}
+    private suspend fun tiktokGift():CheckinFrame {
+        val until=SystemClock.elapsedRealtime()+90_000
+        while(SystemClock.elapsedRealtime()<until){
+            val raw=frame()
+            val f=if(TikTokCheckinPolicy.giftPage(raw.lines))raw else tiktokSettle(raw,allowBack=true)
+            if(TikTokCheckinPolicy.giftPage(f.lines)){tiktokTop();return tiktokSettle(frame())}
+            val tab=TikTokCheckinPolicy.giftTab(f.lines,screenHeight)
+            if(tab!=null&&ui.click(f,tab))delay(4000) else delay(1500)
+        }
+        capture("tiktok_gift_page_load_timeout");error("tiktok_gift_page_load_timeout")
+    }
+    /** Scrolls down the gift page until a card is in reach; one second pass from the top. */
+    private suspend fun tiktokSeek(label:String,found:(List<CheckinLine>)->Boolean):CheckinFrame? {
+        repeat(2){pass->
+            if(pass==1)tiktokTop()
+            repeat(10){
+                val f=tiktokSettle(frame())
+                if(found(f.lines))return f
+                ui.swipe((screenHeight*.72).toInt(),(screenHeight*.42).toInt(),900)
+            }
+        }
+        capture("tiktok_"+label+"_not_found");return null
+    }
+    private suspend fun tiktok(){
+        if(TikTokCheckinPolicy.TASKS.all{done(it)})return
+        val gift=try{tiktokGift()}catch(e:CancellationException){throw e}catch(e:CheckinPerceptionUnavailable){throw e}catch(e:Exception){
+            val why=e.message?.take(160).orEmpty()
+            TikTokCheckinPolicy.TASKS.forEach{t->if(!done(t))set(t,if(reserved(t))CheckinState.UNCONFIRMED else CheckinState.BLOCKED,why)};return
+        }
+        store.log(run,"TIKTOK_BALANCE before="+TikTokCheckinPolicy.balance(gift.lines))
+        task("checkin"){tiktokCheckin()}
+        task("claim"){tiktokClaim()}
+        task("unlock"){tiktokUnlock()}
+        try{tiktokTop();val f=tiktokSettle(frame());store.log(run,"TIKTOK_BALANCE after="+TikTokCheckinPolicy.balance(f.lines));capture("tiktok_balance_after")}
+        catch(e:CancellationException){throw e}catch(e:CheckinPerceptionUnavailable){throw e}catch(_:Exception){}
+    }
+    private suspend fun tiktokCheckin(){
+        set("checkin",CheckinState.RUNNING)
+        val f=tiktokSeek("checkin"){TikTokCheckinPolicy.checkinDone(it)||reachable(TikTokCheckinPolicy.checkinButton(it))}?:error("checkin_card_not_found")
+        if(TikTokCheckinPolicy.checkinDone(f.lines)){set("checkin",CheckinState.ALREADY_DONE,"official_checkin_done_today",capture("tiktok_checkin_done"));return}
+        if(reserved("checkin")){set("checkin",CheckinState.UNCONFIRMED,"prior_checkin_submission_no_replay",capture("tiktok_checkin_review"));return}
+        val button=TikTokCheckinPolicy.checkinButton(f.lines)!!
+        check(mutate {store.reserve("checkin",run,date)}){"already_reserved"}
+        check(ui.click(f,button){mutate {store.submitted("checkin",run,date,preflightVerified=true)}}){"checkin_button_changed"}
+        val until=SystemClock.elapsedRealtime()+20_000
+        while(SystemClock.elapsedRealtime()<until){
+            delay(1200);val r=frame()
+            if(TikTokCheckinPolicy.checkinReceipt(r.lines)){
+                val amount=TikTokCheckinPolicy.receiptAmount(r.lines)
+                set("checkin",CheckinState.SUCCESS,"official_checkin_receipt",capture("tiktok_checkin_receipt"),"TikTokポイント",amount,amount!=null)
+                tiktokSettle(r);return
+            }
+            if(TikTokCheckinPolicy.checkinDone(r.lines)){set("checkin",CheckinState.SUCCESS,"official_checkin_card_done_after_tap",capture("tiktok_checkin_card_done"),"TikTokポイント");return}
+        }
+        // 11/12 07:31: the receipt popup was not recognised, yet the card already read 明日チェックインして…; read the card itself
+        // (popups closed, no tap on it) before calling the check-in unconfirmed. The button is never pressed again.
+        val card=tiktokSeek("checkin_verify"){TikTokCheckinPolicy.checkinDone(it)||TikTokCheckinPolicy.checkinButton(it)!=null}
+        if(card!=null&&TikTokCheckinPolicy.checkinDone(card.lines)){
+            set("checkin",CheckinState.SUCCESS,"official_checkin_card_done_after_tap",capture("tiktok_checkin_card_done"),"TikTokポイント");return
+        }
+        set("checkin",CheckinState.UNCONFIRMED,"checkin_receipt_not_seen",capture("tiktok_checkin_unconfirmed"))
+    }
+    private suspend fun tiktokClaim(){
+        set("claim",CheckinState.RUNNING)
+        val f=tiktokSeek("claim"){reachable(TikTokCheckinPolicy.claimButton(it))||TikTokCheckinPolicy.unlockTitle(it)!=null||TikTokCheckinPolicy.unlockDone(it)}
+            ?:error("claim_area_not_found")
+        val button=TikTokCheckinPolicy.claimButton(f.lines)
+        if(button==null&&TikTokCheckinPolicy.claimTitle(f.lines)==null){set("claim",CheckinState.ALREADY_DONE,"no_claimable_reward_card_today",capture("tiktok_claim_absent"));return}
+        check(button!=null&&reachable(button)){"claim_button_not_in_reach"}
+        if(reserved("claim")){set("claim",CheckinState.UNCONFIRMED,"prior_claim_submission_no_replay",capture("tiktok_claim_review"));return}
+        val amount=TikTokCheckinPolicy.claimAmount(f.lines);capture("tiktok_claim_card")
+        check(mutate {store.reserve("claim",run,date)}){"already_reserved"}
+        check(ui.click(f,button!!){mutate {store.submitted("claim",run,date,preflightVerified=true)}}){"claim_button_changed"}
+        val until=SystemClock.elapsedRealtime()+20_000
+        while(SystemClock.elapsedRealtime()<until){
+            delay(1500);val r=tiktokSettle(frame())
+            if(TikTokCheckinPolicy.claimTitle(r.lines)==null&&TikTokCheckinPolicy.giftPage(r.lines)||TikTokCheckinPolicy.claimTitle(r.lines)==null&&(TikTokCheckinPolicy.unlockTitle(r.lines)!=null||TikTokCheckinPolicy.checkinTitle(r.lines)!=null)){
+                set("claim",CheckinState.SUCCESS,"official_claim_card_removed_after_tap",capture("tiktok_claim_done"),"TikTokポイント",amount,amount!=null);return
+            }
+        }
+        set("claim",CheckinState.UNCONFIRMED,"claim_card_still_present",capture("tiktok_claim_unconfirmed"))
+    }
+    private suspend fun tiktokUnlock(){
+        set("unlock",CheckinState.RUNNING)
+        val f=tiktokSeek("unlock"){TikTokCheckinPolicy.unlockDone(it)||reachable(TikTokCheckinPolicy.unlockButton(it))}?:error("unlock_card_not_found")
+        val button=TikTokCheckinPolicy.unlockButton(f.lines)
+        if(TikTokCheckinPolicy.unlockDone(f.lines)&&button==null){set("unlock",CheckinState.ALREADY_DONE,"official_unlock_done_today",capture("tiktok_unlock_done"));return}
+        if(reserved("unlock")){set("unlock",CheckinState.UNCONFIRMED,"prior_unlock_submission_no_replay",capture("tiktok_unlock_review"));return}
+        check(button!=null&&reachable(button)){"unlock_button_not_in_reach"}
+        check(mutate {store.reserve("unlock",run,date)}){"already_reserved"}
+        check(ui.click(f,button!!){mutate {store.submitted("unlock",run,date,preflightVerified=true)}}){"unlock_button_changed"}
+        val until=SystemClock.elapsedRealtime()+20_000
+        while(SystemClock.elapsedRealtime()<until){
+            delay(1200);val r=frame()
+            if(TikTokCheckinPolicy.unlockPopup(r.lines)){
+                set("unlock",CheckinState.SUCCESS,"official_unlock_confirmed_reward_tomorrow",capture("tiktok_unlock_popup"))
+                tiktokSettle(r);return
+            }
+            if(TikTokCheckinPolicy.unlockDone(r.lines)){set("unlock",CheckinState.SUCCESS,"official_unlock_card_done_after_tap",capture("tiktok_unlock_card_done"));return}
+        }
+        set("unlock",CheckinState.UNCONFIRMED,"unlock_result_not_seen",capture("tiktok_unlock_unconfirmed"))
     }
 }

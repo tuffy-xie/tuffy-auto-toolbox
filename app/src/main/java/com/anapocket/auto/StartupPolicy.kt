@@ -20,6 +20,13 @@ object StartupPolicy {
         reserved && observedAd && officialFreshReceipt && sameDate
     fun canReserveLogin(date: String, recordedDate: String?, recordedState: String?): Boolean =
         recordedDate != date || recordedState !in setOf("AD_OPENING", "AD_PLAYING", "UNCONFIRMED", "REWARD_CONFIRMED", "FAILED")
+    /**
+     * 11/12 02:40: a manual run after the night's runs found ANA closed (task exit cleanup) and stopped with
+     * existing_login_task_unavailable_no_replay. A login attempt that already finished has no open ad to return to,
+     * so ANA may simply be launched; a returned offer is then closed by [mayLeaveUnconfirmedOffer], never replayed.
+     */
+    fun mayFreshLaunchAfterFinishedLogin(date:String,recordedDate:String?,state:String?,finishedAt:Long)=
+        recordedDate==date&&state in setOf("UNCONFIRMED","FAILED")&&finishedAt>0
     /** A terminal unknown reward stays unknown; only its recognized native offer may be dismissed. */
     fun mayLeaveUnconfirmedOffer(date:String,recordedDate:String?,state:String?,finishedAt:Long,knownLogin:Boolean,sdkActivity:Boolean)=
         recordedDate==date&&state in setOf("UNCONFIRMED","FAILED")&&finishedAt>0&&knownLogin&&!sdkActivity
@@ -29,6 +36,14 @@ object StartupPolicy {
 }
 
 object RoutinePolicy {
+    /**
+     * A stopped travel stage hands over to daily ads only when it left nothing open on the travel side:
+     * no unconfirmed travel ad, no unisolated pending row and no Max Boost dialog. Otherwise ads wait.
+     */
+    fun adsAfterBlockedTravel(unresolvedTravelAd:Boolean, unisolatedPending:Boolean, maxBoostPending:Boolean, adsEnabled:Boolean):Boolean =
+        adsEnabled && !unresolvedTravelAd && !unisolatedPending && !maxBoostPending
+    /** With every travel category switched off by the user, travel yields; daily ads apply their own isolation gate. */
+    fun travelYieldsToAds(anyCategoryOn:Boolean, maxBoostPending:Boolean):Boolean = !anyCategoryOn && !maxBoostPending
     fun reuseChallenges(sameDate:Boolean, currentDayOnly:Boolean,
         scopeVerified:Boolean, pending:Boolean):Boolean =
         sameDate && currentDayOnly && scopeVerified && !pending

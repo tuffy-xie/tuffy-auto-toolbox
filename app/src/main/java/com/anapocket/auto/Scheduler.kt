@@ -22,6 +22,7 @@ object Scheduler {
     private const val REQ_DAILY = 1001
     private const val REQ_SELFTEST = 1002
     private const val REQ_RETRY = 1003
+    private const val REQ_ROUTINE_RETRY = 1005
     private const val BACKUP_WORK = "ana_backup_daily"
 
     private fun am(ctx: Context) = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -105,6 +106,19 @@ object Scheduler {
             Logger.i("SCHED", "retry alarm at ${fmt(at)}")
         } catch (t: Throwable) {
             Logger.w("SCHED", "retry alarm failed: ${t.message}")
+        }
+    }
+
+    /** Same-day retry of a stopped routine (see RoutineRetry). */
+    fun scheduleRoutineRetry(ctx: Context, at: Long) {
+        try {
+            val pi = pending(ctx, REQ_ROUTINE_RETRY, Intent(ctx, AlarmReceiver::class.java).putExtra("routineRetry", true))
+            val alm = am(ctx)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alm.canScheduleExactAlarms()) alm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            else alm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+            Logger.i("SCHED", "routine retry alarm at ${fmt(at)}")
+        } catch (t: Throwable) {
+            Logger.w("SCHED", "routine retry alarm failed: ${t.message}")
         }
     }
 

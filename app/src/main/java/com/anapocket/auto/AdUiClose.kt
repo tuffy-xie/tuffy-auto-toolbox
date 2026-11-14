@@ -26,25 +26,53 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
     private var canvasControlAt = 0L
     private var canvasControlProof = ""
     private var stallSample:Triple<Long,IntArray,Int>?=null
+    private var scrollToCloseSwipes=0
+    private var unityStoreSkips=0
+    private var unityStoreSeenAt=0L
+    /** Last resort on a Unity playable with no close; never confirms a reward (see UnityClosePolicy.storeSkip). */
+    private fun unityStoreSkip():android.view.accessibility.AccessibilityNodeInfo? {
+        if(ui.currentPackage()!=pkg||AutoAccessibilityService.stopRequested)return null
+        val m=svc.resources.displayMetrics
+        val hit=ui.foregroundNodes().filter{n->val r=android.graphics.Rect();n.getBoundsInScreen(r)
+            n.isVisibleToUser&&n.isEnabled&&UnityClosePolicy.storeSkip(AutoAccessibilityService.foregroundActivity,n.className?.toString().orEmpty(),
+                ui.label(n),n.isClickable,r.left,r.top,r.width(),r.height(),m.widthPixels,m.heightPixels,unityStoreSkips)}.singleOrNull()
+            ?:run{unityStoreSeenAt=0L;return null}
+        val now=android.os.SystemClock.elapsedRealtime()
+        if(unityStoreSeenAt==0L)unityStoreSeenAt=now
+        // The playable keeps counting while it is shown; the control is pressed only after it stood alone for a while.
+        if(!UnityClosePolicy.storeSkipDue(now-unityStoreSeenAt))return null
+        unityStoreSeenAt=0L;unityStoreSkips++;observedTapOnly=true;observedAdvanceControl=true
+        Logger.i("ADCLOSE","sdk=unity storeSkipToClose request="+unityStoreSkips)
+        return hit
+    }
     val recentlyRevealed: Boolean get() = android.os.SystemClock.elapsedRealtime() - lastReveal < 5000L
     fun beginFlow(knownStoreSheet: Boolean = false) {
         seenStoreSheet = knownStoreSheet; storeBacks = 0; opaqueSince = 0; revealCount = 0; playbackContinueRequests=0
         pangleReplay = PangleStoreReplayPolicy()
         chromeReturn=PangleChromeReturnPolicy();flowOwner=CheckinRuntime.ownership.owner()
         flowRun=AutoAccessibilityService.currentRunId;flowDate=TokyoDate.of()
-        lastReveal = -100_000L; canvasControlBounds = null; canvasControlProof = "";stallSample=null
+        lastReveal = -100_000L; canvasControlBounds = null; canvasControlProof = "";stallSample=null;scrollToCloseSwipes=0;unityStoreSkips=0;unityStoreSeenAt=0L
     }
     fun releaseVisualCache(){canvasControlBounds=null;flowOwner=null;stallSample=null}
     /** Called only after the existing segment timeout; normal identification never calls this. */
     suspend fun stallProgressKey():String? {
         fun unavailable(reason:String):String? {Logger.w("ADSTALL","run="+AutoAccessibilityService.currentRunId+" probe_unavailable="+reason+"; original UNKNOWN kept");return null}
         ui.refreshCache()
-        if(android.os.Build.VERSION.SDK_INT<30||!isStallReviewSurface())return unavailable("unsupported_or_shape")
+        val foreground=ui.currentPackage();val activity=AutoAccessibilityService.foregroundActivity
+        val locked=(svc.getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
+        val capturable=DiagnosticPrivacy.canCapture(foreground,locked)
+        val ids=if(foreground==pkg||capturable)ui.foregroundNodes().filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet() else emptySet()
+        OpaqueRecoveryPolicy.stallProbeFailure(android.os.Build.VERSION.SDK_INT,foreground,pkg,activity,ids)?.let{reason->
+            return unavailable(reason+" "+OpaqueRecoveryPolicy.stallShape(foreground,capturable,activity,ids,
+                svc.windows.map{it.type.toString()+":"+(if(it.isActive)"A" else "-")+(if(it.isFocused)"F" else "-")}))
+        }
         val root=svc.rootInActiveWindow?:return unavailable("root_missing")
         if(root.packageName?.toString()!=pkg||svc.windows.none{it.id==root.windowId&&(it.isActive||it.isFocused)})return unavailable("window_owner_changed")
         val visible=ui.foregroundNodes().filter{it.isVisibleToUser&&it.windowId==root.windowId}
         val canvas=visible.singleOrNull{it.viewIdResourceName=="application-canvas"}
-            ?:visible.singleOrNull{it.viewIdResourceName=="image"}?:return unavailable("canvas_missing_or_ambiguous")
+            ?:visible.singleOrNull{it.viewIdResourceName=="image"}
+            ?:visible.singleOrNull{it.viewIdResourceName=="interactive-html-stage"}
+            ?:visible.singleOrNull{it.viewIdResourceName=="pixiview"}?:return unavailable("canvas_missing_or_ambiguous")
         val area=android.graphics.Rect();canvas.getBoundsInScreen(area)
         val now=android.os.SystemClock.elapsedRealtime();val previous=stallSample
         if(previous==null||now-previous.first>=OpaqueRecoveryPolicy.STALL_SAMPLE_MS){
@@ -194,9 +222,17 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         AutoAccessibilityService.foregroundActivity.startsWith("com.mbridge.msdk.") ||
         ui.foregroundNodes().any { it.isVisibleToUser && it.viewIdResourceName?.startsWith("$pkg:id/mbridge_") == true })
     private fun ogurySurface():Boolean {val n=ui.foregroundNodes().filter{it.isVisibleToUser};return OguryClosePolicy.surface(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,n.mapNotNull{it.viewIdResourceName}.toSet(),n.map{ui.label(it)})}
+    private fun dialogNodes():List<Pair<android.view.accessibility.AccessibilityNodeInfo,DialogNode>> =
+        ui.foregroundNodes().filter{it.isVisibleToUser}.map{n->val r=android.graphics.Rect();n.getBoundsInScreen(r)
+            n to DialogNode(n.className?.toString().orEmpty(),n.viewIdResourceName,ui.label(n),n.isClickable,r.left,r.top,r.right,r.bottom)}
+    private fun nativeDialogAdSurface():Boolean {
+        if(ui.currentPackage()!=pkg||AutoAccessibilityService.foregroundActivity!=NativeDialogAdClosePolicy.ACTIVITY)return false
+        val m=svc.resources.displayMetrics
+        return NativeDialogAdClosePolicy.surface(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,dialogNodes().map{it.second},m.widthPixels,m.heightPixels)
+    }
     fun isNativeChallengeReceipt():Boolean {val n=ui.foregroundNodes().filter{it.isVisibleToUser};return NativeChallengeReceiptPolicy.panel(ui.currentPackage(),n.mapNotNull{it.viewIdResourceName}.toSet(),n.map{ui.label(it)})}
     fun isAdSurface(): Boolean = ui.currentPackage() == pkg && !isNativeChallengeReceipt() && (
-        AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity) || pangleSurface() || fyberSurface() || unitySurface() || mbridgeSurface() || ogurySurface() || isOpaquePlayable())
+        AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity) || ui.foregroundNodes().any{it.isVisibleToUser&&it.viewIdResourceName=="app-interstitial-slot"} || pangleSurface() || fyberSurface() || unitySurface() || mbridgeSurface() || ogurySurface() || isOpaquePlayable() || nativeDialogAdSurface())
     fun isRecoverableSurface(): Boolean = isAdSurface() || AdSignals.playSheet(ui.currentPackage(),
         ui.foregroundNodes().filter { it.isVisibleToUser }.map { ui.label(it) }) ||
         seenStoreSheet && (AdSignals.playHome(ui.currentPackage(), ui.foregroundNodes().map { ui.label(it) }) ||
@@ -236,12 +272,37 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                 ?: activeNodes.filter { it.isVisibleToUser && it.isEnabled && ui.label(it).trim() in setOf("关闭工作表", "Close sheet", "シートを閉じる") }.singleOrNull()
         }
         if (ui.currentPackage() != pkg) return null
+        activeNodes.firstOrNull{n->
+            val b=android.graphics.Rect();n.getBoundsInScreen(b);val m=svc.resources.displayMetrics
+            n.isVisibleToUser&&n.isEnabled&&MolocoClosePolicy.skip(AutoAccessibilityService.foregroundActivity,n.className?.toString().orEmpty(),ui.label(n),n.isClickable,b.left,b.top,m.widthPixels,m.heightPixels)
+        }?.let{observedTapOnly=true;observedAdvanceControl=true;Logger.i("ADCLOSE","sdk=moloco observedSkip=true");return it}
+        // 11/12 00:20: a Google ad said "Scroll to bottom of ad to close" and has no close until the page is scrolled.
+        if(GoogleNativeClosePolicy.scrollToClose(AutoAccessibilityService.foregroundActivity,activeLabels)&&
+            scrollToCloseSwipes<GoogleNativeClosePolicy.MAX_SCROLLS&&!AutoAccessibilityService.stopRequested){
+            scrollToCloseSwipes++
+            val m=svc.resources.displayMetrics
+            // A plain upward swipe on the side margin; a moving gesture is not a tap on the ad links.
+            ui.swipe((m.widthPixels*.5).toInt(),(m.heightPixels*.78).toInt(),(m.widthPixels*.5).toInt(),(m.heightPixels*.30).toInt(),450)
+            Logger.i("ADCLOSE","sdk=google scrollToClose swipe="+scrollToCloseSwipes)
+            kotlinx.coroutines.delay(700);ui.refreshCache()
+            return null
+        }
         activeNodes.singleOrNull{GoogleNativeClosePolicy.matches(AutoAccessibilityService.foregroundActivity,
             it.className?.toString().orEmpty(),ui.label(it),it.isVisibleToUser,it.isEnabled,it.isClickable)}?.let{
             observedTapOnly=true;Logger.i("ADCLOSE","sdk=google observedNativeInterstitialCloseButton=true");return it
         }
+        if(AutoAccessibilityService.foregroundActivity==NativeDialogAdClosePolicy.ACTIVITY){
+            val m=svc.resources.displayMetrics;val all=dialogNodes()
+            NativeDialogAdClosePolicy.close(ui.currentPackage(),AutoAccessibilityService.foregroundActivity,all.map{it.second},m.widthPixels,m.heightPixels,m.density)?.let{hit->
+                all.firstOrNull{it.second==hit}?.first?.let{
+                    observedTapOnly=true
+                    Logger.i("ADCLOSE","sdk=native_dialog observedCornerClose=true bounds=Rect(${hit.left}, ${hit.top} - ${hit.right}, ${hit.bottom})")
+                    return it
+                }
+            }
+        }
         if (pangleSurface()) pangleReplay.observeDocument(activeNodes.filter { it.isVisibleToUser }.mapNotNull { it.viewIdResourceName })
-        val google = AutoAccessibilityService.foregroundActivity == "com.google.android.gms.ads.AdActivity" &&
+        val google = GoogleDismissPolicy.interstitialActivity(AutoAccessibilityService.foregroundActivity) &&
             activeNodes.any { it.viewIdResourceName == "app-interstitial-slot" }
         if (unitySurface() || mbridgeSurface() || google || pangleSurface()) observedTapOnly = true
         if(ogurySurface()){
@@ -265,7 +326,7 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         }
         val googleIds=if(google)activeNodes.filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet() else emptySet()
         fun labelledClose(n:android.view.accessibility.AccessibilityNodeInfo):Boolean {
-            if(!n.isVisibleToUser||!n.isEnabled||!AdSignals.closeLabel(ui.label(n))||!unitySafe(n))return false
+            if(!n.isVisibleToUser||!n.isEnabled||!AdSignals.closeLabel(ui.label(n))||GoogleNativeClosePolicy.scrollPrompt(ui.label(n))||!unitySafe(n))return false
             if(!google)return true
             val b=android.graphics.Rect();n.getBoundsInScreen(b)
             return !GoogleDismissPolicy.creativeClose(true,googleIds,n.viewIdResourceName,b.top,svc.resources.displayMetrics.heightPixels)
@@ -330,11 +391,13 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         }
         val pangle = pangleSurface()
         val knownFullscreen = AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity) || isOpaquePlayable()
-        if (!pangle && !fyber && !knownFullscreen) return null
+        if (!pangle && !fyber && !knownFullscreen) return unityStoreSkip()
         val density = svc.resources.displayMetrics.density
+        val applovin = AppLovinClosePolicy.isActivity(AutoAccessibilityService.foregroundActivity)
         val candidates = ui.foregroundNodes().filter {
             val r = android.graphics.Rect(); it.getBoundsInScreen(r)
-            it.isVisibleToUser && it.isEnabled && it.childCount == 0 && ui.label(it).isBlank() &&
+            it.isVisibleToUser && it.isEnabled && ui.label(it).isBlank() &&
+                (it.childCount == 0 || AppLovinClosePolicy.wrapper(AutoAccessibilityService.foregroundActivity,it.className?.toString().orEmpty(),ui.label(it),it.isClickable,it.childCount,r.left,r.top,svc.resources.displayMetrics.widthPixels,svc.resources.displayMetrics.heightPixels)) &&
                 (if (fyber) it.isClickable && it.viewIdResourceName == "$pkg:id/ia_clickable_close_button" &&
                     r.width() / density in 12f..64f && r.height() / density in 12f..64f
                 else if (pangle) it.className?.toString() in setOf("android.widget.Image", "android.widget.ImageView") &&
@@ -343,7 +406,13 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                 else it.isClickable && it.className?.toString() in setOf("android.widget.ImageView", "android.widget.ImageButton", "android.view.View", "android.widget.FrameLayout") &&
                     r.width() / density in 12f..64f && r.height() / density in 12f..64f)
         }
-        if (candidates.isEmpty()) return null
+        val m = svc.resources.displayMetrics
+        val applovinSkip = if (!applovin) null else ui.foregroundNodes().filter {
+            val r = android.graphics.Rect(); it.getBoundsInScreen(r)
+            it.isVisibleToUser && it.isEnabled && AppLovinClosePolicy.skip(AutoAccessibilityService.foregroundActivity, it.className?.toString().orEmpty(), ui.label(it), it.isClickable, r.left, r.top, r.width(), r.height(), m.widthPixels, m.heightPixels, m.density)
+        }.singleOrNull()
+        fun advanceToEndCard() = applovinSkip?.also { observedTapOnly = true; observedAdvanceControl = true; Logger.i("ADCLOSE", "sdk=applovin observedSkipToEndCard=true") }
+        if (candidates.isEmpty()) return advanceToEndCard() ?: unityStoreSkip()
         lastVisualRequestAt=android.os.SystemClock.elapsedRealtime()
         val matched=ui.inspectBitmap { bmp ->
             val matches = candidates.filter { n ->
@@ -358,13 +427,13 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
             }
             matches.singleOrNull()
         }
-            observedTapOnly = pangle || fyber
+            observedTapOnly = pangle || fyber || applovin
             if (matched != null) {
                 val r = android.graphics.Rect(); matched.getBoundsInScreen(r)
-                Logger.i("ADCLOSE", "run=" + AutoAccessibilityService.currentRunId + " sdk=" + (if (fyber) "fyber_native" else if (pangle) "pangle" else "five") + " observedVisualEndControl=true bounds=" + r)
+                Logger.i("ADCLOSE", "run=" + AutoAccessibilityService.currentRunId + " sdk=" + (if (fyber) "fyber_native" else if (pangle) "pangle" else if (applovin) "applovin" else "five") + " observedVisualEndControl=true bounds=" + r)
                 Evidence.capture(svc,ui,"ad_"+AutoAccessibilityService.currentRunId+"_five_close_observed.png")
             }
-            return matched
+            return matched ?: advanceToEndCard() ?: unityStoreSkip()
     }
 
 }

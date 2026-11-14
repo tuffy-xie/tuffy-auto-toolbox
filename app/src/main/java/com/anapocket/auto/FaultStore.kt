@@ -13,12 +13,12 @@ import java.util.zip.ZipOutputStream
 /** Local, bounded evidence. No credentials, no automatic upload and no changes to task ledgers. */
 object FaultStore {
     private fun root(c:Context)=File(c.getExternalFilesDir(null)?:c.filesDir,"faults_h14").apply{mkdirs()}
-    private fun recentLog():String = runCatching {
+    private fun recentLog(maxBytes:Long=512*1024L):String = runCatching {
         RandomAccessFile(File(Logger.path()),"r").use { r ->
-            val n=minOf(r.length(),512*1024L).toInt();r.seek(r.length()-n)
+            val n=minOf(r.length(),maxBytes).toInt();r.seek(r.length()-n)
             ByteArray(n).also{r.readFully(it)}.toString(Charsets.UTF_8)
         }
-    }.getOrDefault(Logger.tail(500)).let(DiagnosticPrivacy::redact)
+    }.getOrElse{Logger.tail(500)}.let(DiagnosticPrivacy::redact)
     private fun state(c:Context):JSONObject {
         val date=TokyoDate.of()
         return JSONObject().put("date",date).put("deviceTime",TokyoDate.time())
@@ -30,13 +30,29 @@ object FaultStore {
             .put("dailyAttempts",org.json.JSONArray().also{a->DailyAdStore.allAttempts(c,date).forEach{a.put(it.toJson())}})
             .put("accountSafety",AccountSafetyStore.pending(c)).put("challenges",ChallengeStore.rows(c,date)).put("login",LoginBonusStore.read(c,date)).put("routine",RoutineStore.read(c,date))
     }
-    private fun hasCapacity(c:Context):Boolean {
-        val base=root(c);val dirs=base.listFiles()?.filter{it.isDirectory}.orEmpty()
-        return dirs.size<30&&base.walkTopDown().filter{it.isFile}.sumOf{it.length()}<128L*1024*1024
+    /** Makes room per [FaultBudgetPolicy.evict]: today's oldest at the daily cap, then the oldest days by total size. */
+    @Synchronized private fun hasCapacity(c:Context):Boolean {
+        val base=root(c);val today=TokyoDate.of()
+        fun dirs()=base.listFiles()?.filter{it.isDirectory}.orEmpty()
+        val entries=dirs().map{d->FaultDir(d.name,TokyoDate.of(d.lastModified()),d.lastModified(),d.walkTopDown().filter{it.isFile}.sumOf{it.length()})}
+        val loose=base.listFiles()?.filter{it.isFile}?.sumOf{it.length()}?:0L
+        val evict=FaultBudgetPolicy.evict(entries,today,loose)
+        if(evict.isNotEmpty()){
+            val canonical=base.canonicalFile
+            var removed=0;var freed=0L
+            for(e in evict){
+                val d=File(base,e.name).canonicalFile
+                if(d.parentFile!=canonical)continue
+                if(d.deleteRecursively()){removed++;freed+=e.bytes}
+            }
+            Logger.i("FAULT","evidence budget; removed oldest folders=$removed freedKB=${freed/1024} oldest=${evict.first().date} newest=${evict.last().date}")
+        }
+        val after=dirs()
+        return FaultBudgetPolicy.hasRoom(after.map{TokyoDate.of(it.lastModified())},today,base.walkTopDown().filter{it.isFile}.sumOf{it.length()})
     }
     suspend fun capture(svc:AutoAccessibilityService,run:String,module:String,reason:String,attempt:String=""):String? {
         return try {
-            if(!hasCapacity(svc)){Logger.w("FAULT","H14 evidence budget reached; old files preserved");return null}
+            if(!hasCapacity(svc)){Logger.w("FAULT","H14 evidence room could not be made; capture skipped");return null}
             val ui=Ui(svc);ui.refreshCache();val pkg=ui.currentPackage()
             val locked=(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
             val dir=File(root(svc),DiagnosticPrivacy.safeName(run+"_"+module+"_"+attempt+"_"+System.currentTimeMillis())).apply{mkdirs()}
@@ -58,7 +74,7 @@ object FaultStore {
                 }else metadata.put("screenshotOmitted","foreground_changed_during_capture")
             } else metadata.put("screenshotOmitted","unrelated_app_or_locked_screen")
             File(dir,"manifest.json").writeText(DiagnosticPrivacy.redact(metadata.toString(2)))
-            File(dir,"recent.log").writeText(recentLog())
+            File(dir,"recent.log").writeText(recentLog(FaultBudgetPolicy.CAPTURE_LOG_BYTES))
             Logger.i("FAULT","saved run=$run module=$module reason=$reason folder=${dir.name}")
             dir.absolutePath
         } catch(e:Exception){Logger.w("FAULT","capture unavailable: "+e.javaClass.simpleName);null}
@@ -117,7 +133,7 @@ object TaskExit {
         if(!TaskExitPolicy.allowed(finished,AutoAccessibilityService.stopRequested,pending(),!native&&AdUiClose(svc).isAdSurface(),ui.currentPackage()==StartupPolicy.ANA))return
         val proof=JSONObject().put("runId",run).put("date",date).put("startedAt",System.currentTimeMillis()).put("lockAfter",lockAfter).put("nextStartLaunchesAna",true)
         fun save(){Evidence.write(svc,"exit_"+run+".json",proof.toString(2))}
-        proof.put("cleanup",ManagedAppCleanup.run(svc,StartupPolicy.ANA,{!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.currentRunId==run&&AccountSafetyStore.pending(svc)==null},{block->val owner=CheckinRuntime.ownership.owner();if(owner?.app=="ANA"&&owner.run==run&&!AutoAccessibilityService.stopRequested)CheckinRuntime.ownership.action(owner,android.os.SystemClock.elapsedRealtime(),false,block) else false}));save()
+        proof.put("cleanup",ManagedAppCleanup.clearOthers(svc,{!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.currentRunId==run&&AccountSafetyStore.pending(svc)==null},{block->val owner=CheckinRuntime.ownership.owner();if(owner?.app=="ANA"&&owner.run==run&&!AutoAccessibilityService.stopRequested)CheckinRuntime.ownership.action(owner,android.os.SystemClock.elapsedRealtime(),false,block) else false}));save()
         var left=false
         repeat(2){if(!left){ui.home();delay(800);ui.refreshCache();val p=ui.currentPackage();left=!p.isNullOrBlank()&&p!=StartupPolicy.ANA}}
         proof.put("returnedHome",left).put("foregroundAfterExit",ui.currentPackage()).put("exitedAt",System.currentTimeMillis());save()

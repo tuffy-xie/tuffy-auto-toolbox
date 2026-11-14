@@ -70,7 +70,13 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                     if(StalledAdRestart.mayRelaunchLogin(svc,date)){
                         if(!ui.launchApp(pkg))return StartupResult(false,"UNCONFIRMED",0,"stalled_restart_relaunch_failed_no_replay")
                         delay(1800)
-                    }else if(!AdTaskReturn.restore(svc,date,run))return StartupResult(false,"UNCONFIRMED",0,"existing_login_task_unavailable_no_replay")
+                    }else if(AdTaskReturn.restore(svc,date,run)){
+                        // The original task came back.
+                    }else if(StartupPolicy.mayFreshLaunchAfterFinishedLogin(date,prior.optString("date"),prior.optString("state"),prior.optLong("finishedAt"))){
+                        Logger.w("STARTUP","run=$run prior_login_finished_unconfirmed fresh_launch=true no_replay")
+                        if(!ui.launchApp(pkg))return StartupResult(false,"UNCONFIRMED",0,"finished_login_relaunch_failed_no_replay")
+                        delay(1800)
+                    }else return StartupResult(false,"UNCONFIRMED",0,"existing_login_task_unavailable_no_replay")
                 }else {ui.launchApp(pkg);delay(1800)}
             }
             else Logger.i("STARTUP","run=$run ANA already foreground; launch skipped")

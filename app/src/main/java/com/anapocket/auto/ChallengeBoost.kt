@@ -44,7 +44,7 @@ object ChallengeStore {
     }
     fun unconfirmedAd(row:JSONObject):Boolean {
         val a=row.optJSONArray("ads")?:return false
-        return (0 until a.length()).any{val x=a.getJSONObject(it);!x.optBoolean("confirmed")&&!x.optBoolean("officialNoGain")}
+        return (0 until a.length()).any{val x=a.getJSONObject(it);!x.optBoolean("confirmed")&&!x.optBoolean("officialNoGain")&&!InitialRejoinPolicy.resolved(x)}
     }
     fun blocksIndependentNavigation(ctx:Context,date:String):Boolean {
         val a=rows(ctx,date)
@@ -85,7 +85,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             val ad=a.getJSONObject(it)
             ad.optBoolean("officialNoGain")&&ad.optString("recoveryTrigger")=="official_ad_display_failed_restart_requested"
         }
-        return VerifiedLoadFailurePolicy.startLimit(verifiedFailures,verifiedLoadFailures)
+        return VerifiedLoadFailurePolicy.startLimit(verifiedFailures,verifiedLoadFailures)+InitialRejoinPolicy.extraStarts(row)
     }
     private val ui = Ui(svc)
     private val closeDriver = AdUiClose(svc)
@@ -141,10 +141,13 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
         for(row in rows){
             val a=SubmittedUnknownIsolation.binding(row)?:continue
             val matches=official.count{it.key==row.optString("key")&&it.meters==row.optInt("meters")&&it.title==row.optString("title")}
-            if(SubmittedUnknownIsolationPolicy.mayIsolate(a,date,matches==1,cleanIsolationPage(),
+            val ads=row.getJSONArray("ads");val last=ads.getJSONObject(ads.length()-1)
+            val absent=matches==0&&SubmittedUnknownIsolationPolicy.mayIsolateAbsent(a,date,last.optBoolean("initialJoin"),last.optString("reason"),cleanIsolationPage(),
+                android.os.SystemClock.elapsedRealtime()-start,OfficialAdStore.attempts(svc,date).any{!it.terminal})
+            if(absent||SubmittedUnknownIsolationPolicy.mayIsolate(a,date,matches==1,cleanIsolationPage(),
                 android.os.SystemClock.elapsedRealtime()-start,OfficialAdStore.attempts(svc,date).any{!it.terminal})){
                 evidence(run,"submitted_unknown_isolation_before",row.toString())
-                check(SubmittedUnknownIsolation.save(svc,date,row){
+                check(SubmittedUnknownIsolation.save(svc,date,row,if(absent)SubmittedUnknownIsolationPolicy.KIND_ABSENT else SubmittedUnknownIsolationPolicy.KIND){
                     TokyoDate.of()==date&&cleanIsolationPage()&&AccountSafety.authorize(svc,"submitted_unknown_isolation_commit")&&
                         OfficialAdStore.attempts(svc,date).none{!it.terminal}
                 }){"isolation_identity_or_page_changed"}
@@ -156,7 +159,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
     suspend fun isolateForIndependentDaily(run:String,date:String):Boolean {
         if(TokyoDate.of()!=date||blocked()||AutoAccessibilityService.stopRequested||
             OfficialAdStore.attempts(svc,date).any{!it.terminal})return false
-        if(ui.currentPackage()!=pkg&&!AdTaskReturn.restore(svc,date,run))return false
+        if(ui.currentPackage()!=pkg&&!AdTaskReturn.restoreOrRelaunchIfGone(svc,date,run))return false
         val until=android.os.SystemClock.elapsedRealtime()+8_000
         while(!cleanIsolationPage()&&android.os.SystemClock.elapsedRealtime()<until&&
             TokyoDate.of()==date&&!blocked()&&!AutoAccessibilityService.stopRequested){delay(250);ui.refreshCache()}
@@ -174,8 +177,8 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             val steps = ad.getJSONArray("initialBoostSteps")
             return ad.getInt("expectedJoinReward") to (0 until steps.length()).map { steps.getInt(it) }
         }
-        val files = java.io.File(svc.getExternalFilesDir(null) ?: svc.filesDir, "evidence").listFiles()?.toList() ?: return null
         val prefix = "challenge_" + ad.getString("runId") + "_" + row.getString("cat") + "_" + ad.getInt("index") + "_"
+        val files = EvidenceFiles.withPrefix(svc, prefix) ?: return null
         val started = ad.getLong("startedAt")
         val finished = ad.optLong("finishedAt", Long.MAX_VALUE)
         fun stamp(file: java.io.File) = file.name.substringAfterLast('_').substringBefore('.').toLongOrNull() ?: -1L
@@ -657,8 +660,39 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
         row.put("state", if (row.getInt("boost") == 5) "BOOST_MAX_CONFIRMED" else "AD_BUDGET_REACHED")
         ChallengeStore.save(svc, date, row)
         evidence(runId, "${row.getString("cat")}_final", row.toString())
+        if(row.getString("state")=="AD_BUDGET_REACHED")leaveBudgetBoostPrompt(runId,date,row)
         // No navigation is allowed until the bound final dialog is actually gone and category/date verified.
         if(row.getInt("boost")==5)MaxBoostCoordinator.finish(svc,engine,runId,row)
+    }
+
+    /** Budget used: leave ANA's own Boost prompt with its "ブーストをやめる" button, once, only for this exact task. */
+    private suspend fun leaveBudgetBoostPrompt(runId:String,date:String,row:JSONObject):Boolean {
+        ui.refreshCache()
+        val ns=nodes();val ids=ns.mapNotNull{it.viewIdResourceName}.toSet();val l=labels()
+        if(!BudgetBoostPromptPolicy.matches(ids,l,row.optString("state"),row.optInt("boost"),row.optInt("offeredReward",-1)))return false
+        val button=ns.singleOrNull{it.isEnabled&&it.viewIdResourceName==pkg+":id/button_no"}?:return false
+        evidence(runId,"budget_reached_leave_official_boost_prompt",row.toString())
+        row.put("budgetPromptLeftAt",System.currentTimeMillis());ChallengeStore.save(svc,date,row)
+        if(!tap(button))return false
+        repeat(12){delay(500);ui.refreshCache();if(ChallengeSignals.nextBoost(labels())==null){
+            Logger.i("CHBOOST","run=$runId budget_prompt_left key="+row.optString("key")+" boost="+row.optInt("boost"));return true}}
+        Logger.w("CHBOOST","run=$runId budget_prompt_still_visible key="+row.optString("key"))
+        return false
+    }
+    /** A later run that finds a budget-reached task's own Boost prompt still open leaves it before navigating. */
+    private suspend fun leaveLeftoverBudgetPrompt(runId:String,date:String){
+        val all0=ChallengeStore.rows(svc,date)
+        if((0 until all0.length()).none{all0.getJSONObject(it).optString("state")=="AD_BUDGET_REACHED"})return
+        // 11/11 01:06: a manual run starts from Tuffy's own screen, so bring ANA (and its open prompt) forward first.
+        ui.refreshCache()
+        if(ui.currentPackage()!=pkg){if(!ui.launchApp(pkg))return}
+        repeat(12){if(ui.currentPackage()==pkg&&ChallengeSignals.nextBoost(labels())!=null)return@repeat;delay(500);ui.refreshCache()}
+        if(ui.currentPackage()!=pkg||ChallengeSignals.nextBoost(labels())==null)return
+        val ids=nodes().mapNotNull{it.viewIdResourceName}.toSet();val l=labels()
+        val all=ChallengeStore.rows(svc,date)
+        val hits=(0 until all.length()).map{all.getJSONObject(it)}.filter{
+            BudgetBoostPromptPolicy.matches(ids,l,it.optString("state"),it.optInt("boost"),it.optInt("offeredReward",-1))}
+        if(hits.size==1)leaveBudgetBoostPrompt(runId,date,hits.single())
     }
 
     private fun officialResumePrompt():AccessibilityNodeInfo? {
@@ -715,8 +749,8 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             evidence(runId,"bound_initial_receipt_after",row.toString());return true
         }
         if(!ad.optBoolean("initialJoin")||ad.optBoolean("confirmed")||ad.optString("reason")!="ad_timeout_95s")return false
-        val files=java.io.File(svc.getExternalFilesDir(null)?:svc.filesDir,"evidence").listFiles()?.toList()?:return false
         val prefix="challenge_"+ad.getString("runId")+"_"+row.getString("cat")+"_"+ad.getInt("index")+"_"
+        val files=EvidenceFiles.withPrefix(svc,prefix)?:return false
         val started=ad.getLong("startedAt");val finished=ad.optLong("finishedAt")
         fun stamp(f:java.io.File)=f.name.substringAfterLast('_').substringBefore('.').toLongOrNull()?:-1L
         val reward=ad.optInt("expectedJoinReward");val table=ad.optJSONArray("initialBoostSteps")?:return false
@@ -805,7 +839,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                 row.getString("date")==date&&row.optInt("offeredReward")==ad.optInt("offeredBefore")&&
                 BoundLateBoostReceiptPolicy.matches(row.optString("state"),ad.optString("state"),ad.optString("reason"),
                     ad.optBoolean("confirmed"),ad.optBoolean("initialJoin"),ad.optInt("index"),row.getJSONArray("ads").length(),
-                    pendingCount,TokyoDate.of()==date,ad.optBoolean("adDepartureObserved"),row.getInt("boost"),
+                    pendingCount,TokyoDate.of()==date,BoundLateBoostReceiptPolicy.departed(ad.optBoolean("adDepartureObserved"),ad.has("officialBinding"),ad.optString("dispatchPhase")),row.getInt("boost"),
                     ad.optInt("offeredBefore"),ad.optInt("expectedOfferedAfter"),steps,nativePanel,labels())
         }
         ui.refreshCache();if(!valid()||!AccountSafety.authorize(svc,"bound_late_boost_receipt"))return false
@@ -821,6 +855,20 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
         })return false
         evidence(runId,"bound_late_official_advance_after",row.toString());return true
     }
+    /** Reads the outcome through the same identity and stability checks as an official resume; dispatches nothing. */
+    private suspend fun settleFromOfficialPanel(runId:String,date:String,row:JSONObject,ad:JSONObject,pendingCount:Int):Boolean {
+        val saved=ad.optJSONArray("boostSteps")?:return false
+        val steps=(0 until saved.length()).map{saved.getInt(it)}
+        val ads=row.getJSONArray("ads")
+        ui.refreshCache()
+        if(!ChallengeRecoveryPolicy.panelMaySettle(row.optString("state"),ad.optString("state"),ad.optString("reason"),ad.optBoolean("confirmed"),
+            ad.optBoolean("initialJoin"),ad.optInt("index"),ads.length(),pendingCount,row.optString("date")==date&&TokyoDate.of()==date,
+            ad.has("officialBinding"),ad.optString("dispatchPhase"),closeDriver.isRecoverableSurface(),
+            (0 until ads.length()).any{ads.getJSONObject(it).optBoolean("officialNoGain")},
+            OpaqueRecoveryPolicy.outcome(row.getInt("boost"),ad.optInt("offeredBefore"),ad.optInt("expectedOfferedAfter"),steps,labels())))return false
+        evidence(runId,"official_panel_settle_before",row.toString())
+        return awaitResumedBoost(runId,date,row,ad,steps)
+    }
     private suspend fun resumeOfficialInterruptedBoost(runId:String,date:String,row:JSONObject,ad:JSONObject):Boolean {
         val ads=row.getJSONArray("ads")
         val stepsJson=ad.optJSONArray("boostSteps")?:return false
@@ -830,7 +878,9 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             r.optString("state") in setOf("AD_OPENING","UNCONFIRMED","JOINED")&&!PendingInitialJoinStore.isolated(r,date)}
         fun safe()=!AutoAccessibilityService.stopRequested&&!blocked()&&TokyoDate.of()==date&&AccountSafety.authorize(svc,"official_boost_resume")
         check(safe()&&row.getString("date")==date&&row.optInt("offeredReward")==ad.optInt("offeredBefore")){"official_resume_binding_changed"}
-        check(boundNativeIdentity(row)||recordedOfficialRestart(row,ad,count)){"anonymous_official_resume_requires_exact_task_identity"}
+        val restarted=count==1&&OfficialChallengeBinding.valid(row,ad)&&ad.optString("dispatchPhase")=="DISPATCHED"&&ad.optBoolean("adDepartureObserved")&&
+            StalledAdRestart.relaunchedChallenge(svc,date)
+        check(boundNativeIdentity(row)||recordedOfficialRestart(row,ad,count)||restarted){"anonymous_official_resume_requires_exact_task_identity"}
         check(!ad.has("officialBinding")||ad.optInt("officialPromptResumeRequests")==0){"original_official_resume_already_requested"}
         check(ChallengeRecoveryPolicy.officialPromptAllowed(row.optString("state"),ad.optString("state"),ad.optString("reason"),
             ad.optBoolean("confirmed"),ad.optBoolean("initialJoin"),ad.getInt("index"),ads.length(),count,
@@ -973,15 +1023,15 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
     }
 
     private suspend fun processChallenge(engine: AutomationEngine, runId: String, date: String, card: ChallengeCard,
-        adBudget: Int, pilot: Boolean): Boolean {
+        adBudget: Int, pilot: Boolean, rejoinRow: JSONObject? = null): Boolean {
         if(!TravelSelection.enabled(svc,card.cat)){TravelSelection.audit(svc,date,runId,card.cat);return false}
-        if (ChallengeStore.find(svc,date,card.key)?.optJSONArray("ads")?.length()?.let{it>0}==true) return false
+        if (rejoinRow==null&&ChallengeStore.find(svc,date,card.key)?.optJSONArray("ads")?.length()?.let{it>0}==true) return false
         check(!AutoAccessibilityService.stopRequested && !blocked() && TokyoDate.of() == date) { "stopped_or_date_changed" }
         check(withTimeoutOrNull(20_000L){engine.openChallenge(card)}==true) { "target_detail_unreachable_" + card.cat }
         check(nodes().any { ui.label(it)==card.title && Dist.parse(ui.label(it))?.meters==card.meters }) { "detail_identity_mismatch" }
         check(labels().any { AnaCalendarDate.same(it, date) }) { "detail_date_mismatch" }
         val join = byId("button_join_boost") ?: error("observed_video_join_button_missing")
-        val row = JSONObject().put("key", card.key).put("date", date).put("cat", card.cat.name).put("title", card.title)
+        val row = rejoinRow ?: JSONObject().put("key", card.key).put("date", date).put("cat", card.cat.name).put("title", card.title)
             .put("meters", card.meters).put("runId", runId).put("joined", false).put("boost", 0).put("state", "READY").put("ads", JSONArray())
         val joined=watch(runId,date,row,join,true)
         if(!joined&&!TravelSelection.enabled(svc,card.cat)){TravelSelection.audit(svc,date,runId,card.cat);return false}
@@ -1032,7 +1082,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             val unresolved=(0 until prior.length()).map{prior.getJSONObject(it)}.filter{
                 (it.optString("state") in setOf("AD_OPENING","UNCONFIRMED","JOINED")||ChallengeStore.unconfirmedAd(it))&&!PendingInitialJoinStore.isolated(it,date)}
             if(unresolved.isNotEmpty()){
-                check(ui.currentPackage()==pkg||AdTaskReturn.restore(svc,date,runId)){"original_ana_task_unavailable"}
+                check(ui.currentPackage()==pkg||AdTaskReturn.restoreOrRelaunchIfGone(svc,date,runId)){"original_ana_task_unavailable"}
                 val pageUntil=android.os.SystemClock.elapsedRealtime()+8_000
                 while(!cleanIsolationPage()&&live()&&android.os.SystemClock.elapsedRealtime()<pageUntil){delay(250);ui.refreshCache()}
                 isolateSubmittedUnknowns(engine,runId,date,unresolved.filter{ChallengeStore.unconfirmedAd(it)})
@@ -1078,6 +1128,8 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                         // Revalidate only the native receipt recorded during this exact initial watching.
                     } else if(reconcileBoundLateAdvance(runId,date,row,last,pending.size)){
                         // Only this saved attempt was reconciled; continue at the next unstarted Boost below.
+                    } else if(settleFromOfficialPanel(runId,date,row,last,pending.size)){
+                        // The ad is gone and ANA's own Boost panel gave this attempt's outcome.
                     } else if(officialResumePrompt()!=null){
                         check(!last.optBoolean("initialJoin")){"初次接取回执待核对；已识别官方再开提示，尚未点击或新开广告"}
                         check(resumeOfficialInterruptedBoost(runId,date,row,last)){"official_resume_outcome_not_confirmed"}
@@ -1096,10 +1148,15 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                 prior = ChallengeStore.rows(svc, date)
             }
             if(pending.isEmpty()&&(0 until prior.length()).any{PendingInitialJoinStore.isolated(prior.getJSONObject(it),date)}){
+                // A retry can start from the launcher or another app, e.g. right after a check-in.
+                if(ui.currentPackage()!=pkg)ui.launchApp(pkg)
+                val pageUntil=android.os.SystemClock.elapsedRealtime()+8_000
+                while(!cleanIsolationPage()&&live()&&android.os.SystemClock.elapsedRealtime()<pageUntil){delay(250);ui.refreshCache()}
                 check(cleanIsolationPage()&&AccountSafety.authorize(svc,"isolated_initial_navigation")){
                     "isolated_initial_requires_clean_native_window"}
             }
             check(!ChallengeStore.blocksIndependentNavigation(svc,date)){"unconfirmed_challenge_requires_evidence_review"}
+            leaveLeftoverBudgetPrompt(runId,date)
             Evidence.write(svc,"challenge_"+runId+"_settings.json",settings.toJson())
             var partial=pending.isNotEmpty()
             val seenInPlans=mutableSetOf<String>()
@@ -1130,9 +1187,18 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                             val card=CategoryRunSelection.takeNext(fresh,attemptedKeys)?:break
                             eligible++
                             val existing=ChallengeStore.find(svc,date,card.key)
+                            var rejoinRow:JSONObject?=null
                             if(existing?.optJSONArray("ads")?.length()?.let{it>0}==true){
-                                // A joinable-list inconsistency never grants permission to overwrite/replay an ad.
-                                categoryIssues++;partial=true;record(card,"UNCERTAIN","recorded_attempt_kept_no_rejoin");continue
+                                // The card is in this fresh 参加可能 list; the user allows one re-join when 参加中 also proved it absent.
+                                if(InitialRejoinPolicy.mayRejoin(existing,date,true)){
+                                    rejoinRow=InitialRejoinPolicy.prepare(existing,runId,System.currentTimeMillis())
+                                    ChallengeStore.save(svc,date,rejoinRow)
+                                    evidence(runId,"initial_rejoin_official_absent_and_joinable",rejoinRow.toString())
+                                    Logger.i("ACQUIRE","run=$runId key=${card.key} rejoin_once=true reason=official_not_joined")
+                                }else{
+                                    // A joinable-list inconsistency never grants permission to overwrite/replay an ad.
+                                    categoryIssues++;partial=true;record(card,"UNCERTAIN","recorded_attempt_kept_no_rejoin");continue
+                                }
                             }
                             record(card,"INSPECTING")
                             try{
@@ -1140,7 +1206,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                                     check(engine.prepareFilteredCategory(cat,allowLoginSubmission=false)){"category_filter_after_sdk_recovery_unreachable_"+cat}
                                     categoryEpoch=navigationEpoch
                                 }
-                                if(processChallenge(engine,runId,date,card,adBudget,pilot)){
+                                if(processChallenge(engine,runId,date,card,adBudget,pilot,rejoinRow)){
                                     record(card,"JOINED")
                                     return RoutineStepResult("PARTIALLY_COMPLETED","试运行："+card.title+" 接取确认，Boost待验证")
                                 }

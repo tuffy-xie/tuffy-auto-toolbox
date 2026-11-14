@@ -1,0 +1,1 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item><color android:color="@color/line"/></item><item android:top="@dimen/hairline"><color android:color="@color/tab_bar"/></item></layer-list>
