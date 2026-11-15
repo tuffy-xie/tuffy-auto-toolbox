@@ -113,6 +113,9 @@ private class MaxBoostUi(private val svc:AutoAccessibilityService) {
         val action=MaxBoostDialogPolicy.action(number,button.isClickable,text.isClickable)
         if(action!="GESTURE"){
             val target=if(action=="NATIVE_CONTAINER")button else text
+            // This native click bypasses Ui, so it takes the same stop and account-safety boundary itself.
+            if(UiStopGate.refuses(AutoAccessibilityService.isRunning,AutoAccessibilityService.stopRequested)||!AccountSafety.authorize(svc,"max_boost_ok"))
+                return MaxBoostClick("NONE",false,null,"stop_or_account_safety_before_action")
             val sent=target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             return MaxBoostClick("NATIVE_ACTION_CLICK",sent,null,"actual_page_change_still_required")
         }

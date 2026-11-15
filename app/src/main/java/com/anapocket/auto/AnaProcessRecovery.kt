@@ -26,6 +26,8 @@ object AnaProcessRecovery {
         }}
         return count.toString()+":"+last+":"+OfficialAdStore.attempts(c,date).count{it.rewardConfirmed}+":"+LoginBonusStore.read(c,date)?.optString("state").orEmpty()
     }
+    /** The routine the user last stopped, as recorded by [markUserStop]. */
+    fun userStoppedRun(c:Context):String?=sp(c).getString("stoppedRun",null)
     fun markUserStop(c:Context,run:String){
         if(!run.startsWith("RT"))return
         check(sp(c).edit().putString("stoppedRun",run).commit())

@@ -30,6 +30,11 @@ class AutoAccessibilityService : AccessibilityService() {
         var stopRequested: Boolean = false
             private set
 
+        /** Why [stopRequested] was set: user, watchdog, service_destroyed, account_safety_*… Cleared with it at run start. */
+        @Volatile
+        var stopReason: String = ""
+            private set
+
         @Volatile
         var isRunning: Boolean = false
             private set(value) {
@@ -132,6 +137,8 @@ class AutoAccessibilityService : AccessibilityService() {
     }
 
     fun requestStop(reason:String="user") {
+        // The first reason wins: a user stop followed by the watchdog's must stay a user stop (no retry).
+        if(!stopRequested)stopReason=reason
         stopRequested = true
         if(reason=="user")AnaProcessRecovery.markUserStop(this,currentRunId)
         Logger.w("RUN", "stop requested: "+reason)
@@ -241,9 +248,9 @@ class AutoAccessibilityService : AccessibilityService() {
         if(isRunning)return
         val mode=RoutineRunModes.choose(reason,originalMode)
         val run="RT"+java.util.UUID.randomUUID().toString()
-        currentRunId=run;stopRequested=false;isRunning=true
+        currentRunId=run;stopRequested=false;stopReason="";isRunning=true
         val main=scope.launch{
-            var endState="BLOCKED";var endDetail=""
+            var endState="BLOCKED";var endDetail="";var cancelled=false
             try{
                 AnaProcessRecovery.controllerStarting(this@AutoAccessibilityService,run,mode)
                 if(!RunForegroundService.ensure(this@AutoAccessibilityService,"每日流程执行中")){
@@ -263,10 +270,19 @@ class AutoAccessibilityService : AccessibilityService() {
                 Logger.i("ROUTINE","END run=$run state="+outcome.state)
                 if(outcome.state!="DONE")FaultStore.capture(this@AutoAccessibilityService,run,"routine",outcome.detail)
                 TaskExit.finish(this@AutoAccessibilityService,run,outcome.state in setOf("DONE","PARTIALLY_COMPLETED"))
+            }catch(e:kotlinx.coroutines.CancellationException){
+                // Cancellation is not a business failure: record it, let finally release the run, then propagate.
+                cancelled=true;endDetail="cancelled:"+stopReason.ifBlank{"lifecycle"}
+                runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"STOPPED")}
+                Logger.w("ROUTINE","run=$run cancelled reason="+stopReason.ifBlank{"lifecycle"})
+                throw e
             }catch(e:Exception){endDetail=e.message.orEmpty();runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"BLOCKED")};Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");runCatching{FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}}
             finally{
+                // Read before the fields are reset below; the retry decision needs the real ending.
+                val finalState=RoutineRetryPolicy.terminalState(endState,if(currentRunId==run)stopReason else "",cancelled)
                 if(currentRunId==run){isRunning=false;stopRequested=false;RunStore.setLastRunAt(this@AutoAccessibilityService,System.currentTimeMillis());RunForegroundService.stop(this@AutoAccessibilityService)}
-                RoutineRetry.afterRun(this@AutoAccessibilityService,run,endState,endDetail)
+                Logger.i("ROUTINE","run=$run terminal=$finalState reported=$endState cancelled=$cancelled")
+                RoutineRetry.afterRun(this@AutoAccessibilityService,run,finalState,endDetail)
                 DailyDigest.evaluate(this@AutoAccessibilityService)
             }
         }

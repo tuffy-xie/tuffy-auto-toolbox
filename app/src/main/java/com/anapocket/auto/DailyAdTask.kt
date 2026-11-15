@@ -746,6 +746,10 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                     }
                 }
             }
+        } catch (t: kotlinx.coroutines.CancellationException) {
+            // finally below still finishes the active attempt as UNCONFIRMED; cancellation then propagates.
+            blockedReason = "cancelled:" + AutoAccessibilityService.stopReason.ifBlank { "lifecycle" }
+            throw t
         } catch (t: Exception) {
             blockedReason = "execution_error:" + t.javaClass.simpleName + ":" + t.message
             Logger.e("ADTASK", blockedReason, t)

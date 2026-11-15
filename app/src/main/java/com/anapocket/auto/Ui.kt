@@ -19,9 +19,27 @@ import kotlin.coroutines.resume
 data class UiVisualCapture(val visual: DetailVisual, val png: ByteArray? = null)
 
 /**
+ * The one boundary every tap, click, swipe and Back passes. Once a running task has been asked to stop, no new
+ * UI action is dispatched, whichever caller forgot to check. Reading the screen, evidence and Home stay allowed.
+ * Only while a run is active: a stop flag left from a run's safety latch must not block a later check-in.
+ */
+object UiStopGate {
+    fun refuses(running:Boolean,stopRequested:Boolean)=running&&stopRequested
+}
+
+/**
  * 无障碍 UI 操作封装：节点查找、点击（含父节点回溯与手势兜底）、滑动、启动应用、UI 树导出。
  */
 class Ui(private val svc: AutoAccessibilityService) {
+
+    /** Stop first, then account safety (see [UiStopGate]). */
+    private fun actionAllowed(): Boolean {
+        if (UiStopGate.refuses(AutoAccessibilityService.isRunning, AutoAccessibilityService.stopRequested)) {
+            Logger.w("UI", "action refused: stop_requested reason=" + AutoAccessibilityService.stopReason)
+            return false
+        }
+        return AccountSafety.authorize(svc)
+    }
 
     companion object {
         /** 只打印一次窗口诊断，避免刷屏 */
@@ -552,7 +570,7 @@ class Ui(private val svc: AutoAccessibilityService) {
     }
 
     suspend fun click(n: AccessibilityNodeInfo): Boolean {
-        if(!AccountSafety.authorize(svc))return false
+        if(!actionAllowed())return false
         var cur: AccessibilityNodeInfo? = n
         var guard = 0
         while (cur != null && guard < 10) {
@@ -574,7 +592,7 @@ class Ui(private val svc: AutoAccessibilityService) {
      * 语义点击不经过屏幕坐标，可绕过遮挡。
      */
     fun clickSemantic(n: AccessibilityNodeInfo): Boolean {
-        if(!AccountSafety.authorize(svc))return false
+        if(!actionAllowed())return false
         var cur: AccessibilityNodeInfo? = n
         var guard = 0
         while (cur != null && guard < 8) {
@@ -593,7 +611,7 @@ class Ui(private val svc: AutoAccessibilityService) {
 
     data class ObservedTapResult(val dispatched:Boolean,val completed:Boolean?,val detail:String)
     suspend fun tapObserved(x:Int,y:Int):ObservedTapResult {
-        if(!AccountSafety.authorize(svc))return ObservedTapResult(false,false,"account_safety_blocked")
+        if(!actionAllowed())return ObservedTapResult(false,false,"account_safety_blocked")
         val gesture=GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(Path().apply{moveTo(x.toFloat(),y.toFloat())},0,60)).build()
         var accepted=false
         return withTimeoutOrNull(3000L){
@@ -608,7 +626,7 @@ class Ui(private val svc: AutoAccessibilityService) {
     }
 
     suspend fun tap(x: Int, y: Int): Boolean {
-        if(!AccountSafety.authorize(svc))return false
+        if(!actionAllowed())return false
         val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
         val gd = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 60))
@@ -635,7 +653,7 @@ class Ui(private val svc: AutoAccessibilityService) {
     }
 
     suspend fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long = 320): Boolean {
-        if(!AccountSafety.authorize(svc))return false
+        if(!actionAllowed())return false
         val path = Path().apply {
             moveTo(x1.toFloat(), y1.toFloat())
             lineTo(x2.toFloat(), y2.toFloat())
@@ -674,7 +692,7 @@ class Ui(private val svc: AutoAccessibilityService) {
      * 尽量贴近真实手指拖动。
      */
     suspend fun swipeSlow(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long = 1500): Boolean {
-        if(!AccountSafety.authorize(svc))return false
+        if(!actionAllowed())return false
         val steps = 24
         val path = Path().apply {
             moveTo(x1.toFloat(), y1.toFloat())
@@ -716,7 +734,7 @@ class Ui(private val svc: AutoAccessibilityService) {
         return click(n)
     }
 
-    fun back(): Boolean = AccountSafety.authorize(svc) && svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+    fun back(): Boolean = actionAllowed() && svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
 
     fun home(): Boolean = svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
 

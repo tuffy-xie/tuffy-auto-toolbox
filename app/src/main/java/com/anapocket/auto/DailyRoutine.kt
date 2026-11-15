@@ -135,6 +135,13 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 if(outcome.state!="BLOCKED"&&!AutoAccessibilityService.stopRequested&&TokyoDate.of()==date)MedalVideoTask(svc).runOnce(run)
                 result=outcome
             }
+        }catch(e:kotlinx.coroutines.CancellationException){
+            // Persist the stop (original attempts were already finished by their own finally blocks), then propagate.
+            runCatching{
+                val stopped=RoutineOutcome("STOPPED","执行已取消："+AutoAccessibilityService.stopReason.ifBlank{"lifecycle"}+"；原观看记录保留，未重播",emptyMap())
+                RoutineStore.finish(svc,date,run,stopped,RoutineSummary.build(svc,date,stopped,run))
+            }
+            throw e
         }catch(e:Exception){
             val failed=RoutineOutcome(if(AutoAccessibilityService.stopRequested)"STOPPED" else "BLOCKED","执行中止："+(e.message?:e.javaClass.simpleName).take(140),emptyMap())
             val summary=RoutineSummary.build(svc,date,failed,run)

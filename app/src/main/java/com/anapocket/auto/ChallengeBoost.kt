@@ -1263,6 +1263,8 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             for(cat in TravelSelectionPolicy.queue(categories,Prefs.loadBlocking(svc))){
                 if(!ChallengeScanStore.complete(svc,date,cat,settings.kmOf(cat)))ChallengeScanStore.record(svc,date,cat,settings.kmOf(cat),runId,if(TravelSelection.hasUnresolvedAd(svc,date))ChallengeScanStatus.BLOCKED else ChallengeScanStatus.SCAN_FAILED,reason=t.message.orEmpty())
             }
+            // Scan state is recorded and finally keeps the active attempt UNCONFIRMED; a cancellation then propagates.
+            if(t is kotlinx.coroutines.CancellationException)throw t
             if(t is MaxBoostCompletionFailure)Logger.e("MAXBOOST","completion halted without Back/relaunch or ad replay",t)
             else {evidence(runId,"error",t.toString());FaultStore.capture(svc,runId,"challenge_navigation",t.message.orEmpty())}
             return RoutineStepResult("BLOCKED","挑战执行中止：${t.message}\n" + ChallengeStore.summary(svc,date),false)

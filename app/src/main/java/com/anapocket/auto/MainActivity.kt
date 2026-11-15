@@ -131,7 +131,7 @@ class MainActivity:AppCompatActivity(){
   if(bad!=null){bad.input.error="请输入1至"+bad.cat.maxKm+"的整数公里";toast("请先设置"+bad.cat.title+"公里上限");return false}
   current=current.copy(enabled=sw(R.id.swRoutineSchedule).isChecked,adEnabled=sw(R.id.swAd).isChecked,adTarget=DAILY_AD_LIMIT,dayToday=true,dayTomorrow=false,
    catEnabled=rows.associate{it.cat.name to it.toggle.isChecked},catKm=rows.associate{it.cat.name to (CategoryDistancePolicy.parse(it.cat,it.input.text.toString())?:if(it.cat.longDistance)0 else it.cat.defaultKm)})
-  Prefs.saveBlocking(this,current);Scheduler.schedule(this,current.hour,current.minute);CheckinRuntime.updateAnaWindow(this);CheckinScheduler.protection(this);if(!quiet)toast("设置已保存");refresh();return true
+  Prefs.saveBlocking(this,current);if(!current.enabled)RoutineRetry.revoke(this,"schedule_disabled");Scheduler.schedule(this,current.hour,current.minute);CheckinRuntime.updateAnaWindow(this);CheckinScheduler.protection(this);if(!quiet)toast("设置已保存");refresh();return true
  }
 
  private fun requestChallengeScan(resetOnly:Boolean){

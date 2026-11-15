@@ -20,12 +20,34 @@ object RoutineRetryPolicy {
      * Minutes until the next retry, or null for none. [attempts] retries already made today; [stalls] retries
      * in a row that changed nothing; [watchdog] a stop the run watchdog requested rather than the user.
      */
-    fun nextDelay(state:String,detail:String,watchdog:Boolean,attempts:Int,stalls:Int,nowMinute:Int,safetyPending:Boolean,scheduleOn:Boolean):Int? {
+    fun nextDelay(state:String,detail:String,watchdog:Boolean,attempts:Int,stalls:Int,nowMinute:Int,safetyPending:Boolean,scheduleOn:Boolean,userStopped:Boolean=false):Int? {
         val retryable=state=="BLOCKED"||(state=="STOPPED"&&watchdog)
-        if(!scheduleOn||!retryable||humanRequired(detail,safetyPending))return null
+        // A run the user stopped can still end BLOCKED (a step refused its next tap); the stop decides, not the step.
+        if(userStopped||!scheduleOn||!retryable||humanRequired(detail,safetyPending))return null
         if(attempts>=delaysMinutes.size||stalls>=STALL_LIMIT)return null
         val delay=delaysMinutes[attempts]
         return if(nowMinute+delay>LAST_START_MINUTE)null else delay
+    }
+    /**
+     * How a routine actually ended, for the retry decision. A coroutine cancellation is not a business BLOCKED:
+     * the watchdog's cancel stays a watchdog stop (retryable), a service teardown or user stop is a plain stop.
+     */
+    fun terminalState(state:String,stopReason:String,cancelled:Boolean)=when{
+        stopReason=="user"->"STOPPED"
+        cancelled->"STOPPED"
+        else->state
+    }
+    /**
+     * Whether a queued retry may start now. Queued is not authorized: the schedule switch, a user stop of the
+     * run that queued it, and the business day are read again when the alarm fires. Null means fire.
+     */
+    fun dropReason(pendingRun:String?,scheduleOn:Boolean,userStoppedRun:String?,dayFinished:Boolean,nowMinute:Int):String?=when{
+        pendingRun==null->"no_pending_retry_for_today"
+        !scheduleOn->"schedule_disabled"
+        userStoppedRun!=null&&userStoppedRun==pendingRun->"source_run_stopped_by_user"
+        dayFinished->"day_finished"
+        nowMinute>LAST_START_MINUTE->"too_late"
+        else->null
     }
 }
 
@@ -54,7 +76,7 @@ object RoutineRetry {
             val stalls=if(last!=null&&last==fp)p.getInt("stall_$date",0)+1 else 0
             check(p.edit().putString("fp_$date",fp).putInt("stall_$date",stalls).commit())
             val delay=RoutineRetryPolicy.nextDelay(state,detail,watchdogRun==run,attempts,stalls,nowMinute(),
-                AccountSafetyStore.pending(c)!=null,Prefs.loadBlocking(c).enabled)
+                AccountSafetyStore.pending(c)!=null,Prefs.loadBlocking(c).enabled,AnaProcessRecovery.userStoppedRun(c)==run)
             if(delay==null){p.edit().remove("pending_$date").commit();Logger.i("RETRY","run=$run state=$state no_retry attempts=$attempts stalls=$stalls");return}
             val at=System.currentTimeMillis()+delay*60_000L
             check(p.edit().putString("pending_$date",run).commit())
@@ -63,14 +85,20 @@ object RoutineRetry {
         }catch(e:Exception){Logger.w("RETRY","schedule failed: "+e.javaClass.simpleName)}
     }
 
+    /** Turning the schedule off withdraws today's queued retry at once, so turning it back on cannot revive it. */
+    @Synchronized fun revoke(c:Context,reason:String){
+        val date=TokyoDate.of();val p=sp(c);val pending=p.getString("pending_$date",null)?:return
+        p.edit().remove("pending_$date").commit();Logger.i("RETRY","revoked: $reason sourceRun=$pending")
+    }
+
     /** The retry alarm: start the same continue a person would, unless something else holds the phone. */
     @Synchronized fun fire(c:Context) {
-        val date=TokyoDate.of();val p=sp(c)
-        if(p.getString("pending_$date",null)==null){Logger.i("RETRY","alarm without pending retry for $date");return}
+        val date=TokyoDate.of();val p=sp(c);val pending=p.getString("pending_$date",null)
+        if(pending==null){Logger.i("RETRY","alarm without pending retry for $date");return}
         if(AutoAccessibilityService.isRunning)return  // a run is already active; it schedules its own follow-up
-        if(RoutineStore.read(c,date)?.optString("state") in setOf("DONE","PARTIALLY_COMPLETED")||nowMinute()>RoutineRetryPolicy.LAST_START_MINUTE){
-            p.edit().remove("pending_$date").commit();Logger.i("RETRY","dropped: day finished or too late");return
-        }
+        val drop=RoutineRetryPolicy.dropReason(pending,Prefs.loadBlocking(c).enabled,AnaProcessRecovery.userStoppedRun(c),
+            RoutineStore.read(c,date)?.optString("state") in setOf("DONE","PARTIALLY_COMPLETED"),nowMinute())
+        if(drop!=null){p.edit().remove("pending_$date").commit();Logger.i("RETRY","dropped: $drop sourceRun=$pending");return}
         if(CheckinRuntime.activeApp!=null||!AutoAccessibilityService.isConnected()){
             Scheduler.scheduleRoutineRetry(c,System.currentTimeMillis()+10*60_000L)
             Logger.i("RETRY","deferred 10min checkin="+CheckinRuntime.activeApp+" connected="+AutoAccessibilityService.isConnected());return
