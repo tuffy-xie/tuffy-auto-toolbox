@@ -11,9 +11,14 @@ object OfficialLoadFailurePolicy {
     fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)
     fun resolved(a:AdAttempt,reviewed:Set<String>)=
         a.terminal&&a.state==AdState.REWARD_CONFIRMED&&a.completed&&a.rewardConfirmed||reviewable(a)&&key(a) in reviewed
-    fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {
+    /**
+     * [stallVerified]: the original ad was proven frozen (same evidence unchanged for 30 s) before its window went away.
+     * A window that closed without that proof (a person watched or closed it, the SDK ended on its own) and an unchanged
+     * counter cannot show that no reward is still coming, so it never frees a new attempt; the day's ADS stay BLOCKED.
+     */
+    fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>,stallVerified:Boolean):Boolean {
         val a=rows.lastOrNull()?:return false
-        return date==today&&a.date==date&&adClosed&&!receipt&&elapsed>=60_000&&reviewed.size<2&&key(a) !in reviewed&&
+        return stallVerified&&date==today&&a.date==date&&adClosed&&!receipt&&elapsed>=60_000&&reviewed.size<2&&key(a) !in reviewed&&
             blankStall(a)&&counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {

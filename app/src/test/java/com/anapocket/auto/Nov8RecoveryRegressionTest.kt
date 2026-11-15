@@ -153,12 +153,14 @@ class Nov8RecoveryRegressionTest {
     }
     @Test fun reviewNeedsClosedAdUnchangedCounterNoReceiptAndCooldown(){
         val a=listOf(blank(1,0))
-        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,false,60_000,emptySet()))
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,false,false,60_000,emptySet()))
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,1,true,false,60_000,emptySet()))
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,true,60_000,emptySet()))
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,false,59_999,emptySet()))
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,"2026-11-09",0,true,false,60_000,emptySet()))
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,false,60_000,emptySet(),true))
+        // R4: a closed window and an unchanged counter without a verified freeze never free a new attempt.
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,false,60_000,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,false,false,60_000,emptySet(),true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,1,true,false,60_000,emptySet(),true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,true,60_000,emptySet(),true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,date,0,true,false,59_999,emptySet(),true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(a,date,"2026-11-09",0,true,false,60_000,emptySet(),true))
     }
     @Test fun rewardObservedOrOtherFailuresAreNeverBlankStalls(){
         val a=blank(1,0)
@@ -175,8 +177,8 @@ class Nov8RecoveryRegressionTest {
         assertTrue(OfficialLoadFailurePolicy.canReserve(0,0,true,false,listOf(a),setOf(k)))
         assertFalse(OfficialLoadFailurePolicy.canReserve(0,0,false,false,listOf(a),setOf(k)))
         val b=blank(2,0);val c=blank(3,0)
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(a,b,c),date,date,0,true,false,60_000,setOf(k,OfficialLoadFailurePolicy.key(b))))
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(a),date,date,0,true,false,60_000,setOf(k)))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(a,b,c),date,date,0,true,false,60_000,setOf(k,OfficialLoadFailurePolicy.key(b)),true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(a),date,date,0,true,false,60_000,setOf(k),true))
     }
     @Test fun laterAttemptAfterReviewedBlankResolvesNormally(){
         val a=blank(1,0);val k=OfficialLoadFailurePolicy.key(a)
