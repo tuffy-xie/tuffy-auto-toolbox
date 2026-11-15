@@ -33,6 +33,10 @@ class AutomationEngine(
     private val svc: AutoAccessibilityService,
     private val st: AppSettings
 ) {
+    companion object {
+        /** Generic list navigation found a Boost prompt; it stops instead of declining the Boost. */
+        const val BOOST_DIALOG_REFUSED = "boost_dialog_requires_challenge_owner_no_skip"
+    }
     private val ui = Ui(svc)
     private val pkg = "us.ana_pocket.ANAPocket"
     private val overlay = OverlayKeeper(svc)
@@ -1688,8 +1692,11 @@ class AutomationEngine(
                     delay(1300)
                 }
                 "BOOST_DIALOG" -> {
-                    // 参加确认弹窗还在，先处理掉
-                    handleBoostDialog(doBoost = false)
+                    // A Boost prompt belongs to one challenge instance. Generic navigation has no authority to
+                    // decline it (ブーストしない or a blind coordinate tap); ChallengeBoost's own resume / budget
+                    // exit decides for the bound task on the next run. Stop here with evidence instead.
+                    FaultStore.capture(svc,AutoAccessibilityService.currentRunId,"challenge_navigation",BOOST_DIALOG_REFUSED)
+                    error(BOOST_DIALOG_REFUSED)
                 }
                 else -> {
                     if (ui.snapshot().isEmpty()) {
