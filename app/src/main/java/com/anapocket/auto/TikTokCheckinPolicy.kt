@@ -6,7 +6,7 @@ package com.anapocket.auto
  * Invite, campaign, ad, reminder and exchange controls are never targets.
  */
 object TikTokCheckinPolicy {
-    val TASKS=listOf("checkin","claim","unlock")
+    val TASKS=listOf("checkin","claim","unlock","bonus_reward")
     private fun n(t:String)=t.replace(Regex("\\s"),"")
     /** Words that must never be inside the box of anything Tuffy taps on this app. */
     private val forbidden=Regex("AD|広告|リマインド|参加|始める|開始|招待|交換|シェア|スタート|回す|受け取る$")
@@ -38,10 +38,33 @@ object TikTokCheckinPolicy {
     fun checkinDone(lines:List<CheckinLine>):Boolean{val a=checkinTitle(lines)?:return false
         return below(lines,a,650).any{val t=n(it.text);t.startsWith("明日チェックインして")||Regex("^[0-9,]+ポイントを獲得").containsMatchIn(t)}}
     fun claimTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("今日の報酬を受け取る")}
-    fun claimButton(lines:List<CheckinLine>):CheckinLine?{val a=claimTitle(lines)?:return null;return below(lines,a,360).firstOrNull{n(it.text)=="獲得する"}}
+    /**
+     * 「報酬 607」 inside the claim card. 11/15 07:32 a floating 「300ポイントを獲得 AD」 offer covered the card title and OCR
+     * read the amount as 「報酬D607×」; this line still anchors the card. Ad offers never match.
+     */
+    fun claimReward(lines:List<CheckinLine>)=lines.firstOrNull{val t=n(it.text)
+        Regex("^報酬\\D{0,3}[0-9][0-9,]*\\D{0,2}$").matches(t)&&!Regex("AD|広告|ボーナス").containsMatchIn(t)}
+    /** The claim card is on screen: its title, or its 報酬 line when the title is covered. */
+    fun claimPresent(lines:List<CheckinLine>)=claimTitle(lines)!=null||claimReward(lines)!=null
+    fun claimButton(lines:List<CheckinLine>):CheckinLine?{
+        claimTitle(lines)?.let{a->return below(lines,a,360).firstOrNull{n(it.text)=="獲得する"}}
+        val r=claimReward(lines)?:return null
+        return below(lines,r,200).firstOrNull{n(it.text)=="獲得する"}
+    }
     /** 「報酬 608」 between the claim title and its button. */
-    fun claimAmount(lines:List<CheckinLine>):String?{val a=claimTitle(lines)?:return null;val b=claimButton(lines)?:return null
-        return lines.filter{it.top>a.bottom&&it.bottom<=b.top}.mapNotNull{Regex("([0-9][0-9,]*)$").find(n(it.text))?.groupValues?.get(1)?.replace(",","")}.singleOrNull()}
+    fun claimAmount(lines:List<CheckinLine>):String?{val b=claimButton(lines)?:return null
+        val a=claimTitle(lines);val r=claimReward(lines)
+        val rows=if(a!=null)lines.filter{it.top>a.bottom&&it.bottom<=b.top} else listOfNotNull(r)
+        return rows.mapNotNull{Regex("([0-9][0-9,]*)\\D{0,2}$").find(n(it.text))?.groupValues?.get(1)?.replace(",","")}.singleOrNull()}
+    /**
+     * 「ボーナス報酬をGET！最大2,500」 card (seen 11/15): its 受け取る credits at once, shows 「N/10回 受け取り済み」 and turns into a
+     * cooldown timer. The user asked for one press a day (11/15); 受け取る is allowed on this card only.
+     */
+    fun bonusTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("ボーナス報酬を")}
+    fun bonusCount(lines:List<CheckinLine>):Int?{val a=bonusTitle(lines)?:return null
+        return below(lines,a,330).firstNotNullOfOrNull{Regex("([0-9]+)/10回受け取り済み").find(n(it.text))?.groupValues?.get(1)?.toInt()}}
+    fun bonusButton(lines:List<CheckinLine>,width:Int):CheckinLine?{val a=bonusTitle(lines)?:return null
+        return lines.firstOrNull{n(it.text)=="受け取る"&&it.left>width*.5&&it.top>=a.top-60&&it.top<=a.bottom+80}}
     fun unlockTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("翌日報酬が受け取れます")}
     /** The yellow アンロック tag sits under the title; the button is the lowest one in the card. */
     fun unlockButton(lines:List<CheckinLine>):CheckinLine?{val a=unlockTitle(lines)?:return null;return below(lines,a,560).filter{n(it.text)=="アンロック"&&it.top-a.bottom>200}.maxByOrNull{it.top}}

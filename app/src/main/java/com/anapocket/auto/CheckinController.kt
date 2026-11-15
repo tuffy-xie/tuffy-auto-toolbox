@@ -543,6 +543,7 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
         task("checkin"){tiktokCheckin()}
         task("claim"){tiktokClaim()}
         task("unlock"){tiktokUnlock()}
+        task("bonus_reward"){tiktokBonusReward()}
         try{tiktokTop();val f=tiktokSettle(frame());store.log(run,"TIKTOK_BALANCE after="+TikTokCheckinPolicy.balance(f.lines));capture("tiktok_balance_after")}
         catch(e:CancellationException){throw e}catch(e:CheckinPerceptionUnavailable){throw e}catch(_:Exception){}
     }
@@ -577,7 +578,7 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
         val f=tiktokSeek("claim"){reachable(TikTokCheckinPolicy.claimButton(it))||TikTokCheckinPolicy.unlockTitle(it)!=null||TikTokCheckinPolicy.unlockDone(it)}
             ?:error("claim_area_not_found")
         val button=TikTokCheckinPolicy.claimButton(f.lines)
-        if(button==null&&TikTokCheckinPolicy.claimTitle(f.lines)==null){set("claim",CheckinState.ALREADY_DONE,"no_claimable_reward_card_today",capture("tiktok_claim_absent"));return}
+        if(button==null&&!TikTokCheckinPolicy.claimPresent(f.lines)){set("claim",CheckinState.ALREADY_DONE,"no_claimable_reward_card_today",capture("tiktok_claim_absent"));return}
         check(button!=null&&reachable(button)){"claim_button_not_in_reach"}
         if(reserved("claim")){set("claim",CheckinState.UNCONFIRMED,"prior_claim_submission_no_replay",capture("tiktok_claim_review"));return}
         val amount=TikTokCheckinPolicy.claimAmount(f.lines);capture("tiktok_claim_card")
@@ -586,7 +587,8 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
         val until=SystemClock.elapsedRealtime()+20_000
         while(SystemClock.elapsedRealtime()<until){
             delay(1500);val r=tiktokSettle(frame())
-            if(TikTokCheckinPolicy.claimTitle(r.lines)==null&&TikTokCheckinPolicy.giftPage(r.lines)||TikTokCheckinPolicy.claimTitle(r.lines)==null&&(TikTokCheckinPolicy.unlockTitle(r.lines)!=null||TikTokCheckinPolicy.checkinTitle(r.lines)!=null)){
+            // A covered title alone is not a removed card: the 報酬 line must be gone too.
+            if(!TikTokCheckinPolicy.claimPresent(r.lines)&&(TikTokCheckinPolicy.giftPage(r.lines)||TikTokCheckinPolicy.unlockTitle(r.lines)!=null||TikTokCheckinPolicy.checkinTitle(r.lines)!=null)){
                 set("claim",CheckinState.SUCCESS,"official_claim_card_removed_after_tap",capture("tiktok_claim_done"),"TikTokポイント",amount,amount!=null);return
             }
         }
@@ -611,5 +613,28 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             if(TikTokCheckinPolicy.unlockDone(r.lines)){set("unlock",CheckinState.SUCCESS,"official_unlock_card_done_after_tap",capture("tiktok_unlock_card_done"));return}
         }
         set("unlock",CheckinState.UNCONFIRMED,"unlock_result_not_seen",capture("tiktok_unlock_unconfirmed"))
+    }
+    /** 「ボーナス報酬をGET！」: one 受け取る a day (user, 11/15). Its own counter decides; never a second press. */
+    private suspend fun tiktokBonusReward(){
+        set("bonus_reward",CheckinState.RUNNING)
+        val w=ui.svc.resources.displayMetrics.widthPixels
+        // Title and counter both in view (the button sits beside the title); 受け取る itself is outside safeTarget on purpose.
+        val f=tiktokSeek("bonus_reward"){TikTokCheckinPolicy.bonusCount(it)!=null&&TikTokCheckinPolicy.bonusTitle(it)!!.top>screenHeight*.1&&
+            TikTokCheckinPolicy.bonusTitle(it)!!.bottom<screenHeight*.7}?:error("bonus_card_not_found")
+        val before=TikTokCheckinPolicy.bonusCount(f.lines)!!
+        if(before>0){set("bonus_reward",CheckinState.ALREADY_DONE,"official_bonus_count_${before}_today",capture("tiktok_bonus_done"));return}
+        if(reserved("bonus_reward")){set("bonus_reward",CheckinState.UNCONFIRMED,"prior_bonus_submission_no_replay",capture("tiktok_bonus_review"));return}
+        val button=TikTokCheckinPolicy.bonusButton(f.lines,w)?:error("bonus_button_missing")
+        check(button.bottom<screenHeight*.78&&button.top>screenHeight*.1){"bonus_button_not_in_reach"}
+        capture("tiktok_bonus_card")
+        check(mutate {store.reserve("bonus_reward",run,date)}){"already_reserved"}
+        check(ui.click(f,button){mutate {store.submitted("bonus_reward",run,date,preflightVerified=true)}}){"bonus_button_changed"}
+        val until=SystemClock.elapsedRealtime()+15_000
+        while(SystemClock.elapsedRealtime()<until){
+            delay(1200);val r=frame()
+            val after=TikTokCheckinPolicy.bonusCount(r.lines)
+            if(after!=null&&after>before){set("bonus_reward",CheckinState.SUCCESS,"official_bonus_count_${after}_after_tap",capture("tiktok_bonus_received"),"TikTokポイント");return}
+        }
+        set("bonus_reward",CheckinState.UNCONFIRMED,"bonus_count_not_advanced",capture("tiktok_bonus_unconfirmed"))
     }
 }

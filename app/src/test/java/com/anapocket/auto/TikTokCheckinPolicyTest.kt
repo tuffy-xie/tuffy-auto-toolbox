@@ -35,6 +35,39 @@ class TikTokCheckinPolicyTest {
         assertTrue(TikTokCheckinPolicy.popup(shuffled))
         assertTrue(TikTokCheckinPolicy.backDismissible(shuffled))
     }
+    /** 11/15 07:32 last OCR: the claim title was covered by 「300ポイントを獲得 AD」; amount read as 「報酬D607×」. */
+    private val nov15=listOf(l("明日チェックインしてを獲",127,502,600,540),l("300ポイントを獲得 AD",205,1072,520,1110),
+        l("報酬D607×",153,1241,330,1280),l("獲得する",284,1351,436,1390))
+    @Test fun claimCardIsFoundByItsRewardLineWhenTheTitleIsCovered(){
+        assertEquals("獲得する",TikTokCheckinPolicy.claimButton(nov15)?.text)
+        assertTrue(TikTokCheckinPolicy.claimPresent(nov15))
+        assertEquals("607",TikTokCheckinPolicy.claimAmount(nov15))
+        // The ad offer is never the anchor, and a lone 獲得する far from any 報酬 line is not the claim button.
+        assertNull(TikTokCheckinPolicy.claimButton(listOf(l("300ポイントを獲得 AD",205,1072,520,1110),l("獲得する",284,1180,436,1220))))
+        assertNull(TikTokCheckinPolicy.claimButton(listOf(l("報酬 607",153,600,330,640),l("獲得する",284,1351,436,1390))))
+        assertFalse(TikTokCheckinPolicy.claimPresent(listOf(l("明日チェックインしてを獲",127,502,600,540))))
+    }
+    @Test fun claimWithTitleStillWorks(){
+        assertEquals(claim,TikTokCheckinPolicy.claimButton(listOf(title,checkin,claimTitle,reward,claim)))
+        assertEquals("608",TikTokCheckinPolicy.claimAmount(listOf(claimTitle,reward,claim)))
+    }
+    /** 11/15 14:56 gift page, 720x1650. */
+    private val bonus0=listOf(l("ボーナス報酬を",60,420,345,465),l("GET！最大2,500",60,470,420,515),l("受け取る",500,440,620,485),
+        l("ボーナス報酬があり、1日最大10回まで受け取れます。",60,540,650,605),l("0/10回 受け取り済み",60,635,305,665))
+    @Test fun bonusRewardIsPressedOnlyWhileTodaysCountIsZero(){
+        assertEquals(0,TikTokCheckinPolicy.bonusCount(bonus0))
+        assertEquals("受け取る",TikTokCheckinPolicy.bonusButton(bonus0,720)?.text)
+        val after=bonus0.map{if(it.text.startsWith("0/10"))l("1/10回 受け取り済み",60,635,305,665) else if(it.text=="受け取る")l("00:00",515,440,605,485) else it}
+        assertEquals(1,TikTokCheckinPolicy.bonusCount(after))
+        assertNull(TikTokCheckinPolicy.bonusButton(after,720))
+    }
+    @Test fun bonusButtonIsNeverAnotherCardsReceive(){
+        // A 受け取る on the left half, or far below the bonus title, belongs to something else.
+        assertNull(TikTokCheckinPolicy.bonusButton(listOf(l("ボーナス報酬を",60,420,345,465),l("受け取る",60,440,200,485)),720))
+        assertNull(TikTokCheckinPolicy.bonusButton(listOf(l("ボーナス報酬を",60,420,345,465),l("受け取る",500,900,620,945)),720))
+        assertNull(TikTokCheckinPolicy.bonusButton(listOf(l("受け取る",500,440,620,485)),720))
+        assertEquals(listOf("checkin","claim","unlock","bonus_reward"),TikTokCheckinPolicy.TASKS)
+    }
     @Test fun checkinButtonIsTheExactButtonUnderTheStreakCard(){
         assertEquals(checkin,TikTokCheckinPolicy.checkinButton(listOf(title,checkin,claimTitle,claim)))
         assertFalse(TikTokCheckinPolicy.checkinDone(listOf(title,checkin)))

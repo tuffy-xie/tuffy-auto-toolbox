@@ -10,7 +10,7 @@ data class CheckinConfig(val enabled:Boolean=false,val hour:Int,val minute:Int,v
 class CheckinStore(private val ctx:Context,val app:CheckinApp) {
     companion object {
         private val lock=Any()
-        fun taskLabel(task:String)=when(task){"points"->"1ポイントミッション";"garagara_daily"->"ガラガラポン日课";"pickup"->"PICKUP";"bonus"->"三项达成额外抽奖";"lottery1"->"ガラガラポン①";"lottery2"->"ガラガラポン②";"checkin"->"14日连续签到";"claim"->"领取昨日解锁奖励";"unlock"->"解锁明日奖励";else->"每日飞镖"}
+        fun taskLabel(task:String)=when(task){"points"->"1ポイントミッション";"garagara_daily"->"ガラガラポン日课";"pickup"->"PICKUP";"bonus"->"三项达成额外抽奖";"lottery1"->"ガラガラポン①";"lottery2"->"ガラガラポン②";"checkin"->"14日连续签到";"claim"->"领取昨日解锁奖励";"unlock"->"解锁明日奖励";"bonus_reward"->"ボーナス報酬（每天1次）";else->"每日飞镖"}
         fun stateLabel(state:String?)=when(state){"SUCCESS"->"完成";"ALREADY_DONE"->"今日已完成";"UNCONFIRMED"->"待核对";"PREEMPTED"->"已让出给ANA";"NEEDS_USER_ACTION"->"需人工处理";"RUNNING"->"执行中";"BLOCKED"->"受阻";null->"未执行";else->"未完成"}
     }
     private val prefs=ctx.getSharedPreferences("checkin_v1_"+app.name,Context.MODE_PRIVATE)
