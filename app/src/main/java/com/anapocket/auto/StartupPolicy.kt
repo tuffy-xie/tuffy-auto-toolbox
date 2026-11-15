@@ -27,6 +27,19 @@ object StartupPolicy {
      */
     fun mayFreshLaunchAfterFinishedLogin(date:String,recordedDate:String?,state:String?,finishedAt:Long)=
         recordedDate==date&&state in setOf("UNCONFIRMED","FAILED")&&finishedAt>0
+    /**
+     * 11/14 00:03: the login video button was pressed and no ad ever opened (ANA's home stayed on screen). Such an
+     * attempt watched nothing, so the same day's offer may be pressed once more; an attempt that did show an ad never.
+     */
+    fun mayReopenNeverOpenedLogin(date:String,recordedDate:String?,state:String?,reason:String?,adObserved:Boolean,reopenRequests:Int)=
+        recordedDate==date&&state=="UNCONFIRMED"&&reason==StartupAdSequence.NEVER_OPENED&&!adObserved&&reopenRequests<1
+    /**
+     * 11/10, 11/12, 11/13: an Ogury ad was shown and closed (7 s, 35 s, 90 s) and ANA came back to the same login
+     * dialog still offering the video, with no 「報酬をゲット！」. ANA's own offer says this attempt earned nothing;
+     * the user approved pressing it once more per day (11/14). Never while an ad window is still in front.
+     */
+    fun mayRepressUnrewardedLogin(date:String,recordedDate:String?,state:String?,reason:String?,adObserved:Boolean,repressRequests:Int,adInFront:Boolean)=
+        recordedDate==date&&state=="UNCONFIRMED"&&reason=="login_reward_not_confirmed_after_offer_return"&&adObserved&&repressRequests<1&&!adInFront
     /** A terminal unknown reward stays unknown; only its recognized native offer may be dismissed. */
     fun mayLeaveUnconfirmedOffer(date:String,recordedDate:String?,state:String?,finishedAt:Long,knownLogin:Boolean,sdkActivity:Boolean)=
         recordedDate==date&&state in setOf("UNCONFIRMED","FAILED")&&finishedAt>0&&knownLogin&&!sdkActivity

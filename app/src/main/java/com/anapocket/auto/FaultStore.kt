@@ -65,7 +65,10 @@ object FaultStore {
                     "${n.className} id=${n.viewIdResourceName} enabled=${n.isEnabled} clickable=${n.isClickable} bounds=$b actions=${n.actionList.map{it.id}} label="+
                         (if(n.isPassword||n.isEditable)"[PASSWORD_REDACTED]" else DiagnosticPrivacy.redact(ui.label(n).take(500)))
                 }
-                val png=if(ScreenshotDiagnostics.reserve(svc))ui.captureVisual(includePng=true).png?.takeIf{ScreenshotDiagnostics.charge(svc,it.size)} else null
+                // An ad that could not be closed is only understood from its picture (AppLovin playables paint their close
+                // inside a canvas); those few scenes keep one screenshot without the timed screenshot diagnostics.
+                val png=if(FaultScreenshotPolicy.always(module,reason))ui.captureVisual(includePng=true).png?.takeIf{it.size<=FaultScreenshotPolicy.MAX_BYTES}
+                    else if(ScreenshotDiagnostics.reserve(svc))ui.captureVisual(includePng=true).png?.takeIf{ScreenshotDiagnostics.charge(svc,it.size)} else null
                 ui.refreshCache()
                 if(ui.currentPackage()==pkg){
                     File(dir,"nodes.txt").writeText(nodes)

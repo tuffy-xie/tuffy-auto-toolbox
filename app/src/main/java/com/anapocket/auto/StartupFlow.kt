@@ -107,6 +107,27 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                     if(!tap(dismiss))return StartupResult(false,"BLOCKED",closed,"签到窗口关闭失败")
                     delay(1000);stable=0;continue
                 }
+                val neverOpened=prior!=null&&StartupPolicy.mayReopenNeverOpenedLogin(date,prior.optString("date"),prior.optString("state"),
+                    prior.optString("reason"),prior.optBoolean("adDepartureObserved"),prior.optInt("reopenRequests"))
+                val unrewarded=prior!=null&&StartupPolicy.mayRepressUnrewardedLogin(date,prior.optString("date"),prior.optString("state"),
+                    prior.optString("reason"),prior.optBoolean("adDepartureObserved"),prior.optInt("repressRequests"),
+                    AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)&&!normal())
+                if(prior!=null&&allowLoginSubmission&&(neverOpened||unrewarded)&&loginButton()!=null){
+                    // neverOpened: no ad was on screen for this attempt, so nothing is replayed.
+                    // unrewarded: ANA's own dialog still offers the video after the ad returned (approved 11/14, once a day).
+                    val counter=if(neverOpened)"reopenRequests" else "repressRequests"
+                    prior.put(counter,prior.optInt(counter)+1).put("previousFailure",prior.optString("reason"))
+                        .put("state","AD_OPENING").put("reopenAt",System.currentTimeMillis()).put("reopenRunId",run)
+                    prior.remove("reason");prior.remove("finishedAt")
+                    LoginBonusStore.save(svc,date,prior)
+                    proof(run,"login_reopen_before_click",prior.toString()+"\n"+(if(neverOpened)"previous_attempt_showed_no_ad" else "official_offer_still_shown_after_ad_no_receipt")+";same_offer;one_more_request")
+                    Logger.i("STARTUP","run=$run login "+(if(neverOpened)"never_opened" else "official_offer_still_shown")+" $counter="+prior.optInt(counter))
+                    val again=AdDispatchProtocol.dispatch({phase->prior.put("dispatchPhase",phase).put(if(phase=="ARMED")"reopenArmedAt" else "reopenCompletedAt",System.currentTimeMillis());LoginBonusStore.save(svc,date,prior)},
+                        {!blocked()&&TokyoDate.of()==date&&loginButton()?.let{tap(it)}==true})
+                    if(!again){prior.put("state","UNCONFIRMED").put("reason","login_dispatch_unconfirmed").put("finishedAt",System.currentTimeMillis());LoginBonusStore.save(svc,date,prior);return StartupResult(false,"UNCONFIRMED",closed,"签到提交尚未确认，原记录保留待核对")}
+                    if(!observeAd(run,date,prior))return StartupResult(false,prior.optString("state"),closed,prior.optString("reason"))
+                    stable=0;until=SystemClock.elapsedRealtime()+15_000L;continue
+                }
                 if(prior!=null && !StartupPolicy.canReserveLogin(date,prior.optString("date"),prior.optString("state"))){
                     if(StartupPolicy.mayLeaveUnconfirmedOffer(date,prior.optString("date"),prior.optString("state"),prior.optLong("finishedAt"),login,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))){
                         val dismiss=node("button_ok")?.takeIf{ui.label(it)=="閉じる"}
@@ -199,13 +220,18 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 LoginBonusStore.save(svc,date,row)
             }
             override suspend fun observedAd(){
-                if(row!=null){row.put("adDepartureObserved",true).put("state","AD_PLAYING");LoginBonusStore.save(svc,date,row)}
+                if(row!=null){row.put("adDepartureObserved",true).put("state","AD_PLAYING").put("adActivity",AutoAccessibilityService.foregroundActivity);LoginBonusStore.save(svc,date,row)}
+                // Which SDK window the login video really was; the text dump alone could not tell on 11/13 and 11/14.
+                Logger.i("STARTAD","run=$run "+(if(row==null)"startup" else "login")+" ad_observed activity="+AutoAccessibilityService.foregroundActivity+" pkg="+ui.currentPackage())
+                if(row!=null)FaultStore.capture(svc,run,"login_ad","ad_observed",row.optString("startedAt"))
                 proof(run,if(row==null)"startup_ad_playing" else "login_ad_playing",row?.toString()?:"navigation_blocker_only")
             }
             override suspend fun close(){
                 val n=closeNode?:return
                 val b=close.controlBounds(n)?:return
                 proof(run,if(row==null)"startup_sdk_close" else "login_ad_close_available","actual_observed_close;not_completion")
+                Logger.i("STARTAD","run=$run "+(if(row==null)"startup" else "login")+" close activity="+AutoAccessibilityService.foregroundActivity+" bounds=$b store="+close.observedStoreOverlay)
+                if(row!=null&&!row.optBoolean("closeSceneSaved")){row.put("closeSceneSaved",true);FaultStore.capture(svc,run,"login_ad","before_close",row.optString("startedAt"))}
                 ui.tap(b.centerX(),b.centerY())
             }
         }

@@ -19,11 +19,20 @@ interface StartupAdPort {
 /** Startup dismissal is navigation evidence only; a login reward needs a new official receipt after an observed ad. */
 class StartupAdSequence(private val p:StartupAdPort){
     // 11/10 Ogury closed at 7 s and 11/12 closed at 35 s both forfeited the login bonus; 11/08 credited after ~70 s.
-    companion object { const val REWARD_VIEW_MS=90_000L }
+    companion object {
+        const val REWARD_VIEW_MS=90_000L
+        /**
+         * 11/14 00:03: after the login video button was pressed no ad ever covered ANA; its home page stayed on screen
+         * with the SDK activity flag set. Tuffy counted that as a playing ad, waited 90 s and pressed a control on the
+         * home page. While ANA's own home is visible there is no ad, and after this long none is coming.
+         */
+        const val NEVER_OPENED_MS=45_000L
+        const val NEVER_OPENED="login_ad_never_opened"
+    }
     suspend fun run(requireReward:Boolean):StartupAdOutcome{
         val diagnostic=DiagnosticCapturePolicy()
         val start=p.now();var departed=false;var nativeClosed=0;var advanceClosed=0;var storeClosed=0;var lastClose=-100_000L
-        var part:AdPart?=null;var returned:Long?=null;var stable=0;var popupCloses=0;var adSince:Long?=null
+        var part:AdPart?=null;var returned:Long?=null;var stable=0;var popupCloses=0;var adSince:Long?=null;var idleSince:Long?=null
         while(p.now()-start<300_000L){
             if(p.stopped())return StartupAdOutcome("UNCONFIRMED","user_stopped")
             if(!p.sameDate())return StartupAdOutcome("UNCONFIRMED","phone_date_changed")
@@ -35,12 +44,18 @@ class StartupAdSequence(private val p:StartupAdPort){
                 if(popupCloses>=6||!p.dismissPopup())return StartupAdOutcome("UNCONFIRMED","native_popup_not_dismissed")
                 popupCloses++;p.pause(750);continue
             }
-            if(f.ad&&!departed){departed=true;adSince=p.now();p.observedAd()}
+            // For the login video only: ANA's own home on screen is never the ad, whatever the SDK activity flag says.
+            val adNow=f.ad&&!(requireReward&&f.normal)
+            if(adNow&&!departed){departed=true;adSince=p.now();p.observedAd()}
             if(StartupPolicy.loginConfirmed(requireReward,departed,f.receipt,p.sameDate())){p.confirmedReceipt();return StartupAdOutcome("REWARD_CONFIRMED")}
             if(!requireReward&&!f.ad&&!f.store&&(f.normal||f.login)){
                 if(++stable>=3)return StartupAdOutcome("DISMISSED")
             }else stable=0
-            if(requireReward&&departed&&!f.ad&&(f.normal||f.login)&&!f.receipt){
+            if(requireReward&&!departed&&!f.receipt&&!f.store&&(f.normal||f.login)){
+                if(idleSince==null)idleSince=p.now()
+                if(p.now()-idleSince!!>=NEVER_OPENED_MS)return StartupAdOutcome("UNCONFIRMED",NEVER_OPENED)
+            }else idleSince=null
+            if(requireReward&&departed&&!adNow&&(f.normal||f.login)&&!f.receipt){
                 if(returned==null)returned=p.now()
                 if(p.now()-returned!!>=12_000L)return StartupAdOutcome("UNCONFIRMED",if(f.login)"login_reward_not_confirmed_after_offer_return" else "login_reward_not_confirmed")
             }
@@ -51,7 +66,7 @@ class StartupAdSequence(private val p:StartupAdPort){
             // 11/10: Ogury shows its close at once; tapping it 7 s in forfeited the login video bonus.
             // A reward video's own plain close waits until a full video could have played.
             val early=requireReward&&!f.store&&!f.advanceControl&&f.part==null&&adSince!=null&&p.now()-adSince!!<REWARD_VIEW_MS
-            if(f.close&&!early&&!f.login&&!f.receipt&&p.now()-lastClose>=2000L&&(if(f.store)storeClosed<2 else if(f.advanceControl)advanceClosed<3 else nativeClosed<3)){
+            if(f.close&&(!requireReward||adNow||f.store)&&!early&&!f.login&&!f.receipt&&p.now()-lastClose>=2000L&&(if(f.store)storeClosed<2 else if(f.advanceControl)advanceClosed<3 else nativeClosed<3)){
                 if(f.store)storeClosed++ else if(f.advanceControl)advanceClosed++ else nativeClosed++
                 lastClose=p.now();p.close()
             }
