@@ -71,9 +71,18 @@ finally {
     Pop-Location
 }
 
-$apk = Get-ChildItem (Join-Path $ProjectRoot 'app\build\outputs\apk') -Recurse -Filter '*.apk' -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $apk) { Fail '构建结束但未找到 APK' }
+# Pick the APK this task produced from its own variant metadata, never "the newest file" under outputs.
+$variant = if ($Release) { 'release' } else { 'debug' }
+$metaPath = Join-Path $ProjectRoot "app\build\outputs\apk\$variant\output-metadata.json"
+if (-not (Test-Path $metaPath)) { Fail "构建结束但未找到 $variant 的 output-metadata.json" }
+$meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+if ($meta.variantName -ne $variant) { Fail "output-metadata 变体不符：$($meta.variantName)" }
+$element = @($meta.elements)
+if ($element.Count -ne 1) { Fail "output-metadata 中 APK 数量不是 1：$($element.Count)" }
+if ($Release -and $meta.applicationId -ne 'com.anapocket.auto') { Fail "applicationId 不符：$($meta.applicationId)" }
+$apk = Get-Item (Join-Path (Split-Path $metaPath) $element[0].outputFile) -ErrorAction SilentlyContinue
+if (-not $apk) { Fail '构建结束但未找到 metadata 指向的 APK' }
+Write-Host ("Variant: {0}  applicationId: {1}  versionName: {2}  versionCode: {3}" -f $variant, $meta.applicationId, $element[0].versionName, $element[0].versionCode)
 
 $dist = Join-Path $ProjectRoot 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
