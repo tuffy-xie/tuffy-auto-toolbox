@@ -16,7 +16,9 @@ object OfficialAdRecoveryPolicy {
             a.officialBinding.isNotBlank()&&!a.completed&&a.officialBefore in 0..24&&fresh==a.officialBefore+1&&
             (a.state in setOf(AdState.AD_RETURNED,AdState.REWARD_CONFIRMED)||
                 a.state==AdState.UNCONFIRMED&&(a.failureReason=="completion_not_confirmed"||
-                    a.rewardConfirmed&&a.failureReason=="ad_part_timeout_95s"))&&
+                    // 11/16 #5: the native receipt was observed at 95.4 s, so the whole-ad timeout ("ad_timeout_95s")
+                    // fired instead of the part timeout. Same durable receipt + same exact +1 counter; only the label differs.
+                    a.rewardConfirmed&&a.failureReason in setOf("ad_part_timeout_95s","ad_timeout_95s")))&&
             rows.dropLast(1).all{it.date==date&&it.completed&&it.rewardConfirmed&&it.state==AdState.REWARD_CONFIRMED}
     }
     fun confirms(original:AdAttempt,receipt:AdReceipt)=receipt.completed&&receipt.reward&&

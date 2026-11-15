@@ -15,4 +15,15 @@ object MBridgePlaybackPolicy {
         id in setOf("m-playable-skip","m-playable-close","close")&&nodeClass=="android.widget.TextView"&&clickable&&
             !mustWait(labels)&&density>0&&width/density in 12f..64f&&height/density in 12f..64f&&
             left>=screenWidth*.6&&top>=0&&top<screenHeight*.2&&left+width<=screenWidth&&top+height<=screenHeight
+
+    /**
+     * 11/16 WALK_4: the video layer's "close" (640,20) stays in the tree under the end card's "close" (630,78), so two
+     * nodes qualified and singleOrNull() returned nothing for 88 s. Several matches are accepted only when every one
+     * is the same "close" id; tree order is drawing order, so the last one is the topmost, visible end-card X.
+     */
+    fun pick(ids:List<String?>):Int? = when {
+        ids.size==1 -> 0
+        ids.size>1&&ids.all{it=="close"} -> ids.lastIndex
+        else -> null
+    }
 }

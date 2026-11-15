@@ -370,10 +370,11 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         }
         if (mbridgeSurface()) {
             val m=svc.resources.displayMetrics
-            activeNodes.filter{n->val r=android.graphics.Rect();n.getBoundsInScreen(r)
+            val playable=activeNodes.filter{n->val r=android.graphics.Rect();n.getBoundsInScreen(r)
                 n.isVisibleToUser&&n.isEnabled&&MBridgePlaybackPolicy.playableControl(n.viewIdResourceName,n.className.toString(),
                     n.isClickable,r.left,r.top,r.width(),r.height(),m.widthPixels,m.heightPixels,m.density,activeLabels)}
-                .singleOrNull()?.let{observedTapOnly=true;Logger.i("ADCLOSE","sdk=mbridge observedPlayableControl="+it.viewIdResourceName);return it}
+            MBridgePlaybackPolicy.pick(playable.map{it.viewIdResourceName})?.let{playable[it]}?.let{observedTapOnly=true
+                Logger.i("ADCLOSE","sdk=mbridge observedPlayableControl="+it.viewIdResourceName+" candidates="+playable.size);return it}
             val endCloseIds = setOf("mbridge_full_iv_close", "mbridge_full_rl_close", "mbridge_interstitial_iv_close",
                 "mbridge_iv_close", "mbridge_iv_vastclose", "mbridge_order_view_iv_close", "mbridge_vec_iv_close", "mbridge_windwv_close")
             val matches = activeNodes.filter { n ->

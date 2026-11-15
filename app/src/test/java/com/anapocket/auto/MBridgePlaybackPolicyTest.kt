@@ -12,5 +12,9 @@ class MBridgePlaybackPolicyTest {
     @Test fun actualPlayableNextAndCloseAreSmallTopRightSdkControls(){assertTrue(control());assertTrue(control(id="m-playable-close"))}
     @Test fun endCardCloseSeenOnNov9IsAccepted(){assertTrue(control(id="close",left=630,top=78,w=60,h=62));assertFalse(control(id="close",left=630,top=78,w=60,h=62,labels=listOf("28s left to be rewarded")));assertFalse(control(id="privacyIcon",left=30,top=78,w=60,h=62))}
     @Test fun wholeInstallPageAndInfoOrUnclickableNodesAreExcluded(){assertFalse(control(id="m-playable-skip-page",left=0,top=0,w=720,h=1650));assertFalse(control(id="Install"));assertFalse(control(left=20));assertFalse(control(clickable=false));assertFalse(control(cls="android.widget.Image"))}
+    @Test fun nov16StackedVideoAndEndCardClosePickTheTopmost(){
+        assertTrue(control(id="close",left=640,top=20,w=60,h=60));assertTrue(control(id="close",left=630,top=78,w=60,h=62))
+        assertEquals(1,MBridgePlaybackPolicy.pick(listOf("close","close")));assertEquals(0,MBridgePlaybackPolicy.pick(listOf("m-playable-skip")))}
+    @Test fun mixedOrEmptyCandidatesStayAmbiguous(){assertNull(MBridgePlaybackPolicy.pick(listOf("m-playable-skip","close")));assertNull(MBridgePlaybackPolicy.pick(emptyList()))}
     @Test fun rewardCountdownAndForfeitWarningStillOverridePlayableControl(){assertFalse(control(labels=listOf("28s left to be rewarded")));assertFalse(control(labels=actual))}
 }

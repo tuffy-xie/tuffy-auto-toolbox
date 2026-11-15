@@ -18,7 +18,10 @@ class RecordedDailyReceiptTest {
     @Test fun cachedCounterWalletOrMissingOriginalReceiptCannotSupplySuccess(){
         assertFalse(allowed(fresh=1));assertFalse(allowed(fresh=3));assertFalse(allowed(fresh=4));assertFalse(allowed(fresh=null));assertFalse(allowed(proof=false))
         assertFalse(allowed(original.copy(officialBinding="")));assertFalse(allowed(original.copy(adDepartureObserved=false)))
-        assertFalse(allowed(original.copy(dispatchPhase="ARMED")));assertFalse(allowed(original.copy(failureReason="ad_timeout_95s")))
+        assertFalse(allowed(original.copy(dispatchPhase="ARMED")))
+        // 11/16: a whole-ad 95 s timeout is accepted only with the native reward seen; without it, or for 300 s, never.
+        assertFalse(allowed(original.copy(failureReason="ad_timeout_95s",rewardConfirmed=false)))
+        assertFalse(allowed(original.copy(failureReason="ad_timeout_300s")));assertFalse(allowed(original.copy(failureReason="user_stopped")))
     }
     @Test fun otherUnsettledAttemptAndCrossDayRemainBlocked(){
         assertFalse(allowed(today="2026-11-07"));assertFalse(allowed(before=previous.copy(completed=false)))

@@ -62,6 +62,14 @@ class Nov8RecoveryRegressionTest {
         assertFalse(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(false,"ad_part_timeout_95s")),date,date,19,true))
         assertFalse(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(true,"user_stopped")),date,date,19,true))
     }
+    @Test fun nov16WholeAdTimeoutAfterNativeReceiptSettlesOnlyOnExactPlusOne(){
+        fun a(reward:Boolean)=AdAttempt("r",date,2,2L,AdState.UNCONFIRMED,false,reward,100,"ad_timeout_95s",18,dispatchPhase="DISPATCHED",adDepartureObserved=true,officialBinding="{}")
+        assertTrue(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(true)),date,date,19,true))
+        assertFalse(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(true)),date,date,20,true))
+        assertFalse(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(true)),date,date,18,true))
+        assertFalse(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(false)),date,date,19,true))
+        assertFalse(OfficialAdRecoveryPolicy.recordedReceipt(listOf(good(1,17),a(true)),date,date,19,false))
+    }
     @Test fun lateBoostAcceptsADispatchedBoundAttemptWithoutDepartureMark(){
         assertTrue(BoundLateBoostReceiptPolicy.departed(true,false,""))
         assertTrue(BoundLateBoostReceiptPolicy.departed(false,true,"DISPATCHED"))
