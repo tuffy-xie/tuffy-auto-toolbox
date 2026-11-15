@@ -19,6 +19,13 @@ object StalledAdRestartPolicy {
         openDailyAd||(terminalUnconfirmedDailyAd&&stage!="CHALLENGES")
     fun refused(stage:String,sdkWindowOpen:Boolean,unresolvedTravelAd:Boolean,unresolvedDailyAd:Boolean)=
         unresolvedDailyAd||(sdkWindowOpen&&stage !in setOf("STARTUP","CHALLENGES"))||(unresolvedTravelAd&&stage!="CHALLENGES")
+    /**
+     * Segment timeouts only say "no progress was seen in 95 s", which includes "nothing could be read". Before any
+     * destructive restart these need a no-progress review of the same attempt; the 300 s absolute caps do not.
+     */
+    val SEGMENT_TIMEOUTS=setOf("ad_timeout_95s","ad_part_timeout_95s")
+    fun needsStallReview(reason:String)=reason in SEGMENT_TIMEOUTS
+    const val REVIEW_WINDOW_MS=45_000L
     fun eligible(date:String,recordedDate:String,stage:String,state:String,reason:String,startedAt:Long,
         now:Long,confirmed:Boolean,used:Boolean,dailyRestarts:Int,live:Boolean,sdk:Boolean,limit:Int=3):Boolean =
         live && sdk && date==recordedDate && stage in setOf("STARTUP","CHALLENGES","ADS") &&
@@ -33,4 +40,23 @@ object StalledAdRestartPolicy {
     fun confirmation(pkg:String,labels:List<String>,targetVerified:Boolean) = targetVerified &&
         pkg=="com.miui.securitycenter" && "要强行停止吗？" in labels &&
         labels.any{it=="强行停止某个应用可能会导致其出现异常。"} && "确定" in labels
+}
+
+/**
+ * Read-only stall review: verified only after the same evidence key stayed unchanged for [quietMs]. A changed key is
+ * progress (the quiet clock restarts); a missing key never counts toward quiet.
+ */
+class StallQuietTracker(private val quietMs:Long=OpaqueRecoveryPolicy.STALL_QUIET_MS) {
+    private var key:String?=null;private var since=0L
+    var evidenceSeen=false;private set
+    var changes=0;private set
+    fun observe(now:Long,k:String?):Boolean {
+        if(k==null){key=null;return false}
+        evidenceSeen=true
+        if(k!=key){if(key!=null)changes++;key=k;since=now}
+        return now-since>=quietMs
+    }
+    fun quiet(now:Long)=if(key==null)0L else now-since
+    /** Why a review ended without proof: progress seen, or nothing readable. */
+    fun outcome()=if(changes>0)"progress_observed" else if(!evidenceSeen)"no_evidence" else "quiet_window_not_reached"
 }

@@ -88,6 +88,21 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         val semantic=visible.map{ui.label(it)}.filter{it.isNotBlank()}.take(12).joinToString("|"){it.take(160)}
         return "${root.windowId}:${AutoAccessibilityService.foregroundActivity}:${stallSample?.third}:$semantic"
     }
+    /**
+     * Fallback no-progress evidence when no canvas can be sampled: a digest of the ANA-process SDK window's visible
+     * nodes (class, id, label, bounds). A countdown, part label or moving control changes it. Null when nothing
+     * trustworthy is readable (other app in front, locked, empty tree). Only a digest is kept, never the labels.
+     */
+    fun stallTreeKey():String? {
+        ui.refreshCache()
+        if(ui.currentPackage()!=pkg)return null
+        if((svc.getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked)return null
+        val nodes=ui.foregroundNodes().filter{it.isVisibleToUser}
+        if(nodes.isEmpty())return null
+        val r=android.graphics.Rect()
+        val text=nodes.joinToString("\n"){n->n.getBoundsInScreen(r);"${n.className}|${n.viewIdResourceName}|${ui.label(n).take(80)}|${r.left},${r.top},${r.right},${r.bottom}"}
+        return "tree:"+OpaqueRecoveryPolicy.treeDigest(AutoAccessibilityService.foregroundActivity+"\n"+text)
+    }
     /** Observation only. This must never authorize a reveal touch or a painted control tap. */
     fun isStallReviewSurface():Boolean {
         if(ui.currentPackage()!=pkg)return false

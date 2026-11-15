@@ -33,6 +33,9 @@ object OpaqueRecoveryPolicy {
     const val STALL_SAMPLE_MS=15_000L
     fun freshStallReview(quietMs:Long,finishedAt:Long,now:Long)=
         quietMs>=STALL_QUIET_MS&&finishedAt>0&&now>=finishedAt&&now-finishedAt<=60_000L
+    /** Short stable digest of a node-tree description; labels are never stored. */
+    fun treeDigest(text:String):String=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+        .take(12).joinToString(""){"%02x".format(it)}
     /** Small sampled image values, never retained Bitmaps. Minor pixel noise is not progress. */
     fun visualProgress(previous:IntArray,current:IntArray):Boolean {
         if(previous.size!=256||current.size!=256)return true

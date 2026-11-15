@@ -14,15 +14,48 @@ import org.json.JSONObject
 /** Normal, observed HyperOS app-info controls. No shell, clearing data, or ledger rewriting. */
 object StalledAdRestart {
     private const val PKG=StartupPolicy.ANA
-    private data class Bound(val key:String,val date:String,val stage:String,val state:String,val reason:String,val startedAt:Long,val confirmed:Boolean)
+    private data class Bound(val key:String,val date:String,val stage:String,val state:String,val reason:String,val startedAt:Long,val confirmed:Boolean,val reviewed:Boolean=false)
     private fun prefs(c:Context)=c.getSharedPreferences("ana_stalled_restart_v1",Context.MODE_PRIVATE)
+    private const val REVIEW_AREA="adStallReview"
+    fun dailyKey(date:String,a:AdAttempt)="DAILY|"+date+"|"+a.runId+"|"+a.index+"|"+a.startedAt
+    private fun reviewed(c:Context,date:String,key:String)=ReliableLedger.read(c,REVIEW_AREA,date,key){null}!=null
+    /** A verified no-progress review exists for this daily attempt (used by the blank-ad review, R4). */
+    fun dailyStallReviewed(c:Context,date:String,a:AdAttempt)=reviewed(c,date,dailyKey(date,a))
+    /**
+     * One read-only no-progress review for every destructive ad restart (R3). Segment timeouts need it; a review
+     * already recorded for this attempt is reused. Canvas sample first, node-tree digest otherwise. Progress or no
+     * evidence within the window refuses the restart; the original UNKNOWN stays and the bounded retry decides later.
+     */
+    private suspend fun stallVerified(svc:AutoAccessibilityService,date:String,run:String,b:Bound,live:()->Boolean):Boolean {
+        if(!StalledAdRestartPolicy.needsStallReview(b.reason))return true
+        if(b.reviewed){Logger.i("ADSTALL","run=$run bound="+b.key+" existing_review_reused");return true}
+        val driver=AdUiClose(svc);val tracker=StallQuietTracker()
+        val end=SystemClock.elapsedRealtime()+StalledAdRestartPolicy.REVIEW_WINDOW_MS
+        while(SystemClock.elapsedRealtime()<end){
+            if(!live())return false
+            if(!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)){Logger.i("ADSTALL","run=$run bound="+b.key+" ad_window_left_during_review; no restart");return false}
+            val key=(if(driver.isStallReviewSurface())driver.stallProgressKey() else null)?:driver.stallTreeKey()
+            val now=SystemClock.elapsedRealtime()
+            if(tracker.observe(now,key)){
+                ReliableLedger.put(svc,REVIEW_AREA,date,b.key,JSONObject().put("identity",b.key).put("stage",b.stage).put("controllerRun",run)
+                    .put("quietMs",tracker.quiet(now)).put("kind",if(key!!.startsWith("tree:"))"node_tree" else "canvas_sample")
+                    .put("deviceTime",TokyoDate.time()).put("noRewardInferred",true).toString())
+                Logger.w("ADSTALL","run=$run bound="+b.key+" verified_no_progress quietMs="+tracker.quiet(now))
+                return true
+            }
+            delay(1500L)
+        }
+        Logger.w("ADSTALL","run=$run bound="+b.key+" restart_refused review="+tracker.outcome()+"; original UNKNOWN kept")
+        return false
+    }
     private fun bound(c:Context,date:String,stage:String):Bound? = when(stage){
         "HOME" -> Bound("HOME|"+date+"|"+AutoAccessibilityService.currentRunId,date,stage,"NAVIGATION_STALLED","home_navigation_stalled",System.currentTimeMillis(),false)
         "STARTUP" -> LoginBonusStore.read(c,date)?.takeIf{it.optBoolean("adDepartureObserved")}?.let{
             Bound("LOGIN|"+date+"|"+it.optString("runId")+"|"+it.optLong("startedAt"),it.optString("date"),stage,it.optString("state"),it.optString("reason"),it.optLong("startedAt"),it.optBoolean("rewardConfirmed")||it.optBoolean("completed"))
         }
         "ADS" -> OfficialAdStore.attempts(c,date).lastOrNull()?.takeIf{it.terminal}?.let{
-            Bound("DAILY|"+date+"|"+it.runId+"|"+it.index+"|"+it.startedAt,it.date,stage,it.state.name,it.failureReason,it.startedAt,it.rewardConfirmed||it.completed)
+            val key=dailyKey(date,it)
+            Bound(key,it.date,stage,it.state.name,it.failureReason,it.startedAt,it.rewardConfirmed||it.completed,reviewed(c,date,key))
         }
         "MAX_BOOST" -> MaxBoostCompletionStore.pending(c,date)?.takeIf{MaxBoostCompletionStore.valid(c,it)}?.let{v->
             Bound("MAX_BOOST|"+date+"|"+v.key+"|"+v.adRun+"|"+v.adIndex+"|"+v.adStarted,date,stage,"BOOST_MAX_CONFIRMED",
@@ -32,7 +65,10 @@ object StalledAdRestart {
             val a=ChallengeStore.rows(c,date)
             val pending=(0 until a.length()).map{a.getJSONObject(it)}.filter{it.optString("state")=="UNCONFIRMED"&&!PendingInitialJoinStore.isolated(it,date)}
             pending.singleOrNull()?.let{row->val ads=row.optJSONArray("ads");val ad=ads?.takeIf{it.length()>0}?.optJSONObject(ads.length()-1)
-                ad?.let{Bound("CHALLENGE|"+date+"|"+row.optString("key")+"|"+it.optString("runId")+"|"+it.optInt("index")+"|"+it.optLong("startedAt"),row.optString("date"),stage,it.optString("state"),it.optString("reason"),it.optLong("startedAt"),it.optBoolean("confirmed"))}
+                ad?.let{val key="CHALLENGE|"+date+"|"+row.optString("key")+"|"+it.optString("runId")+"|"+it.optInt("index")+"|"+it.optLong("startedAt")
+                    // The in-flight canvas review (AdInteraction) or an earlier restart review of this same attempt.
+                    Bound(key,row.optString("date"),stage,it.optString("state"),it.optString("reason"),it.optLong("startedAt"),it.optBoolean("confirmed"),
+                        it.optJSONObject("stallReview")!=null||reviewed(c,date,key))}
             }
         }
         else -> null
@@ -76,6 +112,7 @@ object StalledAdRestart {
         delay(2500L)
         // Already closed by a person or the system: nothing to remove, the daily review reads the fresh counter.
         if(!live()||!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)){Logger.i("ADBLANK","run=$run no_ad_window_to_close activity="+AutoAccessibilityService.foregroundActivity);return false}
+        if(!stallVerified(svc,date,run,b){live()})return false
         Evidence.write(svc,"blank_restart_"+run+"_before.txt","identity="+b.key+";JST="+TokyoDate.time()+";timed_out_ad_still_open;no_new_viewing;no_reward_inferred\n"+ui.dump())
         Evidence.capture(svc,ui,"blank_restart_"+run+"_before.png")
         if(!reserve(svc,date,b,run))return false
@@ -131,6 +168,8 @@ object StalledAdRestart {
         if(!allowed)return false
         // The initial navigation stage may not interrupt a separately reserved challenge or daily viewing.
         if(stage=="STARTUP"&&(TravelSelection.hasUnresolvedAd(svc,date)||OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED}))return false
+        // Same no-progress evidence as every other ad restart entry; HOME and completed MAX_BOOST are not open ads.
+        if(stage !in setOf("HOME","MAX_BOOST")&&!stallVerified(svc,date,run,b){live()})return false
         // The app-info stop below failed every time it ran on this phone (Nov 1-3); an open ad is closed from Recents instead.
         if(stage in setOf("STARTUP","CHALLENGES")&&AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))
             return removeTaskAndRelaunch(svc,date,run,b,ui,owner){live()}
