@@ -28,7 +28,21 @@ object AccountSafetyStore {
     }
 }
 
+/** Separates "read and found nothing" (success with null) from "could not read" (failure). */
+object AccountRiskRead {
+    fun <T> bounded(attempts:Int,read:()->T):Result<T>{
+        var last:Throwable?=null
+        repeat(attempts.coerceAtLeast(1)){
+            try{return Result.success(read())}
+            catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){last=e}
+        }
+        return Result.failure(last!!)
+    }
+}
+
 object AccountSafety {
+    private const val READ_ATTEMPTS=3
     private val evidenceScope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
     fun frame(svc:AutoAccessibilityService):RiskFrame {
         val ui=Ui(svc);val nodes=ui.foregroundNodes().filter{it.isVisibleToUser}
@@ -37,7 +51,11 @@ object AccountSafety {
     /** Called again at gesture/click boundaries, so an event race cannot authorize the next tap. */
     fun authorize(svc:AutoAccessibilityService,module:String="ui"):Boolean {
         if(AccountSafetyStore.pending(svc)!=null)return false
-        val kind=runCatching{AccountRiskPolicy.detect(frame(svc))}.getOrNull()?:return true
+        // A read that threw is not "no risk". Re-read a bounded number of times; still unreadable refuses only this
+        // action (no latch, no stop), so the caller's own bounded retry decides and nothing is blocked for good.
+        val read=AccountRiskRead.bounded(READ_ATTEMPTS){AccountRiskPolicy.detect(frame(svc))}
+        if(read.isFailure){Logger.w("SAFETY","risk_read_failed module=$module attempts=$READ_ATTEMPTS "+read.exceptionOrNull()?.javaClass?.simpleName+"; action_refused");return false}
+        val kind=read.getOrNull()?:return true
         val (row,created)=AccountSafetyStore.latch(svc,kind,AutoAccessibilityService.currentRunId,module)
         svc.requestStop("account_safety_"+kind.name)
         if(created){
