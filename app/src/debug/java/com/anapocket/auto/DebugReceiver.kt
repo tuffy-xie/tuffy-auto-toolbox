@@ -192,10 +192,12 @@ class DebugReceiver : BroadcastReceiver() {
         val sp = ctx.getSharedPreferences("ana_debug", Context.MODE_PRIVATE)
         var t = sp.getString("token", null)
         if (t.isNullOrBlank()) {
-            val hex = "0123456789abcdef"
-            t = (1..32).map { hex[(Math.random() * 16).toInt()] }.joinToString("")
-            sp.edit().putString("token", t).apply()
-            Logger.i("DEBUG", "generated per-install token=$t")
+            // SecureRandom, and never written to the log or exports: read it with
+            // `adb shell run-as com.anapocket.auto cat shared_prefs/ana_debug.xml` (debuggable builds only).
+            val bytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+            t = bytes.joinToString("") { "%02x".format(it) }
+            check(sp.edit().putString("token", t).commit()) { "debug_token_write_failed" }
+            Logger.i("DEBUG", "generated per-install token (stored in shared_prefs/ana_debug.xml, not logged)")
         }
         return t
     }
