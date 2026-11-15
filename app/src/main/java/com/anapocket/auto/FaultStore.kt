@@ -113,12 +113,14 @@ object FaultStore {
             CheckinDiagnostics.append(c,::add)
             add("README.txt","故障现场来自实际手机。screen.png缺失原因见manifest.json；checkins含各新App最近最多10次记录，附件总量最多64MB。日志已脱敏，不含Telegram设置或密钥。截图可能含广告或会员页面，请确认后手动分享。".toByteArray())
             val legacy=File(c.getExternalFilesDir(null)?:c.filesDir,"faults").canonicalFile
+            // File.toPath() is API 26; canonical path prefixes give the same containment check on minSdk 24.
+            fun inside(f:File,dir:File)=f.canonicalPath.startsWith(dir.canonicalPath+File.separator)
             for(f in (base.walkTopDown()+legacy.walkTopDown()).filter{it.isFile}){
-                if(!f.canonicalFile.toPath().startsWith(base.toPath())&&!f.canonicalFile.toPath().startsWith(legacy.toPath()))continue
+                if(!inside(f,base)&&!inside(f,legacy))continue
                 if(f.extension !in setOf("json","txt","log","png"))continue
                 if(f.extension=="png"&&!ScreenshotDiagnostics.enabled(c))continue
                 val data=if(f.extension=="png")f.readBytes() else DiagnosticPrivacy.redact(f.readText()).toByteArray()
-                add((if(f.canonicalFile.toPath().startsWith(base.toPath()))"faults_h14/"+f.relativeTo(base).invariantSeparatorsPath else "faults/"+f.relativeTo(legacy).invariantSeparatorsPath),data)
+                add((if(inside(f,base))"faults_h14/"+f.relativeTo(base).invariantSeparatorsPath else "faults/"+f.relativeTo(legacy).invariantSeparatorsPath),data)
             }
         }
         // Never rotate or delete the user's earlier diagnostic exports automatically.

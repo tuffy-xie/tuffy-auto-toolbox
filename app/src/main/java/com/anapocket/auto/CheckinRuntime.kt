@@ -199,7 +199,7 @@ object CheckinRuntime {
         val body="状态："+status+"\n发生时间："+TokyoDate.time(at)+" JST\n来源："+source+"\nRUN_ID："+id+"\n"+text+
             (if(rows.any{it.optString("failureReason")=="app_launch_foreground_timeout_after_two_attempts"})"\n原因：两次打开此App均未进入前台；未提交任务" else "")
         val nm=ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(NotificationChannel("checkin_results","各App执行结果",NotificationManager.IMPORTANCE_DEFAULT))
+        if(android.os.Build.VERSION.SDK_INT>=26)nm.createNotificationChannel(NotificationChannel("checkin_results","各App执行结果",NotificationManager.IMPORTANCE_DEFAULT))
         val pi=PendingIntent.getActivity(ctx,9300+app.ordinal,Intent(ctx,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         runCatching{nm.notify(9300+app.ordinal,NotificationCompat.Builder(ctx,"checkin_results").setSmallIcon(R.drawable.ic_stat_ana).setContentTitle(app.title+" · "+date+" · "+status).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setContentIntent(pi).setAutoCancel(true).build())}
         // Per-run results stay on the phone. Telegram gets the daily report, plus one alert when the app needs a person.
@@ -409,13 +409,16 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
 class CheckinUnlockActivity:Activity(){
     override fun onCreate(state:Bundle?){super.onCreate(state);val owner=CheckinRuntime.ownership.owner();if(owner==null||owner.run!=intent.getStringExtra("run")||owner.app=="ANA"){finish();return}
         val km=getSystemService(KEYGUARD_SERVICE) as KeyguardManager;if(km.isKeyguardSecure||km.isDeviceSecure){finish();return}
-        setShowWhenLocked(true);setTurnScreenOn(true)
+        // minSdk 24: the API 27 calls, with the equivalent window flags below that (same pattern as DeviceReady).
+        if(android.os.Build.VERSION.SDK_INT>=27){setShowWhenLocked(true);setTurnScreenOn(true)}
+        else @Suppress("DEPRECATION") window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
         setContentView(android.widget.TextView(this).apply{text="Tuffy正在准备签到…"})
         Handler(Looper.getMainLooper()).postDelayed({finish()},10_000)
     }
     override fun onWindowFocusChanged(focus:Boolean){super.onWindowFocusChanged(focus);if(!focus)return
         val owner=CheckinRuntime.ownership.owner();if(owner==null||owner.run!=intent.getStringExtra("run")||owner.app=="ANA"){finish();return}
         val km=getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        if(android.os.Build.VERSION.SDK_INT<26){finish();return}  // non-secure keyguard is already passed by the window flags
         km.requestDismissKeyguard(this,object:KeyguardManager.KeyguardDismissCallback(){override fun onDismissSucceeded(){finish()};override fun onDismissCancelled(){finish()};override fun onDismissError(){finish()}})
     }
 }
@@ -424,7 +427,7 @@ class CheckinForeground:Service(){
     override fun onBind(intent:Intent?)=null
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
         if(intent?.action=="STOP"){CheckinRuntime.stop();return START_NOT_STICKY}
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(NotificationChannel("checkin_running","签到运行状态",NotificationManager.IMPORTANCE_LOW))
+        if(android.os.Build.VERSION.SDK_INT>=26)(getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(NotificationChannel("checkin_running","签到运行状态",NotificationManager.IMPORTANCE_LOW))
         startForeground(9350,NotificationCompat.Builder(this,"checkin_running").setSmallIcon(R.drawable.ic_stat_ana).setContentTitle("Tuffy的自动百宝箱").setContentText(intent?.getStringExtra("text")).setOngoing(true).addAction(0,"停止签到",PendingIntent.getService(this,9351,Intent(this,CheckinForeground::class.java).setAction("STOP"),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build());return START_NOT_STICKY
     }
 }
