@@ -33,7 +33,7 @@
 
 ## 2. 需要什么
 
-- Android 7.0 以上（实测：小米 HyperOS / Android 14）。
+- **Android 11 以上**（实测：小米 HyperOS / Android 14）。签到识别和广告卡死检测要用 Android 11 的无障碍截图，更低版本无法安装。
 - 手机系统时区或业务按 **日本时间（JST）** 计算。
 - 手机上已安装并登录好要用的 App（ANA Pocket、楽天 PointClub、いきなり！ステーキ、TikTok Lite，用哪个装哪个）。
 - 建议用一台**专门挂机**的手机，常插电、连 Wi‑Fi。

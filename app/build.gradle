@@ -27,7 +27,9 @@ android {
 
     defaultConfig {
         applicationId "com.anapocket.auto"
-        minSdk 24
+        // Android 11: check-in OCR and ad stall sampling use AccessibilityService.takeScreenshot (API 30),
+        // process recovery uses ApplicationExitInfo (API 30). Older phones could install but not run them.
+        minSdk 30
         targetSdk 34
         testInstrumentationRunner "com.anapocket.auto.AdTestInstrumentation"
         versionCode 44
