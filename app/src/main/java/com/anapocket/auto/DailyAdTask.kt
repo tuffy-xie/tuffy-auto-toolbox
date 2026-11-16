@@ -603,8 +603,12 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
     /** Review one timed-out ad once its window is gone; no advertisement is opened by this method. */
     private suspend fun reviewBlankStall(runId:String,date:String):Boolean {
         val rows=OfficialAdStore.attempts(svc,date);val a=rows.lastOrNull()?:return false
-        if(!OfficialLoadFailurePolicy.blankStall(a)||OfficialLoadFailurePolicy.key(a) in OfficialAdStore.reviewedKeys(svc,date)||
+        val quiet=OfficialLoadFailurePolicy.quietReturn(a)
+        if(!OfficialLoadFailurePolicy.blankStall(a)&&!quiet||OfficialLoadFailurePolicy.key(a) in OfficialAdStore.reviewedKeys(svc,date)||
             AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))return false
+        // A quiet return is only reviewed by a later run once 30 minutes have passed; this run does not wait for it.
+        if(quiet&&System.currentTimeMillis()-a.finishedAt<OfficialLoadFailurePolicy.QUIET_RETURN_MS){
+            Logger.i("ADBLANK","run=$runId quiet_return_wait originalRun="+a.runId+" index="+a.index);return false}
         fun live()=TokyoDate.of()==date&&!blocked()&&!AutoAccessibilityService.stopRequested&&AccountSafety.authorize(svc,"daily_blank_review")
         val waitMs=(a.finishedAt+60_000L-System.currentTimeMillis()).coerceIn(0L,60_000L)
         repeat(((waitMs+799L)/800L).toInt()){if(!live())return false;delay(800L)}

@@ -179,6 +179,30 @@ class Nov8RecoveryRegressionTest {
         assertFalse(OfficialLoadFailurePolicy.blankStall(a.copy(dispatchPhase="ARMED")))
         assertFalse(OfficialLoadFailurePolicy.blankStall(a.copy(finishedAt=0)))
     }
+    @Test fun nov16QuietReturnFreesOneAttemptOnlyAfterThirtyQuietMinutes(){
+        val q=blank(15,14).copy(failureReason="completion_not_confirmed");val rows=(1..14).map{good(it,it-1)}+q
+        val m30=OfficialLoadFailurePolicy.QUIET_RETURN_MS
+        assertTrue(OfficialLoadFailurePolicy.quietReturn(q))
+        assertFalse(OfficialLoadFailurePolicy.blankStall(q))
+        // No frozen-ad proof is needed, but the full 30 minutes, a closed window, no receipt and an unchanged counter are.
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,m30,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,m30-1,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,false,false,m30,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,true,m30,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,15,true,false,m30,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,"2026-11-09",14,true,false,m30,emptySet(),false))
+        // Reward seen, reward-receipt-missing, never dispatched, or never left ANA: not a quiet return.
+        assertFalse(OfficialLoadFailurePolicy.quietReturn(q.copy(rewardConfirmed=true)))
+        assertFalse(OfficialLoadFailurePolicy.quietReturn(q.copy(completed=true,failureReason="reward_receipt_missing")))
+        assertFalse(OfficialLoadFailurePolicy.quietReturn(q.copy(dispatchPhase="ARMED")))
+        assertFalse(OfficialLoadFailurePolicy.quietReturn(q.copy(adDepartureObserved=false)))
+        // Once reviewed the original stays UNCONFIRMED but no longer blocks; one new start is allowed at the same counter.
+        val k=OfficialLoadFailurePolicy.key(q)
+        assertFalse(OfficialLoadFailurePolicy.canReserve(14,14,true,false,rows,emptySet()))
+        assertTrue(OfficialLoadFailurePolicy.canReserve(14,14,true,false,rows,setOf(k)))
+        assertEquals(AdState.UNCONFIRMED,rows.last().state)
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,m30,setOf(k),false))
+    }
     @Test fun unreviewedBlankKeepsBlockingAndReviewCapStaysTwo(){
         val a=blank(1,0);val k=OfficialLoadFailurePolicy.key(a)
         assertFalse(OfficialLoadFailurePolicy.canReserve(0,0,true,false,listOf(a),emptySet()))

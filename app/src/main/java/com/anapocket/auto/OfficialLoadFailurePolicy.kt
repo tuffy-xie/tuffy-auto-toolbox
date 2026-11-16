@@ -8,7 +8,14 @@ object OfficialLoadFailurePolicy {
     /** A timed-out daily ad with no reward observed. The original row stays UNCONFIRMED; review only frees a new attempt. */
     fun blankStall(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&!a.rewardConfirmed&&
         a.failureReason=="ad_timeout_95s"&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&a.officialBefore in 0..24
-    fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)
+    /**
+     * 11/16 #15 (user-approved): the ad went out, came back to ANA by itself, and no reward was seen. Never replayed and the
+     * row stays UNCONFIRMED; only after [QUIET_RETURN_MS] with a closed ad window and an unchanged counter is a new attempt freed.
+     */
+    fun quietReturn(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&!a.rewardConfirmed&&
+        a.failureReason=="completion_not_confirmed"&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&a.officialBefore in 0..24
+    const val QUIET_RETURN_MS=30*60_000L
+    fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)
     fun resolved(a:AdAttempt,reviewed:Set<String>)=
         a.terminal&&a.state==AdState.REWARD_CONFIRMED&&a.completed&&a.rewardConfirmed||reviewable(a)&&key(a) in reviewed
     /**
@@ -18,8 +25,9 @@ object OfficialLoadFailurePolicy {
      */
     fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>,stallVerified:Boolean):Boolean {
         val a=rows.lastOrNull()?:return false
-        return stallVerified&&date==today&&a.date==date&&adClosed&&!receipt&&elapsed>=60_000&&reviewed.size<2&&key(a) !in reviewed&&
-            blankStall(a)&&counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
+        return date==today&&a.date==date&&adClosed&&!receipt&&reviewed.size<2&&key(a) !in reviewed&&
+            (blankStall(a)&&stallVerified&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS)&&
+            counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {
         val a=rows.lastOrNull()?:return false
