@@ -83,6 +83,7 @@ data class AdFrame(
     val part: AdPart? = null,
     val storeOverlay: Boolean = false,
     val nativePangleRender: Boolean = false,
+    val unitySkipStoreVideo: Boolean = false,
     val manualRequired:Boolean=false,
     val advanceControl:Boolean=false
 )
@@ -107,6 +108,8 @@ interface AdInteractionPort {
     suspend fun state(state: AdState)
     suspend fun progress(part: AdPart) {}
     suspend fun observationBudgetChanged(ms: Long) {}
+    /** Which observed format granted the extended budget ("native_pangle" or "unity_skip_store_video"). */
+    suspend fun extendedObservationSource(source: String) {}
     /** Optional, exception-only probe. Null means no reliable stall proof, not permission to restart. */
     suspend fun stallProgressKey():String? = null
     suspend fun stallReviewed(quietMs:Long,key:String) {}
@@ -165,8 +168,10 @@ class AdInteraction(private val port: AdInteractionPort) {
                     port.progress(progress)
                 }
             }
-            if (!nativePangleWait && observedPart == null && f.anaForeground && f.adSurface && f.nativePangleRender) {
+            if (!nativePangleWait && observedPart == null && f.anaForeground && f.adSurface && !f.blocked && !f.error &&
+                (f.nativePangleRender || f.unitySkipStoreVideo)) {
                 nativePangleWait = true
+                port.extendedObservationSource(if (f.nativePangleRender) "native_pangle" else "unity_skip_store_video")
                 port.observationBudgetChanged(300_000L)
             }
             val segmentBudget = if (nativePangleWait && observedPart == null) 300_000L else 95_000L

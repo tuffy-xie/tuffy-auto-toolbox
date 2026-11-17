@@ -1,0 +1,15 @@
+android.widget.FrameLayout id=null enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.LinearLayout id=null enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.FrameLayout id=android:id/content enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.webkit.WebView id=null enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[] label=
+android.webkit.WebView id=null enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 2, 64] label=
+android.view.View id=root enabled=true clickable=true bounds=Rect(0, 49 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 16, 64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 49 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 64] label=
+android.view.View id=null enabled=true clickable=true bounds=Rect(0, 49 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 64, 16] label=
+android.widget.Button id=null enabled=true clickable=true bounds=Rect(498, 83 - 686, 139) actions=[16908342, 16908348, 1024, 2048, 256, 512, 1, 16, 64] label=Skip 打开商店
+android.widget.Button id=null enabled=true clickable=true bounds=Rect(0, 1407 - 82, 1481) actions=[16908342, 16908348, 1024, 2048, 256, 512, 1, 16, 64] label=Unmuted
+android.widget.Button id=null enabled=true clickable=true bounds=Rect(0, 1479 - 82, 1551) actions=[16908342, 16908348, 1024, 2048, 1, 16, 64] label=Privacy
+android.widget.Image id=null enabled=true clickable=false bounds=Rect(26, 1549 - 242, 1615) actions=[16908342, 16908348, 1024, 2048, 64] label=Google Play
+android.widget.ProgressBar id=null enabled=true clickable=false bounds=Rect(0, 1639 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 64] label=
+android.widget.TextView id=null enabled=true clickable=false bounds=Rect(0, 1585 - 720, 1650) actions=[16908342, 16908348, 1024, 2048, 64] label=

@@ -1,0 +1,54 @@
+android.widget.FrameLayout id=null enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.LinearLayout id=null enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.FrameLayout id=null enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.FrameLayout id=com.android.vending:id/0_resource_name_obfuscated enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.FrameLayout id=android:id/content enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.FrameLayout id=com.android.vending:id/0_resource_name_obfuscated enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.widget.FrameLayout id=com.android.vending:id/0_resource_name_obfuscated enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+androidx.compose.ui.platform.ComposeView id=com.android.vending:id/0_resource_name_obfuscated enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[4, 8, 64, 16908342] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 0 - 720, 1650) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 0 - 720, 1556) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 0 - 720, 1556) actions=[64] label=
+android.view.View id=null enabled=true clickable=true bounds=Rect(0, 0 - 720, 350) actions=[256, 512, 64, 16, 131072] label=关闭工作表
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 350 - 720, 1556) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 350 - 720, 1556) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 350 - 720, 1556) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 462 - 720, 1556) actions=[16908346, 64, 4096] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(24, 486 - 696, 630) actions=[64] label=
+android.widget.TextView id=null enabled=true clickable=false bounds=Rect(216, 486 - 548, 550) actions=[256, 512, 64, 131072] label=Royal Kingdom
+android.widget.TextView id=null enabled=true clickable=true bounds=Rect(216, 522 - 466, 618) actions=[1, 256, 512, 64, 16, 131072] label=Dream Games, Ltd.
+android.widget.TextView id=null enabled=true clickable=false bounds=Rect(216, 590 - 363, 625) actions=[256, 512, 64, 131072] label=包含内购商品
+android.widget.HorizontalScrollView id=null enabled=true clickable=false bounds=Rect(0, 654 - 720, 782) actions=[16908347, 64, 4096] label=
+android.view.View id=null enabled=true clickable=true bounds=Rect(24, 654 - 184, 782) actions=[1, 256, 512, 64, 16, 131072] label=有 268万 条评价，平均评分为 4.7 星
+android.view.View id=null enabled=true clickable=true bounds=Rect(312, 654 - 472, 782) actions=[1, 256, 512, 64, 16, 131072] label=内容分级为16 岁以上
+android.view.View id=null enabled=true clickable=false bounds=Rect(600, 654 - 720, 782) actions=[256, 512, 64, 131072] label=183 MB
+android.view.View id=null enabled=true clickable=true bounds=Rect(25, 806 - 696, 902) actions=[1, 64, 16] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(333, 834 - 389, 874) actions=[256, 512, 64, 131072] label=安装
+android.widget.TextView id=null enabled=true clickable=false bounds=Rect(333, 834 - 389, 874) actions=[256, 512, 64, 131072] label=安装
+android.widget.Button id=null enabled=true clickable=false bounds=Rect(25, 814 - 696, 894) actions=[64] label=
+android.widget.ImageView id=null enabled=true clickable=false bounds=Rect(24, 954 - 56, 986) actions=[256, 512, 64, 131072] label=Play Pass 边栏
+android.widget.TextView id=null enabled=true clickable=false bounds=Rect(88, 950 - 664, 1070) actions=[256, 512, 64, 131072] label=Play Pass を定期購入すると、ロイヤルキングダム (Royal Kingdom) でのアプリ内購入が 1 回 50% オフ（最大割引額: ￥600）
+android.view.View id=null enabled=true clickable=true bounds=Rect(88, 1070 - 200, 1166) actions=[1, 64, 16] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(88, 1098 - 200, 1138) actions=[256, 512, 64, 131072] label=了解详情
+android.widget.TextView id=null enabled=true clickable=false bounds=Rect(88, 1098 - 200, 1138) actions=[256, 512, 64, 131072] label=了解详情
+android.widget.Button id=null enabled=true clickable=false bounds=Rect(88, 1078 - 200, 1158) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 1214 - 720, 1554) actions=[16908347, 64, 4096] label=
+android.view.View id=null enabled=true clickable=true bounds=Rect(28, 1218 - 215, 1550) actions=[1, 256, 512, 64, 16, 131072] label=第 1 张屏幕截图，共 5 张
+android.view.View id=null enabled=true clickable=true bounds=Rect(241, 1218 - 428, 1550) actions=[1, 256, 512, 64, 16, 131072] label=第 2 张屏幕截图，共 5 张
+android.view.View id=null enabled=true clickable=true bounds=Rect(454, 1218 - 641, 1550) actions=[1, 256, 512, 64, 16, 131072] label=第 3 张屏幕截图，共 5 张
+android.view.View id=null enabled=true clickable=true bounds=Rect(667, 1218 - 720, 1550) actions=[1, 256, 512, 64, 16, 131072] label=第 4 张屏幕截图，共 5 张
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 350 - 720, 462) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(0, 350 - 720, 462) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(32, 358 - 512, 454) actions=[64] label=
+android.view.View id=null enabled=true clickable=true bounds=Rect(48, 358 - 512, 454) actions=[1, 256, 512, 64, 16, 131072] label=Google Play
+android.view.View id=null enabled=true clickable=true bounds=Rect(520, 358 - 616, 454) actions=[1, 64, 16] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(544, 382 - 592, 430) actions=[256, 512, 64, 131072] label=在 Google Play 中搜索
+android.widget.Button id=null enabled=true clickable=false bounds=Rect(528, 366 - 608, 446) actions=[64] label=
+android.view.View id=null enabled=true clickable=true bounds=Rect(616, 358 - 712, 454) actions=[1, 64, 16] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(640, 382 - 688, 430) actions=[256, 512, 64, 131072] label=关闭
+android.widget.Button id=null enabled=true clickable=false bounds=Rect(624, 366 - 704, 446) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(16, 1551 - 128, 1647) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(160, 1551 - 272, 1647) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(304, 1551 - 416, 1647) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(448, 1551 - 560, 1647) actions=[64] label=
+android.view.View id=null enabled=true clickable=false bounds=Rect(592, 1551 - 704, 1647) actions=[64] label=

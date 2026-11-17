@@ -342,7 +342,9 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                 return AdFrame(ui.currentPackage() == pkg, returned, confirmedSerial, confirmedSerial == previous + 1,
                     closeNode != null, error = AdSignals.error(ls), blocked = blocked(), adSurface = ad,
                     part = AdSignals.part(ls), storeOverlay = closeDriver.observedStoreOverlay,
-                    nativePangleRender = closeDriver.isNativePangleRender(),advanceControl=closeDriver.observedAdvanceControl)
+                    nativePangleRender = closeDriver.isNativePangleRender(),
+                    unitySkipStoreVideo = ui.currentPackage() == pkg && UnityClosePolicy.skipStoreVideo(AutoAccessibilityService.foregroundActivity, ls),
+                    advanceControl=closeDriver.observedAdvanceControl)
             }
             override suspend fun close(): Boolean {
                 val n = closeNode ?: return false
@@ -400,9 +402,16 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                     .put("finishedAt",System.currentTimeMillis()).put("frameKey",key.take(512)))
                 ChallengeStore.save(svc,date,row)
             }
+            var extendedSource = "native_pangle"
+            override suspend fun extendedObservationSource(source: String) { extendedSource = source }
             override suspend fun observationBudgetChanged(ms: Long) {
-                a.put("nativePangleObservationBudgetMs", ms); ChallengeStore.save(svc, date, row)
-                evidence(runId, "${row.getString("cat")}_${a.getInt("index")}_nativePangle_wait", "same attempt; native SDK close only; absolute300s observation cap")
+                if (extendedSource == "native_pangle") {
+                    a.put("nativePangleObservationBudgetMs", ms); ChallengeStore.save(svc, date, row)
+                    evidence(runId, "${row.getString("cat")}_${a.getInt("index")}_nativePangle_wait", "same attempt; native SDK close only; absolute300s observation cap")
+                } else {
+                    a.put("extendedObservationBudgetMs", ms).put("extendedObservationSource", extendedSource); ChallengeStore.save(svc, date, row)
+                    evidence(runId, "${row.getString("cat")}_${a.getInt("index")}_${extendedSource}_wait", "same attempt; Skip never tapped; absolute300s observation cap")
+                }
             }
         }
         val dispatchRequired=recovering==null||reservedContinuation

@@ -16,6 +16,14 @@ object UnityClosePolicy {
         activity==ACTIVITY&&skipsSoFar<MAX_STORE_SKIPS&&clickable&&nodeClass=="android.widget.Button"&&
             label.trim() in setOf("打开商店","Open Store","ストアを開く")&&width>0&&height>0&&
             left>=0&&left+width<=screenWidth*.40&&top>=0&&top+height<=screenHeight*.15
+    /**
+     * 11/17 00:22/00:45/02:31 joins: a Unity video with a top-right Button 「Skip 打开商店」, Privacy and a bottom ProgressBar
+     * was still playing at 95 s; the same format ended by itself at ~63 s on other attempts (Play sheet, then end card close).
+     * Seeing it only extends observation of the same attempt (300 s absolute cap). The Skip control is never tapped.
+     */
+    fun skipStoreVideo(activity:String?,labels:List<String>):Boolean = activity==ACTIVITY &&
+        labels.any{it.trim()=="Privacy"} && labels.any{l->val t=l.trim()
+            t.startsWith("Skip ")&&t.removePrefix("Skip ").trim() in setOf("打开商店","Open Store","ストアを開く")}
     fun privacyOverlay(labels:List<String>) = labels.contains("button:privacy-back") &&
         labels.any{it=="button:privacy-request-data"||it=="button:privacy-report-ad"}
     fun endControl(left:Int,top:Int,width:Int,height:Int,screenWidth:Int,screenHeight:Int,density:Float):Boolean =

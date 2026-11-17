@@ -507,7 +507,12 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                     ui.currentPackage() == pkg && (closeDriver.isAdSurface() ||
                         ui.foregroundNodes().any { it.isVisibleToUser && (ui.label(it).contains("Skip Ad") || AdSignals.part(listOf(ui.label(it))) != null) }),
                     part = AdSignals.part(ls), storeOverlay = observedStoreOverlay,
-                    nativePangleRender = closeDriver.isNativePangleRender(),advanceControl=closeDriver.observedAdvanceControl)
+                    nativePangleRender = closeDriver.isNativePangleRender(),
+                    unitySkipStoreVideo = ui.currentPackage() == pkg && UnityClosePolicy.skipStoreVideo(AutoAccessibilityService.foregroundActivity, ls),
+                    advanceControl=closeDriver.observedAdvanceControl)
+            }
+            override suspend fun extendedObservationSource(source: String) {
+                Logger.i("ADTASK", "run=$runId #" + attempt.index + " extended_observation source=" + source + " cap=300s")
             }
             override suspend fun close(): Boolean {
                 val n = observedClose ?: return false
