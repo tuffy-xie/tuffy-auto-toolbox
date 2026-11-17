@@ -23,7 +23,7 @@ object MaxBoostDialogPolicy {
         sameDay&&bound&&!unresolved&&!sdk&&!used&&daily<3&&live
     fun resumeIdentity(fields:Map<String,String>,binding:MaxBoostBinding)=
         fields["text_name"]==binding.title&&AnaCalendarDate.same(fields["text_date"],binding.date)&&
-            fields["text_attended"]?.removePrefix("参加日：")?.let{AnaCalendarDate.same(it,binding.date)}==true
+            ChallengeDetailReceipt.attendedOn(fields["text_attended"],binding.date)
     fun finalResumeAllowed(bound:Boolean,sameDay:Boolean,unresolved:Boolean,sdk:Boolean,used:Boolean,visibleIdentity:Boolean)=
         bound&&sameDay&&!unresolved&&!sdk&&!used&&visibleIdentity
     const val DISMISS_MS=18_000L

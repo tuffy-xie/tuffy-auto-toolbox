@@ -150,7 +150,7 @@ object MaxBoostCoordinator {
         val rows=ChallengeStore.rows(svc,date)
         val visibleBinding=if(journal==null)(0 until rows.length()).mapNotNull{MaxBoostCompletionStore.fromRow(rows.getJSONObject(it),date)}.singleOrNull{
             snapshot.fields["text_name"]==it.title&&AnaCalendarDate.same(snapshot.fields["text_date"],it.date)&&
-                snapshot.fields["text_attended"]?.removePrefix("参加日：")?.let{d->AnaCalendarDate.same(d,it.date)}==true
+                ChallengeDetailReceipt.attendedOn(snapshot.fields["text_attended"],it.date)
         } else null
         val binding=journal?:visibleBinding
         if(binding==null){

@@ -46,9 +46,17 @@ object ChallengeStore {
         val a=row.optJSONArray("ads")?:return false
         return (0 until a.length()).any{val x=a.getJSONObject(it);!x.optBoolean("confirmed")&&!x.optBoolean("officialNoGain")&&!InitialRejoinPolicy.resolved(x)}
     }
+    /**
+     * ANA's own joined detail showed "ブースト5回" for this exact task (reconcileJoinedMax). The ad window is gone and the
+     * task cannot take another Boost, so its unknown receipt stays recorded but no longer holds the rest of the day.
+     */
+    fun officialMaxSettled(row:JSONObject):Boolean = OfficialMaxSettlement.settled(row.optString("state"),row.optInt("boost"),
+        row.optInt("officialObservedBoost"),row.optLong("officialObservedAt"))
+    /** An unknown ad receipt that still owns the screen/navigation. Summaries keep using [unconfirmedAd]. */
+    fun navigationBlockingAd(row:JSONObject):Boolean=OfficialMaxSettlement.blocksNavigation(unconfirmedAd(row),officialMaxSettled(row))
     fun blocksIndependentNavigation(ctx:Context,date:String):Boolean {
         val a=rows(ctx,date)
-        return (0 until a.length()).any{val r=a.getJSONObject(it);unconfirmedAd(r)&&!PendingInitialJoinStore.isolated(r,date)}
+        return (0 until a.length()).any{val r=a.getJSONObject(it);navigationBlockingAd(r)&&!PendingInitialJoinStore.isolated(r,date)}
     }
     fun hasPending(ctx:Context,date:String)=pendingRows(ctx,date).isNotEmpty()
     private fun sp(ctx: Context) = ctx.getSharedPreferences("challenge_boost_v1", Context.MODE_PRIVATE)
@@ -165,7 +173,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             TokyoDate.of()==date&&!blocked()&&!AutoAccessibilityService.stopRequested){delay(250);ui.refreshCache()}
         ui.refreshCache()
         if(!cleanIsolationPage()||!AccountSafety.authorize(svc,"independent_daily_isolation"))return false
-        val pending=ChallengeStore.pendingRows(svc,date).filter{ChallengeStore.unconfirmedAd(it)&&!PendingInitialJoinStore.isolated(it,date)}
+        val pending=ChallengeStore.pendingRows(svc,date).filter{ChallengeStore.navigationBlockingAd(it)&&!PendingInitialJoinStore.isolated(it,date)}
         isolateSubmittedUnknowns(AutomationEngine(svc,Prefs.loadBlocking(svc)),run,date,pending)
         ui.refreshCache()
         return TokyoDate.of()==date&&cleanIsolationPage()&&!ChallengeStore.blocksIndependentNavigation(svc,date)&&
@@ -622,7 +630,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
         val currentAds=current.getJSONArray("ads");val original=currentAds.optJSONObject(currentAds.length()-1)
         val remaining=ChallengeStore.rows(svc,date)
         val pendingCount=(0 until remaining.length()).count{val r=remaining.getJSONObject(it)
-            (ChallengeStore.unconfirmedAd(r)||r.optString("state")=="JOINED")&&!PendingInitialJoinStore.isolated(r,date)}
+            (ChallengeStore.navigationBlockingAd(r)||r.optString("state")=="JOINED")&&!PendingInitialJoinStore.isolated(r,date)}
         val sameAttempt=original!=null&&current.getString("date")==date&&
             original.optString("runId")==ad.getString("runId")&&ad.getString("runId")==runId&&original.optInt("index")==ad.getInt("index")&&
             original.optLong("startedAt")==ad.getLong("startedAt")&&ad.getInt("index")==currentAds.length()&&
@@ -1089,18 +1097,18 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             // A pending ad from a killed process cannot be repeated or inferred successful.
             var prior = ChallengeStore.rows(svc, date)
             val unresolved=(0 until prior.length()).map{prior.getJSONObject(it)}.filter{
-                (it.optString("state") in setOf("AD_OPENING","UNCONFIRMED","JOINED")||ChallengeStore.unconfirmedAd(it))&&!PendingInitialJoinStore.isolated(it,date)}
+                (it.optString("state") in setOf("AD_OPENING","UNCONFIRMED","JOINED")||ChallengeStore.navigationBlockingAd(it))&&!PendingInitialJoinStore.isolated(it,date)}
             if(unresolved.isNotEmpty()){
                 check(ui.currentPackage()==pkg||AdTaskReturn.restoreOrRelaunchIfGone(svc,date,runId)){"original_ana_task_unavailable"}
                 val pageUntil=android.os.SystemClock.elapsedRealtime()+8_000
                 while(!cleanIsolationPage()&&live()&&android.os.SystemClock.elapsedRealtime()<pageUntil){delay(250);ui.refreshCache()}
-                isolateSubmittedUnknowns(engine,runId,date,unresolved.filter{ChallengeStore.unconfirmedAd(it)})
+                isolateSubmittedUnknowns(engine,runId,date,unresolved.filter{ChallengeStore.navigationBlockingAd(it)})
                 prior=ChallengeStore.rows(svc,date)
             }
             val pending = (0 until prior.length()).map { prior.getJSONObject(it) }
-                .filter { it.optString("state") in setOf("AD_OPENING", "UNCONFIRMED", "JOINED")||ChallengeStore.unconfirmedAd(it) }
+                .filter { it.optString("state") in setOf("AD_OPENING", "UNCONFIRMED", "JOINED")||ChallengeStore.navigationBlockingAd(it) }
                 .filterNot{PendingInitialJoinStore.isolated(it,date)}.filter { row->TravelSelection.enabled(svc,Cat.ofName(row.optString("cat"))!!) || row.optString("state") in setOf("AD_OPENING","UNCONFIRMED") }
-            val recoverablePending=pending.filter{ChallengeStore.unconfirmedAd(it)||!cleanIsolationPage()}
+            val recoverablePending=pending.filter{ChallengeStore.navigationBlockingAd(it)||!cleanIsolationPage()}
             if (recoverablePending.isNotEmpty()) {
                 check(recoverablePending.size == 1) { "multiple_unconfirmed_challenges_require_review" }
                 val row = recoverablePending.single()
