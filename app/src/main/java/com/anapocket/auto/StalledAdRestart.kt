@@ -29,6 +29,14 @@ object StalledAdRestart {
     private suspend fun stallVerified(svc:AutoAccessibilityService,date:String,run:String,b:Bound,live:()->Boolean):Boolean {
         if(!StalledAdRestartPolicy.needsStallReview(b.reason))return true
         if(b.reviewed){Logger.i("ADSTALL","run=$run bound="+b.key+" existing_review_reused");return true}
+        val now0=System.currentTimeMillis()
+        if(live()&&StalledAdRestartPolicy.pastAbsoluteCap(b.startedAt,now0,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))){
+            ReliableLedger.put(svc,REVIEW_AREA,date,b.key,JSONObject().put("identity",b.key).put("stage",b.stage).put("controllerRun",run)
+                .put("quietMs",0).put("openMs",now0-b.startedAt).put("kind","absolute_cap_open_window")
+                .put("deviceTime",TokyoDate.time()).put("noRewardInferred",true).toString())
+            Logger.w("ADSTALL","run=$run bound="+b.key+" absolute_cap_exceeded openMs="+(now0-b.startedAt)+"; no frozen proof needed")
+            return true
+        }
         val driver=AdUiClose(svc);val tracker=StallQuietTracker()
         val end=SystemClock.elapsedRealtime()+StalledAdRestartPolicy.REVIEW_WINDOW_MS
         while(SystemClock.elapsedRealtime()<end){

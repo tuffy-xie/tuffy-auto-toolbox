@@ -25,6 +25,13 @@ object StalledAdRestartPolicy {
      */
     val SEGMENT_TIMEOUTS=setOf("ad_timeout_95s","ad_part_timeout_95s")
     fun needsStallReview(reason:String)=reason in SEGMENT_TIMEOUTS
+    /**
+     * 11/19 01:05-01:40 and 03:16: an AppLovin playable kept animating with no close for 30+ minutes, so every review saw
+     * "progress" and every retry stopped in front of it. An ad window still open well past the 300 s absolute cap is the
+     * same case that cap already covers (no frozen proof needed); the same attempt identity and every other gate still apply.
+     */
+    const val ABSOLUTE_CAP_OPEN_MS=330_000L
+    fun pastAbsoluteCap(startedAt:Long,now:Long,adWindowOpen:Boolean)=adWindowOpen&&startedAt>0&&now>=startedAt&&now-startedAt>=ABSOLUTE_CAP_OPEN_MS
     const val REVIEW_WINDOW_MS=45_000L
     fun eligible(date:String,recordedDate:String,stage:String,state:String,reason:String,startedAt:Long,
         now:Long,confirmed:Boolean,used:Boolean,dailyRestarts:Int,live:Boolean,sdk:Boolean,limit:Int=3):Boolean =

@@ -163,6 +163,35 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             }
         }
     }
+    /**
+     * 11/18 05:59: the timed-out ad was gone but ANA was left on that task's own detail sheet, so the read-only isolation
+     * was skipped and every retry stopped with "unconfirmed_challenge_requires_evidence_review" until a person restarted
+     * from the launcher at 07:02 — which closed the sheet and isolated the same row. This does exactly that: close ANA's own
+     * detail sheet with its × (no ad window, no open daily ad), wait for the clean list page, then the same read-only
+     * participation audit and isolation. Nothing is confirmed, credited or replayed.
+     */
+    private suspend fun setAsideAfterStaleDetail(engine:AutomationEngine,runId:String,date:String,row:JSONObject):Boolean {
+        ui.refreshCache()
+        if(TokyoDate.of()!=date||blocked()||AutoAccessibilityService.stopRequested||ui.currentPackage()!=pkg||
+            AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)||closeDriver.isRecoverableSurface()||
+            OfficialAdStore.attempts(svc,date).any{!it.terminal}||SubmittedUnknownIsolation.binding(row)==null||
+            !AccountSafety.authorize(svc,"stale_detail_isolation"))return false
+        if(!cleanIsolationPage()){
+            val ids=nodes().mapNotNull{it.viewIdResourceName?.substringAfterLast('/')}.toSet()
+            if(!HomeNavigationPolicy.nativeDetail(ui.currentPackage(),labels(),ids))return false
+            val close=byId("close")?:return false
+            evidence(runId,"stale_detail_close_before_isolation",row.toString())
+            if(!tap(close))return false
+            val until=android.os.SystemClock.elapsedRealtime()+8_000
+            while(!cleanIsolationPage()&&android.os.SystemClock.elapsedRealtime()<until&&!blocked()&&!AutoAccessibilityService.stopRequested){delay(250);ui.refreshCache()}
+            if(!cleanIsolationPage())return false
+        }
+        isolateSubmittedUnknowns(engine,runId,date,listOf(row))
+        val fresh=ChallengeStore.find(svc,date,row.getString("key"))?:return false
+        val done=PendingInitialJoinStore.isolated(fresh,date)
+        Logger.i("CHBOOST","run=$runId stale_detail_isolation key=${row.optString("key")} isolated=$done")
+        return done
+    }
     /** Read-only participation audit + existing metadata isolation; never joins or starts a Boost. */
     suspend fun isolateForIndependentDaily(run:String,date:String):Boolean {
         if(TokyoDate.of()!=date||blocked()||AutoAccessibilityService.stopRequested||
@@ -1139,6 +1168,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                 val last = ads.getJSONObject(ads.length() - 1)
                 val reserved=PendingInitialJoinStore.binding(row)?.let{PendingInitialJoinPolicy.mayDispatchReserved(it,date,nativeUnjoined(row))}==true
                 val isolated=isolateLegacyInitial(runId,date,row,pending.size)
+                var setAside=false
                 if(reserved){
                     check(watch(runId,date,row,byId("button_join_boost"),true,last,reservedContinuation=true)){"reserved_initial_receipt_not_confirmed"}
                     boost(runId,date,row,adBudget,engine)
@@ -1171,6 +1201,10 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                     } else if (AdSignals.loadFailure(labels()) && !last.getBoolean("initialJoin") && !last.optBoolean("confirmed") && last.getInt("index") == ads.length()) {
                         evidence(runId, "pending_official_load_failure_observed", row.toString())
                         check(recoverOpaque(runId, date, row, last, observedExistingLoadFailure = true)) { "official_load_failure_recovery_not_verified" }
+                    } else if(!ChallengeRecoveryPolicy.canResume(row.getString("state"), last.getString("state"),
+                        last.optString("reason"), last.optBoolean("confirmed"), last.getInt("index"), ads.length(),
+                        closeDriver.isRecoverableSurface())&&setAsideAfterStaleDetail(engine,runId,date,row)){
+                        setAside=true // Read-only isolation of the same unknown; never replayed, the other tasks continue.
                     } else {
                     check(ChallengeRecoveryPolicy.canResume(row.getString("state"), last.getString("state"),
                         last.optString("reason"), last.optBoolean("confirmed"), last.getInt("index"), ads.length(),
@@ -1178,7 +1212,7 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                     evidence(runId, "manual_resume_existing_ad", row.toString())
                     check(watch(runId, date, row, null, last.getBoolean("initialJoin"), last)) { "existing_ad_receipt_not_confirmed" }
                     }
-                    boost(runId, date, row, adBudget,engine)
+                    if(!setAside)boost(runId, date, row, adBudget,engine)
                 }
                 prior = ChallengeStore.rows(svc, date)
             }

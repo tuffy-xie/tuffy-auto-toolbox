@@ -152,12 +152,40 @@ object MaxBoostCoordinator {
             snapshot.fields["text_name"]==it.title&&AnaCalendarDate.same(snapshot.fields["text_date"],it.date)&&
                 ChallengeDetailReceipt.attendedOn(snapshot.fields["text_attended"],it.date)
         } else null
-        val binding=journal?:visibleBinding
+        val binding=journal?:visibleBinding?:if(journal==null)confirmLateMax(svc,run,date,snapshot) else null
         if(binding==null){
             FaultStore.maxBoostFailure(svc,run,"MAX_BOOST_DIALOG_DISMISS_FAILED:binding_required_no_reward_amount_guess",snapshot.trace)
             throw MaxBoostCompletionFailure("MAX_BOOST_DIALOG_DISMISS_FAILED","binding_required_no_reward_amount_guess")
         }
         finish(svc,engine,run,binding)
+    }
+    private fun lateRow(row:JSONObject,date:String):LateMaxRow {
+        val ads=row.optJSONArray("ads");val ad=ads?.optJSONObject(ads.length()-1)
+        return LateMaxRow(row.optString("key"),row.optString("date"),row.optString("state"),row.optBoolean("joined"),row.optInt("boost",-1),
+            PendingInitialJoinStore.isolated(row,date),ad?.optInt("index",-1)?:-1,ads?.length()?:0,ad?.optBoolean("initialJoin",true)?:true,
+            ad?.optBoolean("confirmed")?:false,ad?.optBoolean("adDepartureObserved")?:false,ad?.optString("dispatchPhase").orEmpty(),
+            ad?.optString("reason").orEmpty(),ad?.optInt("expectedOfferedAfter",-1)?:-1,row.optInt("offeredReward",-1))
+    }
+    /** User-approved 11/19 (see LateMaxDialogPolicy): bind ANA's own max dialog to the single matching late 5th Boost. */
+    private fun confirmLateMax(svc:AutoAccessibilityService,run:String,date:String,snapshot:MaxBoostUiSnapshot):MaxBoostBinding? {
+        val frame=snapshot.frame
+        if(frame.page!=MaxBoostPage.MAX_DIALOG||!frame.trusted||TokyoDate.of()!=date)return null
+        fun pick(rows:org.json.JSONArray)=LateMaxDialogPolicy.pick((0 until rows.length()).map{lateRow(rows.getJSONObject(it),date)},TokyoDate.of(),frame.reward)
+        val key=pick(ChallengeStore.rows(svc,date))?:return null
+        val saved=ReliableLedger.updateChallenge(svc,date,key){current->
+            // Re-check inside the same transaction: nothing else may have changed since the dialog was read.
+            if(pick(ReliableLedger.challenges(svc,date))!=key)return@updateChallenge null
+            val ads=current.getJSONArray("ads");val ad=ads.getJSONObject(ads.length()-1);val now=System.currentTimeMillis()
+            ad.put("previousFailure",ad.optString("reason")).put("state",AdState.REWARD_CONFIRMED.name).put("confirmed",true)
+                .put("afterSerial",current.getInt("boost")+2).put("offeredAfter",ad.getInt("expectedOfferedAfter"))
+                .put("reason","late_official_max_dialog_unique_pending_exact_reward").put("receiptObservedAt",now)
+                .put("firstUnconfirmedAt",ad.optLong("finishedAt")).put("finishedAt",now).put("lateMaxReviewRunId",run)
+            current.put("boost",5).put("state","BOOST_MAX_CONFIRMED").put("offeredReward",ad.getInt("expectedOfferedAfter"))
+            current.remove("error");current
+        }?:return null
+        Logger.i("MAXBOOST","run=$run late_official_max_dialog_bound key=$key reward=${frame.reward}")
+        Evidence.write(svc,"late_max_dialog_"+run+".txt","key="+key+";reward="+frame.reward+";JST="+TokyoDate.time()+"\n"+snapshot.trace+"\n"+saved)
+        return MaxBoostCompletionStore.fromRow(saved,date)
     }
     suspend fun finish(svc:AutoAccessibilityService,engine:AutomationEngine,run:String,row:JSONObject){
         val binding=MaxBoostCompletionStore.fromRow(row,TokyoDate.of())

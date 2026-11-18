@@ -76,6 +76,14 @@ class StallSingleBackTest {
         // The initial join and every other existing gate stay closed.
         assertFalse(OpaqueRecoveryPolicy.mayRecover(true,true,true,true,true,false,0,2,listOf(50,50,50,100,100)))
     }
+    @Test fun openWindowPastTheAbsoluteCapNeedsNoFrozenProof() {
+        val start=1_000_000L
+        assertTrue(StalledAdRestartPolicy.pastAbsoluteCap(start,start+330_000,true))
+        assertFalse(StalledAdRestartPolicy.pastAbsoluteCap(start,start+329_999,true))
+        assertFalse(StalledAdRestartPolicy.pastAbsoluteCap(start,start+3_600_000,false))
+        assertFalse(StalledAdRestartPolicy.pastAbsoluteCap(0,3_600_000,true))
+        assertFalse(StalledAdRestartPolicy.pastAbsoluteCap(start,start-1,true))
+    }
     @Test fun dailyBlankReviewCoversPartAndAbsoluteTimeoutsButKeepsTheFrozenProofForSegments() {
         val date="2026-11-19"
         val a=AdAttempt(date=date,runId="AD1",index=3,startedAt=1L,finishedAt=2L,officialBefore=5,state=AdState.UNCONFIRMED,
