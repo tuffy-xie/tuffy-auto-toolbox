@@ -17,6 +17,16 @@ object AdCloseIcon {
         }
         return isWhiteCross(width, height, centre)
     }
+    /**
+     * AppLovin's WebView end card (11/18 ArtZMiami, MakesYouFluent) draws an 18px cross in the middle of an 80px tap
+     * wrapper, on a dark disc or a grey disc over a white page. The whole box fails the 25% size floor and the white page
+     * fills it, so the same white-cross test runs on the central half, where only the disc and the cross are.
+     */
+    fun isCentredSmallCross(width: Int, height: Int, pixels: IntArray): Boolean {
+        if (width < 24 || height < 24 || pixels.size != width * height) return false
+        val w = width / 2; val h = height / 2; val left = (width - w) / 2; val top = (height - h) / 2
+        return isWhiteCross(w, h, IntArray(w * h) { i -> pixels[(top + i / w) * width + left + i % w] })
+    }
     /** Exact path exposed by Fyber's actual enabled HTML close button; never executes SVG content. */
     fun isCloseSvg(svg: String): Boolean {
         if (svg.length > 4096) return false

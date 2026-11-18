@@ -57,6 +57,11 @@ class CheckinOcrService:Service() {
     override fun onDestroy(){runCatching{recognizer?.close()};recognizer=null;journal("service_destroyed_context_retained");super.onDestroy()}
 }
 
+object CheckinOcrRetry {
+    /** Only the first failure of a read may be retried, and only when the helper died or stalled. */
+    fun retryable(attempt:Int,reason:String?)=attempt==0&&reason in setOf("recognizer_service_unavailable","recognition_timeout")
+}
+
 object CheckinOcr {
     data class DartPull(val arrow:CheckinLine,val endY:Int)
     /** Find the red dart BELOW the wheel using the actual vertical pull instruction as anchor. */
@@ -98,8 +103,11 @@ object CheckinOcr {
     suspend fun read(ctx:Context,png:ByteArray):List<CheckinLine> {
         repeat(2){attempt->try{return readOnce(ctx,png)}catch(e:CheckinPerceptionUnavailable){
             currentCoroutineContext().ensureActive()
-            if(attempt!=0||e.message!="recognizer_service_unavailable")throw e
-            delay(1000) // Rebind once after a disconnected/killed helper; never repeats an official action.
+            if(!CheckinOcrRetry.retryable(attempt,e.message))throw e
+            // 11/18 12:30: one 8 s recognition stall ended the whole TikTok run. A stalled helper is stopped so the
+            // rebind gets a fresh recognizer. Reading a screenshot again never repeats an official action.
+            if(e.message=="recognition_timeout")stop(ctx)
+            delay(1000)
         }}
         error("recognition_unavailable")
     }

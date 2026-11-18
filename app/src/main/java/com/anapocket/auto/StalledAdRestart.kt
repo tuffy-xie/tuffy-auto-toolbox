@@ -165,9 +165,13 @@ object StalledAdRestart {
             TravelSelection.hasUnresolvedAd(svc,date)||OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED},
             AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),prefs(svc).contains(b.key),prefs(svc).getInt("count_"+date,0),live()&&ui.currentPackage()==PKG&&MaxBoostCoordinator.visible(svc))
         else StalledAdRestartPolicy.eligible(date,b.date,b.stage,b.state,b.reason,b.startedAt,System.currentTimeMillis(),b.confirmed,prefs(svc).contains(b.key),prefs(svc).getInt("count_"+date,0),live(),ui.currentPackage()==PKG&&AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),StalledAdRestartPolicy.OPEN_AD_RESTART_LIMIT)
-        if(!allowed)return false
+        val loginOffer=!allowed&&StalledAdRestartPolicy.loginOfferRestart(date,b.date,stage,b.state,b.reason,b.confirmed,prefs(svc).contains(b.key),
+            prefs(svc).getInt("count_"+date,0),live(),ui.currentPackage()==PKG,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))
+        if(!allowed&&!loginOffer)return false
         // The initial navigation stage may not interrupt a separately reserved challenge or daily viewing.
         if(stage=="STARTUP"&&(TravelSelection.hasUnresolvedAd(svc,date)||OfficialAdStore.attempts(svc,date).any{!it.terminal||it.state==AdState.UNCONFIRMED}))return false
+        // The same Recents removal used for an open ad; the app-info stop below never worked on this phone.
+        if(loginOffer){Logger.w("ADRESTART","run=$run login_offer_still_shown_after_ad; restarting ANA once");return removeTaskAndRelaunch(svc,date,run,b,ui,owner){live()}}
         // Same no-progress evidence as every other ad restart entry; HOME and completed MAX_BOOST are not open ads.
         if(stage !in setOf("HOME","MAX_BOOST")&&!stallVerified(svc,date,run,b){live()})return false
         // The app-info stop below failed every time it ran on this phone (Nov 1-3); an open ad is closed from Recents instead.

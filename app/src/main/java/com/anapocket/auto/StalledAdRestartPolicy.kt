@@ -32,6 +32,17 @@ object StalledAdRestartPolicy {
         state=="UNCONFIRMED" && !confirmed && !used && dailyRestarts<limit && startedAt>0 &&
         now>=startedAt && now-startedAt>=(if(stage=="STARTUP")300_000L else 95_000L) &&
         reason in setOf("startup_ad_timeout_300s","ad_timeout_95s","ad_part_timeout_95s","ad_timeout_300s","completion_not_confirmed")
+    /**
+     * 11/18 00:05 (and 11/10): the login video was watched and closed, ANA's dialog still offered 「動画を見てさらに100ptGET」
+     * and the whole run stopped until the 00:15 retry, which then got the 100pt. The user asked (11/18) to restart ANA at
+     * once in that case. Only that recorded reason, with ANA itself in front and no ad window open, once per login attempt.
+     * Nothing is marked watched or rewarded; the relaunched startup reads the official dialog like any retry would.
+     */
+    const val LOGIN_OFFER_RETURN="login_reward_not_confirmed_after_offer_return"
+    fun loginOfferRestart(date:String,recordedDate:String,stage:String,state:String,reason:String,confirmed:Boolean,
+        used:Boolean,dailyRestarts:Int,live:Boolean,anaForeground:Boolean,sdk:Boolean,limit:Int=OPEN_AD_RESTART_LIMIT)=
+        live&&anaForeground&&!sdk&&stage=="STARTUP"&&date==recordedDate&&state=="UNCONFIRMED"&&reason==LOGIN_OFFER_RETURN&&
+            !confirmed&&!used&&dailyRestarts in 0 until limit
     fun mayRelaunch(date:String,recordedDate:String,state:String,marker:String) =
         date==recordedDate && state=="UNCONFIRMED" && marker in setOf("SYSTEM_STOP_CONFIRMED","RELAUNCHED_REVIEW_REQUIRED")
     fun appInfo(pkg:String,activity:String,labels:List<String>) =

@@ -7,6 +7,12 @@ package com.anapocket.auto
  */
 object TikTokCheckinPolicy {
     val TASKS=listOf("checkin","claim","unlock","bonus_reward")
+    /**
+     * Frames read per pass while scrolling down the gift page. 11/16-11/17 the 14日連続 card came into reach after ~8 swipes;
+     * 11/18 a 「新規ユーザーを招待して 2,800円分」 card above it pushed it past 10 and all four tasks read not found.
+     * The step stays the same (shorter than a card), so only the reach grows; scanning still stops at the first match.
+     */
+    const val SEEK_SWIPES=18
     private fun n(t:String)=t.replace(Regex("\\s"),"")
     /** Words that must never be inside the box of anything Tuffy taps on this app. */
     private val forbidden=Regex("AD|広告|リマインド|参加|始める|開始|招待|交換|シェア|スタート|回す|受け取る$")

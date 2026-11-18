@@ -438,7 +438,9 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                     val pixels = IntArray(r.width() * r.height())
                     bmp.getPixels(pixels, 0, r.width(), r.left, r.top, r.width(), r.height())
                     AdCloseIcon.isWhiteCross(r.width(), r.height(), pixels) || AdCloseIcon.isWhiteCircleCross(r.width(), r.height(), pixels) ||
-                        pangle && AdCloseIcon.isWhiteForward(r.width(), r.height(), pixels)
+                        pangle && AdCloseIcon.isWhiteForward(r.width(), r.height(), pixels) ||
+                        // Only the top-right single-child AppLovin wrapper (see AppLovinClosePolicy.wrapper) may use the inner half.
+                        applovin && n.childCount == 1 && AdCloseIcon.isCentredSmallCross(r.width(), r.height(), pixels)
                 }
             }
             matches.singleOrNull()

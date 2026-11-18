@@ -525,7 +525,7 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
     private suspend fun tiktokSeek(label:String,found:(List<CheckinLine>)->Boolean):CheckinFrame? {
         repeat(2){pass->
             if(pass==1)tiktokTop()
-            repeat(10){
+            repeat(TikTokCheckinPolicy.SEEK_SWIPES){
                 val f=tiktokSettle(frame())
                 if(found(f.lines))return f
                 ui.swipe((screenHeight*.72).toInt(),(screenHeight*.42).toInt(),900)
