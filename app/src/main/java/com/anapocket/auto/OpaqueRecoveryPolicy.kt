@@ -55,6 +55,26 @@ object OpaqueRecoveryPolicy {
         opaque: Boolean, alreadyTried: Boolean, verifiedFailures: Int, boost: Int, steps: List<Int>): Boolean =
         !initial && timedOut && departed && sameRun && opaque && !alreadyTried && verifiedFailures == 0 &&
             boost in 0..4 && steps.size == 5 && steps.all { it > 0 }
+    /**
+     * 11/19 (Gemini review B/G): the in-card restart used to need one of four canvas shapes, so every AppLovin playable
+     * (ids playable/canvas/animation_container, or ab/bg/overlay-portrait) fell through to the whole-step BLOCKED path.
+     * Any timeout of this attempt qualifies when the same attempt carries frozen proof (canvas sample or node-tree digest),
+     * or when the 300 s absolute cap was reached with the ad window still open (that cap never needed a review).
+     */
+    val IN_CARD_TIMEOUTS=setOf("ad_timeout_95s","ad_part_timeout_95s","ad_timeout_300s")
+    fun inCardTimeout(reason:String)=reason in IN_CARD_TIMEOUTS
+    fun reviewRequired(reason:String)=reason!="ad_timeout_300s"
+    fun stallEvidence(canvasSurface:Boolean,frozenReviewed:Boolean,reason:String,adWindowOpen:Boolean)=
+        canvasSurface||frozenReviewed||reason=="ad_timeout_300s"&&adWindowOpen
+    /**
+     * Tier 4 (user-approved 11/19): one system Back for one attempt, only after the segment has played at least 65 s and
+     * the canvas or node tree has stayed unchanged for 30 s while an ad window is still in front. Returning is never a
+     * receipt; only ANA's own official receipt can confirm the attempt, and the restart path stays behind it.
+     */
+    const val STALL_BACK_MIN_PLAY_MS=65_000L
+    fun mayStallBack(partElapsedMs:Long,quietMs:Long,adSurface:Boolean,used:Boolean)=
+        !used&&adSurface&&partElapsedMs>=STALL_BACK_MIN_PLAY_MS&&quietMs>=STALL_QUIET_MS
+    const val STALL_BACK_GRACE_MS=10_000L
     fun unlockedAnaCard(description: String): Boolean = description.trim() in setOf(
         "ANA Pocket,未加锁", "ANA Pocket,Unlocked", "ANA Pocket,ロック解除")
     fun outcome(boost: Int, before: Int, expected: Int, originalSteps: List<Int>, labels: List<String>): String? {

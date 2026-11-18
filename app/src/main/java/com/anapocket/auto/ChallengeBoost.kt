@@ -403,7 +403,20 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                 evidence(runId, "${row.getString("cat")}_${a.getInt("index")}_part_${part.current}")
             }
             override suspend fun diagnostic(reason:String){FaultStore.capture(svc,runId,"challenge",reason,row.getString("cat")+"_"+a.getInt("index"))}
-            override suspend fun stallProgressKey()=closeDriver.stallProgressKey()
+            // 11/19 (Gemini review G): the same evidence the outer restart already accepts. Canvas sample when the shape is
+            // known, otherwise the node-tree digest, so AppLovin playables get their frozen proof inside this attempt.
+            override suspend fun stallProgressKey()=(if(closeDriver.isStallReviewSurface())closeDriver.stallProgressKey() else null)?:closeDriver.stallTreeKey()
+            override suspend fun stallBack():Boolean {
+                ui.refreshCache()
+                if(stopped()||blocked()||a.optBoolean("confirmed")||ui.currentPackage()!=pkg||
+                    !AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)||!AccountSafety.authorize(svc,"stall_single_back"))return false
+                // Persist the one request before the gesture, so a process death can never grant a second Back.
+                if(a.has("stallBackRequestedAt"))return false
+                a.put("stallBackRequestedAt",System.currentTimeMillis()).put("stallBackActivity",AutoAccessibilityService.foregroundActivity.take(120))
+                ChallengeStore.save(svc,date,row)
+                evidence(runId,"${row.getString("cat")}_${a.getInt("index")}_stall_single_back","verified no progress 30s; one system Back; returning is never a receipt")
+                return ui.back()
+            }
             override suspend fun stallReviewed(quietMs:Long,key:String){
                 check(!stopped()&&!blocked()&&!a.optBoolean("confirmed")){"stall_review_binding_changed"}
                 a.put("stallReview",JSONObject().put("controllerRun",runId).put("quietMs",quietMs)
@@ -550,13 +563,18 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             ad.getString("runId") == runId || observedExistingLoadFailure, used, failures, row.getInt("boost"), steps)||
             VerifiedLoadFailurePolicy.mayReviewSecond(ad.getBoolean("initialJoin"),AdSignals.loadFailure(labels()),
                 ad.getString("runId")==runId||observedExistingLoadFailure,used,failures,verifiedLoadFailures,row.getInt("boost"),steps)
-        if (!loadFailure && !OpaqueRecoveryPolicy.mayRecover(ad.getBoolean("initialJoin"), ad.optString("reason") == "ad_timeout_95s",
-            ad.optBoolean("adDepartureObserved"), ad.getString("runId") == runId, closeDriver.isStallReviewSurface(),
+        val reason=ad.optString("reason")
+        val review=ad.optJSONObject("stallReview")
+        val freshReview=review!=null&&review.optString("controllerRun")==runId&&OpaqueRecoveryPolicy.freshStallReview(
+            review.optLong("quietMs"),review.optLong("finishedAt"),System.currentTimeMillis())
+        ui.refreshCache()
+        val adWindowOpen=ui.currentPackage()==pkg&&AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)
+        if (!loadFailure && !OpaqueRecoveryPolicy.mayRecover(ad.getBoolean("initialJoin"), OpaqueRecoveryPolicy.inCardTimeout(reason),
+            ad.optBoolean("adDepartureObserved"), ad.getString("runId") == runId,
+            OpaqueRecoveryPolicy.stallEvidence(closeDriver.isStallReviewSurface(),freshReview,reason,adWindowOpen),
             used, failures,
             row.getInt("boost"), steps)) return false
-        val review=ad.optJSONObject("stallReview")
-        if(!loadFailure&&(review?.optString("controllerRun")!=runId||!OpaqueRecoveryPolicy.freshStallReview(
-            review.optLong("quietMs"),review.optLong("finishedAt"),System.currentTimeMillis())))return false
+        if(!loadFailure&&OpaqueRecoveryPolicy.reviewRequired(reason)&&!freshReview)return false
         check(ad.getInt("index")==ads.length()&&!ad.optBoolean("confirmed")){"native_recovery_attempt_changed"}
         val controller=AutoAccessibilityService.currentRunId;val owner=CheckinRuntime.ownership.owner()
         fun safe() = !AutoAccessibilityService.stopRequested && !blocked() && TokyoDate.of() == date&&

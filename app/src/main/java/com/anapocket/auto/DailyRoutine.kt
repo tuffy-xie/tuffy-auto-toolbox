@@ -122,7 +122,9 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 /* No multi-hour wake hold: native readiness and active UI ownership remain bounded. */
                 StalledAdRestart.recoverBlankDaily(svc,date,run)
                 var outcome=RoutineSequence(port).run();var restarts=0
-                while(outcome.state=="BLOCKED"&&!AutoAccessibilityService.stopRequested&&restarts<3){
+                // 11/19 (Gemini review H): each pass needs its own reserved restart of a distinct attempt (daily cap 12),
+                // so the in-run budget follows that cap instead of stopping at 3 and waiting 10-120 min for an alarm.
+                while(outcome.state=="BLOCKED"&&!AutoAccessibilityService.stopRequested&&restarts<StalledAdRestartPolicy.OPEN_AD_RESTART_LIMIT){
                     // The stage that stopped, not the last one run: travel can stop while ads still ran after it.
                     val stage=if(outcome.detail.contains("MAX_BOOST_"))"MAX_BOOST" else outcome.steps.entries.firstOrNull{it.value.state=="BLOCKED"}?.key?:outcome.steps.keys.lastOrNull()?:break
                     if(!StalledAdRestart.recoverBlankDaily(svc,date,run)&&!StalledAdRestart.recover(svc,date,run,stage))break

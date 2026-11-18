@@ -5,9 +5,16 @@ object OfficialLoadFailurePolicy {
     fun key(a:AdAttempt)=a.runId+":"+a.index+":"+a.startedAt
     fun failedLoad(a:AdAttempt)=a.terminal&&a.state==AdState.FAILED&&!a.completed&&!a.rewardConfirmed&&
         a.failureReason=="official_error_dialog"&&a.officialBefore in 0..24
-    /** A timed-out daily ad with no reward observed. The original row stays UNCONFIRMED; review only frees a new attempt. */
+    /**
+     * A timed-out daily ad with no reward observed. The original row stays UNCONFIRMED; review only frees a new attempt.
+     * 11/19 (Gemini review E): a multi-part ad stuck in a later part, or an ad that hit the 300 s absolute cap, is the same
+     * kind of timeout; before this only the 95 s whole-ad reason was reviewable and the other two kept ADS blocked all day.
+     */
+    val BLANK_TIMEOUTS=setOf("ad_timeout_95s","ad_part_timeout_95s","ad_timeout_300s")
     fun blankStall(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&!a.rewardConfirmed&&
-        a.failureReason=="ad_timeout_95s"&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&a.officialBefore in 0..24
+        a.failureReason in BLANK_TIMEOUTS&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&a.officialBefore in 0..24
+    /** The 300 s cap is absolute (StalledAdRestartPolicy.needsStallReview); segment timeouts still need the frozen proof. */
+    fun stallProofSatisfied(a:AdAttempt,stallVerified:Boolean)=stallVerified||a.failureReason=="ad_timeout_300s"
     /**
      * 11/16 #15 (user-approved): the ad went out, came back to ANA by itself, and no reward was seen. Never replayed and the
      * row stays UNCONFIRMED; only after [QUIET_RETURN_MS] with a closed ad window and an unchanged counter is a new attempt freed.
@@ -26,7 +33,7 @@ object OfficialLoadFailurePolicy {
     fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>,stallVerified:Boolean):Boolean {
         val a=rows.lastOrNull()?:return false
         return date==today&&a.date==date&&adClosed&&!receipt&&reviewed.size<2&&key(a) !in reviewed&&
-            (blankStall(a)&&stallVerified&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS)&&
+            (blankStall(a)&&stallProofSatisfied(a,stallVerified)&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS)&&
             counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {

@@ -63,7 +63,9 @@ object RoutineRetry {
         val scans=Cat.values().filter{s.catOn(it)}.count{ChallengeScanStore.complete(c,date,it,s.kmOf(it))}
         // A new task row or a set-aside attempt is progress even when nothing reached max yet.
         val isolated=(0 until a.length()).count{PendingInitialJoinStore.isolated(a.getJSONObject(it),date)}
-        return listOf(maxed,a.length(),isolated,scans,OfficialAdStore.counter(c,date)?:-1,LoginBonusStore.read(c,date)?.optString("state").orEmpty()).joinToString("|")
+        // 11/19 (Gemini review D): a retry that moved a task from Boost 1/5 to 4/5 is progress too.
+        val boosts=(0 until a.length()).sumOf{a.getJSONObject(it).optInt("boost",0).coerceIn(0,5)}
+        return listOf(maxed,a.length(),isolated,scans,OfficialAdStore.counter(c,date)?:-1,LoginBonusStore.read(c,date)?.optString("state").orEmpty(),boosts).joinToString("|")
     }
 
     /** Called when a routine run ends; schedules the next retry or records why there is none. */

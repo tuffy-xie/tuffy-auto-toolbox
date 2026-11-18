@@ -113,6 +113,8 @@ interface AdInteractionPort {
     /** Optional, exception-only probe. Null means no reliable stall proof, not permission to restart. */
     suspend fun stallProgressKey():String? = null
     suspend fun stallReviewed(quietMs:Long,key:String) {}
+    /** Tier 4: one system Back after proven no-progress. True only when the Back was actually dispatched. */
+    suspend fun stallBack():Boolean = false
     suspend fun diagnostic(reason:String) {}
 }
 
@@ -134,6 +136,9 @@ class AdInteraction(private val port: AdInteractionPort) {
         var nativePangleWait = false
         var stallKey:String? = null
         var stallQuietSince=0L
+        var backUsed=false
+        var backGraceUntil=Long.MIN_VALUE/2
+        var reviewBeforeBack:Pair<Long,String>?=null
         var lastClose = Long.MIN_VALUE / 2
         var lastReceiptDismiss = Long.MIN_VALUE / 2
         var receiptDismissRetries = 0
@@ -175,13 +180,28 @@ class AdInteraction(private val port: AdInteractionPort) {
                 port.observationBudgetChanged(300_000L)
             }
             val segmentBudget = if (nativePangleWait && observedPart == null) 300_000L else 95_000L
-            if (port.now() - partStartedAt >= segmentBudget &&
+            // After the single Back: give ANA's own return/receipt path the floor, and never call a native page a stalled ad.
+            val backPending=backUsed&&reviewBeforeBack!=null&&(port.now()<backGraceUntil||!f.adSurface)
+            if (!backPending && port.now() - partStartedAt >= segmentBudget &&
                 !(leftEntry&&f.anaForeground&&f.entry&&!f.blocked&&!f.error&&reward&&f.watched==before+1)) {
+                reviewBeforeBack?.let{(quiet,key)->
+                    // The Back was ignored: the ad is still in front, so the proof taken before it stands for the restart.
+                    port.stallReviewed(quiet,key)
+                    return AdReceipt(AdState.UNCONFIRMED,reward=reward,reason="ad_timeout_95s")
+                }
                 val key=if(!f.blocked&&!f.error&&!f.manualRequired&&f.adSurface)port.stallProgressKey() else null
                 if(key!=null){
                     if(key!=stallKey){stallKey=key;stallQuietSince=port.now()}
                     val quiet=port.now()-stallQuietSince
                     if(quiet>=OpaqueRecoveryPolicy.STALL_QUIET_MS){
+                        val mayBack=OpaqueRecoveryPolicy.mayStallBack(port.now()-partStartedAt,quiet,f.adSurface,backUsed)
+                        backUsed=true
+                        if(mayBack&&port.stallBack()){
+                            reviewBeforeBack=quiet to key
+                            backGraceUntil=port.now()+OpaqueRecoveryPolicy.STALL_BACK_GRACE_MS
+                            port.pause(800L)
+                            continue
+                        }
                         port.stallReviewed(quiet,key)
                         return AdReceipt(AdState.UNCONFIRMED,reward=reward,reason="ad_timeout_95s")
                     }
