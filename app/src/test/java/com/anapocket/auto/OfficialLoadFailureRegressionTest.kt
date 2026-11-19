@@ -32,6 +32,20 @@ class OfficialLoadFailureRegressionTest {
         assertTrue(OfficialLoadFailurePolicy.mayReview(r.take(4),date,date,0,true,30000,keys.take(3).toSet()))
         assertFalse(OfficialLoadFailurePolicy.mayReview(r,date,date,0,true,30000,keys.take(4).toSet()))
     }
+    @Test fun nov19ReservationThatWasNeverArmedIsReviewedLikeAStall(){
+        val rows=(1..24).map{good(it).copy(officialBefore=it-1,officialAfter=it)}
+        val r=AdAttempt("r",date,25,25L,AdState.UNCONFIRMED,false,false,100,"process_interrupted",24,dispatchPhase="RESERVED")
+        assertTrue(OfficialLoadFailurePolicy.undispatched(r));assertTrue(OfficialLoadFailurePolicy.reviewable(r))
+        assertFalse(OfficialLoadFailurePolicy.blankStall(r));assertFalse(OfficialLoadFailurePolicy.quietReturn(r))
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(rows+r,date,date,24,true,false,60_000,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows+r,date,date,24,true,false,59_999,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows+r,date,date,25,true,false,60_000,emptySet(),false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows+r,date,date,24,false,false,60_000,emptySet(),false))
+        // Anything that may have reached the tap is never this case.
+        for(x in listOf(r.copy(dispatchPhase="ARMED",dispatchArmedAt=5),r.copy(dispatchPhase="DISPATCHED"),r.copy(dispatchArmedAt=5),
+            r.copy(adDepartureObserved=true),r.copy(failureReason="completion_not_confirmed"),r.copy(finishedAt=0)))
+            assertFalse(OfficialLoadFailurePolicy.undispatched(x))
+    }
     @Test fun nov19ThirdFrozenDailyStallIsReviewedButAFifthIsNot(){
         fun stall(i:Int,before:Int)=AdAttempt("r",date,i,i.toLong(),AdState.UNCONFIRMED,false,false,100,"ad_timeout_95s",before,
             dispatchPhase="DISPATCHED",adDepartureObserved=true)

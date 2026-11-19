@@ -28,7 +28,15 @@ object OfficialLoadFailurePolicy {
     fun quietReturn(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&!a.rewardConfirmed&&
         a.failureReason=="completion_not_confirmed"&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&a.officialBefore in 0..24
     const val QUIET_RETURN_MS=30*60_000L
-    fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)
+    /**
+     * 11/19 09:57: attempt #28 was reserved and the run then failed before the ARMED fence was written, so no tap was ever
+     * sent (the tap only follows a durable ARMED). On restart it is marked process_interrupted and nothing could free it.
+     * Same review as the others: closed window, no receipt, and the fresh counter unchanged from its baseline.
+     */
+    fun undispatched(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&!a.rewardConfirmed&&
+        a.failureReason=="process_interrupted"&&a.dispatchPhase=="RESERVED"&&a.dispatchArmedAt==0L&&a.dispatchCompletedAt==0L&&
+        !a.adDepartureObserved&&a.officialBefore in 0..24
+    fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)||undispatched(a)
     fun resolved(a:AdAttempt,reviewed:Set<String>)=
         a.terminal&&a.state==AdState.REWARD_CONFIRMED&&a.completed&&a.rewardConfirmed||reviewable(a)&&key(a) in reviewed
     /**
@@ -39,7 +47,8 @@ object OfficialLoadFailurePolicy {
     fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>,stallVerified:Boolean):Boolean {
         val a=rows.lastOrNull()?:return false
         return date==today&&a.date==date&&adClosed&&!receipt&&reviewed.size<MAX_REVIEWS&&key(a) !in reviewed&&
-            (blankStall(a)&&stallProofSatisfied(a,stallVerified)&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS)&&
+            (blankStall(a)&&stallProofSatisfied(a,stallVerified)&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS||
+                undispatched(a)&&elapsed>=60_000)&&
             counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {
