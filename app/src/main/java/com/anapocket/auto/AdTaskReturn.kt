@@ -61,8 +61,12 @@ object AdTaskReturn {
                 if(cards.isEmpty()){
                     val container=nodes.singleOrNull{it.viewIdResourceName=="com.miui.home:id/recents_view"}?:return no
                     val signature=nodes.filter{it.isClickable}.mapNotNull{it.contentDescription?.toString()?.takeIf{v->v.isNotBlank()}}.sorted().joinToString("|")
-                    // The native Recents container can precede its cards; retain the existing 36-poll budget.
-                    if(signature.isBlank()){if(it==0)Logger.i("ADRETURN","await native recents first frame; no task action");return@repeat}
+                    // An empty Recents says so in text; without that text the container can precede its cards (36-poll budget).
+                    if(signature.isBlank()){
+                        if(AdTaskReturnPolicy.emptyRecents(signature,nodes.map{n->ui.label(n)})&&safe()){
+                            Evidence.write(svc,"ad_"+run+"_recents_empty.txt","Observed native Recents with its empty-state text; no task to restore.\n"+ui.dump())
+                            Logger.i("ADRETURN","run=$run recents_empty ana_task_absent=true");return Outcome.ABSENT}
+                        if(it==0)Logger.i("ADRETURN","await native recents first frame; no task action");return@repeat}
                     if(signature==previousCards||!AdTaskReturnPolicy.maySearch(true,cards.size,searches,safe()))
                         return if(AdTaskReturnPolicy.searchedWholeList(signature==previousCards,searches,safe()))Outcome.ABSENT else no
                     previousCards=signature;val area=Rect();container.getBoundsInScreen(area)
@@ -98,4 +102,10 @@ object AdTaskReturnPolicy {
      * (same cards seen twice) or the page budget ran out, with the run still live. Anything else is an ordinary failure.
      */
     fun searchedWholeList(sameCardsAgain:Boolean,pages:Int,live:Boolean)=live&&pages>=1&&(sameCardsAgain||pages>3)
+    /**
+     * 11/20 03:39 and 04:39: after the timed-out #16 ad's task was removed, Recents showed only 「近期没有任何内容」; it was
+     * read as a list still loading until the budget ran out, and ANA was never relaunched for the review.
+     */
+    val EMPTY_RECENTS=setOf("近期没有任何内容","最近没有任何内容","No recent items","最近のアイテムはありません")
+    fun emptyRecents(cardSignature:String,labels:List<String>)=cardSignature.isBlank()&&labels.any{it.trim() in EMPTY_RECENTS}
 }

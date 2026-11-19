@@ -609,8 +609,10 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
     private suspend fun reviewBlankStall(runId:String,date:String):Boolean {
         val rows=OfficialAdStore.attempts(svc,date);val a=rows.lastOrNull()?:return false
         val quiet=OfficialLoadFailurePolicy.quietReturn(a)
+        ui.refreshCache()
+        val home=svc.packageManager.resolveActivity(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME),0)?.activityInfo?.packageName
         if(!OfficialLoadFailurePolicy.blankStall(a)&&!quiet&&!OfficialLoadFailurePolicy.undispatched(a)||OfficialLoadFailurePolicy.key(a) in OfficialAdStore.reviewedKeys(svc,date)||
-            AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))return false
+            OfficialLoadFailurePolicy.adWindowInFront(AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),ui.currentPackage(),home))return false
         // A quiet return is only reviewed by a later run once 30 minutes have passed; this run does not wait for it.
         if(quiet&&System.currentTimeMillis()-a.finishedAt<OfficialLoadFailurePolicy.QUIET_RETURN_MS){
             Logger.i("ADBLANK","run=$runId quiet_return_wait originalRun="+a.runId+" index="+a.index);return false}

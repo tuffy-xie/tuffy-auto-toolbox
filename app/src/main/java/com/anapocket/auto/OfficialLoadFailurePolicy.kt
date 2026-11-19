@@ -36,6 +36,13 @@ object OfficialLoadFailurePolicy {
     fun undispatched(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&!a.rewardConfirmed&&
         a.failureReason=="process_interrupted"&&a.dispatchPhase=="RESERVED"&&a.dispatchArmedAt==0L&&a.dispatchCompletedAt==0L&&
         !a.adDepartureObserved&&a.officialBefore in 0..24
+    /**
+     * 11/20 03:39 and 04:39: the timed-out #16 ad's task was already removed and the launcher was in front, but launcher and
+     * Recents events carry no Activity name, so the SDK Activity stayed recorded and the blank review never started.
+     * With the launcher in front no ad window is; the review still reopens ANA and re-checks the window before deciding.
+     */
+    fun adWindowInFront(sdkActivityRecorded:Boolean,currentPkg:String?,homePkg:String?)=
+        sdkActivityRecorded&&!(currentPkg!=null&&currentPkg==homePkg)
     fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)||undispatched(a)
     fun resolved(a:AdAttempt,reviewed:Set<String>)=
         a.terminal&&a.state==AdState.REWARD_CONFIRMED&&a.completed&&a.rewardConfirmed||reviewable(a)&&key(a) in reviewed
