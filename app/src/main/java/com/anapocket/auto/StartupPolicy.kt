@@ -12,6 +12,15 @@ object StartupPolicy {
         return when {"button_get_point" in ids->"button_get_point";"bonus_point" in ids->"bonus_point";else->null}
     }
     fun loginOffer(pkg:String?,labels:List<String>,ids:Set<String>)=loginClaimId(pkg,labels,ids)!=null
+    /**
+     * 11/20 00:03: ANA suspended the service from 11/19 21:30 (resume time not announced) and showed its native
+     * maintenance page (maintenanceTitleTextView 「ただいま、システムメンテナンス中です」 and refreshButton 「画面を更新する」).
+     * It was reported as an unstable start page, and the second unchanged retry would have ended retries for the day.
+     * Nothing on this page is tapped; the run stops and the retry waits for the service ([MAINTENANCE_TAG]).
+     */
+    const val MAINTENANCE_TAG="ANA_MAINTENANCE"
+    fun maintenance(pkg:String?,labels:List<String>,ids:Set<String>)=pkg==ANA&&"maintenanceTitleTextView" in ids&&
+        labels.any{it.replace(Regex("\\s|　"),"").contains("メンテナンス中")}
     fun rewardReceipt(pkg: String?, labels: List<String>, ids: Set<String>, adSurface: Boolean): Boolean =
         pkg == ANA && !adSurface && AdSignals.receipt(labels) && "button_ok" in ids
     fun nativePopup(pkg: String?, ids: Set<String>, loginContext: Boolean, receipt: Boolean, adSurface: Boolean) =

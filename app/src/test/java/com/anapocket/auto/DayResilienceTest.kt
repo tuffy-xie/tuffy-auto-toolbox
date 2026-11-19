@@ -27,6 +27,22 @@ class DayResilienceTest {
         assertNull(delay(detail="账号保护已暂停任务，请手动处理后复核"))
         assertNull(delay(on=false))
     }
+    @Test fun nov20AnaMaintenanceIsWaitedOutHourlyNotCountedAsStalls(){
+        // 11/20 00:03: ANA's own maintenance page (service suspended 11/19 21:30, resume time not announced).
+        val m="ANA Pocket系统维护中（ANA_MAINTENANCE），稍后自动重试"
+        assertTrue(RoutineRetryPolicy.maintenance(m));assertFalse(RoutineRetryPolicy.maintenance("启动页面未稳定，已保存证据"))
+        assertEquals(60,delay(detail=m,attempts=8,stalls=2,minute=14))
+        assertEquals(60,delay(detail=m,minute=22*60))
+        assertNull(delay(detail=m,minute=22*60+1))
+        assertNull(delay(detail=m,safety=true));assertNull(delay(detail=m,on=false))
+        assertNull(delay(state="STOPPED",detail=m))
+        val labels=listOf("ただいま、\nシステムメンテナンス中です","画面を更新する")
+        val ids=setOf("maintenanceTitleTextView","maintenanceMessageTextView","refreshButton","scrollView2")
+        assertTrue(StartupPolicy.maintenance(StartupPolicy.ANA,labels,ids))
+        assertFalse(StartupPolicy.maintenance("other.pkg",labels,ids))
+        assertFalse(StartupPolicy.maintenance(StartupPolicy.ANA,labels,ids-"maintenanceTitleTextView"))
+        assertFalse(StartupPolicy.maintenance(StartupPolicy.ANA,listOf("画面を更新する"),ids))
+    }
     @Test fun onlyStoppedRunsAreRetried(){
         assertNull(delay(state="DONE"));assertNull(delay(state="PARTIALLY_COMPLETED"))
         assertNull(delay(state="STOPPED"))                      // the user pressed stop

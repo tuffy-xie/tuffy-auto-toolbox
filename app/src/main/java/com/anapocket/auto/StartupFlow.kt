@@ -89,6 +89,11 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
             if(!AccountSafety.authorize(svc,"startup"))return StartupResult(false,"BLOCKED",closed,AccountSafety.message(svc))
             val observed=nodes();val ls=observed.map{ui.label(it)}
             val ii=observed.mapNotNull{it.viewIdResourceName?.takeIf{v->v.startsWith(pkg+":id/")}?.substringAfterLast('/')}.toSet()
+            if(StartupPolicy.maintenance(ui.currentPackage(),ls,ii)){
+                proof(run,"ana_maintenance","official_maintenance_page;nothing_tapped;retry_waits_for_service")
+                FaultStore.capture(svc,run,"startup","ana_maintenance")
+                return StartupResult(false,"BLOCKED",closed,"ANA Pocket系统维护中（"+StartupPolicy.MAINTENANCE_TAG+"），稍后自动重试")
+            }
             val context=StartupPolicy.loginContext(ui.currentPackage(),ls);val login=StartupPolicy.loginOffer(ui.currentPackage(),ls,ii)
             // A known daily reward is never a generic dismissible popup, including transient/incomplete layouts.
             if(context&&!login){stable=0;delay(650);continue}

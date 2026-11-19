@@ -24,10 +24,17 @@ object RoutineRetryPolicy {
         val retryable=state=="BLOCKED"||(state=="STOPPED"&&watchdog)
         // A run the user stopped can still end BLOCKED (a step refused its next tap); the stop decides, not the step.
         if(userStopped||!scheduleOn||!retryable||humanRequired(detail,safetyPending))return null
+        if(maintenance(detail))return if(nowMinute+MAINTENANCE_DELAY>LAST_START_MINUTE)null else MAINTENANCE_DELAY
         if(attempts>=delaysMinutes.size||stalls>=STALL_LIMIT)return null
         val delay=delaysMinutes[attempts]
         return if(nowMinute+delay>LAST_START_MINUTE)null else delay
     }
+    /**
+     * 11/20: ANA's own maintenance (resume time not announced). Waiting is not a stall and not one of the day's
+     * retries: check every [MAINTENANCE_DELAY] minutes until [LAST_START_MINUTE], then the normal budget applies again.
+     */
+    const val MAINTENANCE_DELAY=60
+    fun maintenance(detail:String)=detail.contains(StartupPolicy.MAINTENANCE_TAG)
     /**
      * How a routine actually ended, for the retry decision. A coroutine cancellation is not a business BLOCKED:
      * the watchdog's cancel stays a watchdog stop (retryable), a service teardown or user stop is a plain stop.
@@ -73,9 +80,13 @@ object RoutineRetry {
         try {
             val date=TokyoDate.of();val p=sp(c)
             val fp=progress(c,date);val last=p.getString("fp_$date",null)
+            val maintenance=RoutineRetryPolicy.maintenance(detail)
+            // The retry that follows a maintenance stop does not take one of the day's attempts (see fire).
+            check(p.edit().putBoolean("maint_$date",maintenance).commit())
             val attempts=p.getInt("count_$date",0)
             // The first stop of the day has nothing to compare with; later ones count only when nothing moved.
-            val stalls=if(last!=null&&last==fp)p.getInt("stall_$date",0)+1 else 0
+            // Maintenance never counts as a stall, and resets the run of stalls before it.
+            val stalls=if(maintenance)0 else if(last!=null&&last==fp)p.getInt("stall_$date",0)+1 else 0
             check(p.edit().putString("fp_$date",fp).putInt("stall_$date",stalls).commit())
             val delay=RoutineRetryPolicy.nextDelay(state,detail,watchdogRun==run,attempts,stalls,nowMinute(),
                 AccountSafetyStore.pending(c)!=null,Prefs.loadBlocking(c).enabled,AnaProcessRecovery.userStoppedRun(c)==run)
@@ -105,7 +116,8 @@ object RoutineRetry {
             Scheduler.scheduleRoutineRetry(c,System.currentTimeMillis()+10*60_000L)
             Logger.i("RETRY","deferred 10min checkin="+CheckinRuntime.activeApp+" connected="+AutoAccessibilityService.isConnected());return
         }
-        check(p.edit().remove("pending_$date").putInt("count_$date",p.getInt("count_$date",0)+1).commit())
+        val waitingForService=p.getBoolean("maint_$date",false)
+        check(p.edit().remove("pending_$date").putInt("count_$date",p.getInt("count_$date",0)+if(waitingForService)0 else 1).commit())
         Logger.i("RETRY","start attempt="+p.getInt("count_$date",0))
         AutoAccessibilityService.triggerRoutine("auto_retry")
     }
