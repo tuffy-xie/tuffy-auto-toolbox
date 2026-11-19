@@ -2,6 +2,12 @@ package com.anapocket.auto
 
 /** Fresh native load-failure proof grants a bounded replacement; original rows remain FAILED. */
 object OfficialLoadFailurePolicy {
+    /**
+     * Reviews per day, each freeing one replacement attempt (so at most 25+[MAX_REVIEWS] starts). 11/19: three daily ads
+     * stalled (#3, #11, #17); the third was proven frozen and the counter was unchanged, but the old limit of 2 kept the
+     * remaining 11 ads blocked all day. Every review still needs the unchanged official counter; nothing is replayed.
+     */
+    const val MAX_REVIEWS=4
     fun key(a:AdAttempt)=a.runId+":"+a.index+":"+a.startedAt
     fun failedLoad(a:AdAttempt)=a.terminal&&a.state==AdState.FAILED&&!a.completed&&!a.rewardConfirmed&&
         a.failureReason=="official_error_dialog"&&a.officialBefore in 0..24
@@ -32,24 +38,24 @@ object OfficialLoadFailurePolicy {
      */
     fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>,stallVerified:Boolean):Boolean {
         val a=rows.lastOrNull()?:return false
-        return date==today&&a.date==date&&adClosed&&!receipt&&reviewed.size<2&&key(a) !in reviewed&&
+        return date==today&&a.date==date&&adClosed&&!receipt&&reviewed.size<MAX_REVIEWS&&key(a) !in reviewed&&
             (blankStall(a)&&stallProofSatisfied(a,stallVerified)&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS)&&
             counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {
         val a=rows.lastOrNull()?:return false
-        return date==today&&a.date==date&&nativeProof&&elapsed>=30_000&&reviewed.size<2&&key(a) !in reviewed&&
+        return date==today&&a.date==date&&nativeProof&&elapsed>=30_000&&reviewed.size<MAX_REVIEWS&&key(a) !in reviewed&&
             failedLoad(a)&&counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
-    fun runCap(base:Int,initial:Int,current:Int)=base+(current-initial).coerceIn(0,2)
+    fun runCap(base:Int,initial:Int,current:Int)=base+(current-initial).coerceIn(0,MAX_REVIEWS)
     fun nativeAlert(activity:String,lines:List<String>)=activity.endsWith("AlertDialog")&&
         lines.any{it.contains("id=us.ana_pocket.ANAPocket:id/alertTitle ")&&it.endsWith("label=広告表示に失敗しました。")}&&
         lines.any{it.contains("id=android:id/message ")&&it.contains("アプリの再起動をお試しください")}
-    fun startCap(reviewed:Int)=25+if(reviewed in 0..2)reviewed else 0
+    fun startCap(reviewed:Int)=25+if(reviewed in 0..MAX_REVIEWS)reviewed else 0
     fun canReserve(counter:Int?,previous:Int?,sameDate:Boolean,stopped:Boolean,rows:List<AdAttempt>,reviewed:Set<String>)=
         sameDate&&!stopped&&counter!=null&&counter in 0..24&&(previous==null||counter>=previous)&&
-        reviewed.size in 1..2&&reviewed.all{k->rows.any{key(it)==k&&reviewable(it)}}&&
+        reviewed.size in 1..MAX_REVIEWS&&reviewed.all{k->rows.any{key(it)==k&&reviewable(it)}}&&
         rows.size<startCap(reviewed.size)&&rows.all{resolved(it,reviewed)}
     fun routineAllowed(limit:Boolean,blocked:String,own:List<AdAttempt>,reviewed:Set<String>)=
-        reviewed.size<=2&&RoutineAdCompletion.allowed(limit,blocked,own.filterNot{reviewable(it)&&key(it) in reviewed}.map{it.completed to it.rewardConfirmed})
+        reviewed.size<=MAX_REVIEWS&&RoutineAdCompletion.allowed(limit,blocked,own.filterNot{reviewable(it)&&key(it) in reviewed}.map{it.completed to it.rewardConfirmed})
 }

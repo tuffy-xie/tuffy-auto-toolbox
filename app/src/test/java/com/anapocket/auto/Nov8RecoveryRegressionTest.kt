@@ -203,13 +203,16 @@ class Nov8RecoveryRegressionTest {
         assertEquals(AdState.UNCONFIRMED,rows.last().state)
         assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,m30,setOf(k),false))
     }
-    @Test fun unreviewedBlankKeepsBlockingAndReviewCapStaysTwo(){
+    @Test fun unreviewedBlankKeepsBlockingAndReviewCapStaysFour(){
         val a=blank(1,0);val k=OfficialLoadFailurePolicy.key(a)
         assertFalse(OfficialLoadFailurePolicy.canReserve(0,0,true,false,listOf(a),emptySet()))
         assertTrue(OfficialLoadFailurePolicy.canReserve(0,0,true,false,listOf(a),setOf(k)))
         assertFalse(OfficialLoadFailurePolicy.canReserve(0,0,false,false,listOf(a),setOf(k)))
-        val b=blank(2,0);val c=blank(3,0)
-        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(a,b,c),date,date,0,true,false,60_000,setOf(k,OfficialLoadFailurePolicy.key(b)),true))
+        val r=(1..5).map{blank(it,0)};val keys=r.map{OfficialLoadFailurePolicy.key(it)}
+        // 11/19: the cap was raised from 2 to 4; the third and fourth reviews pass, the fifth does not.
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(r.take(3),date,date,0,true,false,60_000,keys.take(2).toSet(),true))
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(r.take(4),date,date,0,true,false,60_000,keys.take(3).toSet(),true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(r,date,date,0,true,false,60_000,keys.take(4).toSet(),true))
         assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(a),date,date,0,true,false,60_000,setOf(k),true))
     }
     @Test fun laterAttemptAfterReviewedBlankResolvesNormally(){

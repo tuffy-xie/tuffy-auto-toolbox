@@ -55,7 +55,7 @@ object OfficialAdStore {
         check(sp(c).edit().putString("counter_"+date,row.toString()).commit())
     }
     private fun reviewKeys(c:Context,date:String,rows:List<AdAttempt>):Set<String>{
-        val a=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));check(a.length()<=2){"load_review_limit"}
+        val a=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));check(a.length()<=OfficialLoadFailurePolicy.MAX_REVIEWS){"load_review_limit"}
         val keys=(0 until a.length()).map{
             val p=a.getJSONObject(it);val row=rows.singleOrNull{r->OfficialLoadFailurePolicy.key(r)==p.getString("key")}
                 ?:error("load_review_binding_missing")

@@ -24,11 +24,26 @@ class OfficialLoadFailureRegressionTest {
     @Test fun priorUnknownRemainsBlocking(){
         assertFalse(OfficialLoadFailurePolicy.mayReview(listOf(fail(1,0).copy(state=AdState.UNCONFIRMED),fail(2,0)),date,date,0,true,30000,emptySet()))
     }
-    @Test fun sameFailureAndThirdReplacementNeverQualify(){
-        val a=fail(1,0);val b=fail(2,0);val c=fail(3,0)
-        val k=OfficialLoadFailurePolicy.key(a)
-        assertFalse(OfficialLoadFailurePolicy.mayReview(listOf(a),date,date,0,true,30000,setOf(k)))
-        assertFalse(OfficialLoadFailurePolicy.mayReview(listOf(a,b,c),date,date,0,true,30000,setOf(k,OfficialLoadFailurePolicy.key(b))))
+    @Test fun sameFailureAndReplacementPastTheDailyLimitNeverQualify(){
+        val r=(1..5).map{fail(it,0)};val keys=r.map{OfficialLoadFailurePolicy.key(it)}
+        assertFalse(OfficialLoadFailurePolicy.mayReview(listOf(r[0]),date,date,0,true,30000,setOf(keys[0])))
+        // 11/19: the third review is now allowed (limit 4), the fifth still is not.
+        assertTrue(OfficialLoadFailurePolicy.mayReview(r.take(3),date,date,0,true,30000,keys.take(2).toSet()))
+        assertTrue(OfficialLoadFailurePolicy.mayReview(r.take(4),date,date,0,true,30000,keys.take(3).toSet()))
+        assertFalse(OfficialLoadFailurePolicy.mayReview(r,date,date,0,true,30000,keys.take(4).toSet()))
+    }
+    @Test fun nov19ThirdFrozenDailyStallIsReviewedButAFifthIsNot(){
+        fun stall(i:Int,before:Int)=AdAttempt("r",date,i,i.toLong(),AdState.UNCONFIRMED,false,false,100,"ad_timeout_95s",before,
+            dispatchPhase="DISPATCHED",adDepartureObserved=true)
+        val s3=stall(3,2);val s11=stall(11,9);val s17=stall(17,14)
+        val rows=listOf(good(1),good(2),s3)+(4..10).map{good(it).copy(officialBefore=it-2,officialAfter=it-1)}+s11+
+            (12..16).map{good(it).copy(officialBefore=it-3,officialAfter=it-2)}+s17
+        val two=setOf(OfficialLoadFailurePolicy.key(s3),OfficialLoadFailurePolicy.key(s11))
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,60_000,two,true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,15,true,false,60_000,two,true))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,60_000,two,false))
+        val four=two+setOf("x:1:1","x:2:2")
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,14,true,false,60_000,four,true))
     }
     @Test fun onlyVerifiedFailuresPermit26Or27Starts(){
         val a=fail(1,0);val key=OfficialLoadFailurePolicy.key(a)
@@ -39,7 +54,8 @@ class OfficialLoadFailureRegressionTest {
         assertFalse(OfficialLoadFailurePolicy.canReserve(24,24,true,true,rows,setOf(key)))
         assertFalse(OfficialLoadFailurePolicy.canReserve(24,24,true,false,rows+good(26),setOf(key)))
         assertEquals(27,OfficialLoadFailurePolicy.startCap(2))
-        assertEquals(25,OfficialLoadFailurePolicy.startCap(3))
+        assertEquals(29,OfficialLoadFailurePolicy.startCap(4))
+        assertEquals(25,OfficialLoadFailurePolicy.startCap(5))
     }
     @Test fun reviewedFailedRowIsPreservedAndUnknownStillBlocksRoutine(){
         val a=fail(1,0);val keys=setOf(OfficialLoadFailurePolicy.key(a))
