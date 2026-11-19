@@ -121,9 +121,17 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
     }
     private suspend fun reviewSubmittedLottery(task:String){
         val until=SystemClock.elapsedRealtime()+45_000
+        var pageSeen=0
         while(SystemClock.elapsedRealtime()<until){
             val f=frame()
             if(ui.nativeLabel(CheckinLotteryReview.TITLE)==null)break
+            if(CheckinLotteryReview.resultPage(ui.webView().first)){
+                if(++pageSeen>=CheckinLotteryReview.RESULT_PAGE_POLLS){
+                    val proof=capture("lottery_late_result_page_"+task)
+                    set(task,CheckinState.SUCCESS,"draw_completed_official_result_page_amount_not_read",proof,"楽天ポイント",null,false)
+                    return
+                }
+            }else pageSeen=0
             val result=CheckinLotteryReview.explicitResult(f.lines,ui.nativeLabel("start")!=null)
             if(result!=null){
                 val proof=capture("lottery_late_result_"+task)
@@ -240,11 +248,12 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
         var result:CheckinFrame?=null
         var until=SystemClock.elapsedRealtime()+45_000
         var reviewCloses=0
-        while(result==null&&SystemClock.elapsedRealtime()<until){
+        var pageSeen=0
+        while(result==null&&pageSeen<CheckinLotteryReview.RESULT_PAGE_POLLS&&SystemClock.elapsedRealtime()<until){
             delay(900)
             val (ids,labels)=ui.webView()
             if(RakutenReviewModalPolicy.mayClose(ids,labels,reviewCloses)){
-                reviewCloses++;capture("lottery_review_modal")
+                reviewCloses++;pageSeen=0;capture("lottery_review_modal")
                 if(ui.webNode(RakutenReviewModalPolicy.CLOSE_ID)){store.log(run,"LOTTERY review_modal_closed=$reviewCloses");until=maxOf(until,SystemClock.elapsedRealtime()+15_000)}
                 continue
             }
@@ -252,6 +261,14 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             if(already(next.text)){set(task,CheckinState.ALREADY_DONE,"official_already_participated",capture("lottery_no_chance"));return}
             val fresh=next.lines.any{Regex("当選|当たり|あたり|はずれ|ハズレ|残念|参加賞").containsMatchIn(it.text)&&!before.contains(it.text)}
             if(fresh&&CheckinReceiptPolicy.realReceipt(true,false,true,next.text))result=next
+            else if(CheckinLotteryReview.resultPage(ids))pageSeen++ else pageSeen=0
+        }
+        if(result==null&&pageSeen>=CheckinLotteryReview.RESULT_PAGE_POLLS){
+            val proof=capture("lottery_result_page_"+task)
+            store.log(run,"LOTTERY official_result_page=winpage amount=NOT_READ")
+            set(task,CheckinState.SUCCESS,"draw_completed_official_result_page_amount_not_read",proof,"楽天ポイント",null,false)
+            if(task=="lottery1"&&!done("lottery2"))set("lottery2",CheckinState.UNCONFIRMED,"second_chance_needs_official_current_control",proof)
+            return
         }
         val receipt=result?:run{set(task,CheckinState.UNCONFIRMED,"lottery_result_missing",capture("lottery_unknown"));return}
         val proof=capture("lottery_result_"+task)
