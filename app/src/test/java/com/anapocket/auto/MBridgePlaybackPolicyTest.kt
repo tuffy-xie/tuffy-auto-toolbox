@@ -16,5 +16,15 @@ class MBridgePlaybackPolicyTest {
         assertTrue(control(id="close",left=640,top=20,w=60,h=60));assertTrue(control(id="close",left=630,top=78,w=60,h=62))
         assertEquals(1,MBridgePlaybackPolicy.pick(listOf("close","close")));assertEquals(0,MBridgePlaybackPolicy.pick(listOf("m-playable-skip")))}
     @Test fun mixedOrEmptyCandidatesStayAmbiguous(){assertNull(MBridgePlaybackPolicy.pick(listOf("m-playable-skip","close")));assertNull(MBridgePlaybackPolicy.pick(emptyList()))}
+    @Test fun nov21ChineseCountdownBlocksEarlyX(){assertEquals(29,MBridgePlaybackPolicy.remaining(listOf("29s后即可获得奖励")));assertTrue(MBridgePlaybackPolicy.mustWait(listOf("29s后即可获得奖励")));assertFalse(MBridgePlaybackPolicy.mustWait(listOf("0s后即可获得奖励")))}
+    @Test fun nov21ContinueIsAButtonAndCloseItNeverMatches(){
+        val pre="us.ana_pocket.ANAPocket:id/"
+        assertTrue(MBridgePlaybackPolicy.continueControl(pre+"mbridge_video_common_alertview_cancel_button","android.widget.Button","Continue",true))
+        assertTrue(MBridgePlaybackPolicy.continueControl(null,"android.widget.TextView","Continue",true))
+        assertFalse(MBridgePlaybackPolicy.continueControl(pre+"mbridge_video_common_alertview_confirm_button","android.widget.Button","Close it",true))
+        assertFalse(MBridgePlaybackPolicy.continueControl(pre+"mbridge_video_common_alertview_confirm_button","android.widget.Button","Continue",true))
+        assertFalse(MBridgePlaybackPolicy.continueControl(pre+"mbridge_video_common_alertview_cancel_button","android.widget.Button","Continue",false))
+        val nov21=listOf("Confirm to close?","You will not be rewarded after closing the window","Close it","Continue")
+        assertTrue(MBridgePlaybackPolicy.mustWait(nov21));assertTrue(MBridgePlaybackPolicy.mayContinue(nov21,0))}
     @Test fun rewardCountdownAndForfeitWarningStillOverridePlayableControl(){assertFalse(control(labels=listOf("28s left to be rewarded")));assertFalse(control(labels=actual))}
 }

@@ -265,8 +265,8 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         val activeLabels = activeNodes.filter { it.isVisibleToUser }.map { ui.label(it) }
         if(mbridgeSurface()&&MBridgePlaybackPolicy.mustWait(activeLabels)){
             if(!AutoAccessibilityService.stopRequested&&MBridgePlaybackPolicy.mayContinue(activeLabels,playbackContinueRequests)){
-                val resume=activeNodes.filter{it.isVisibleToUser&&it.isEnabled&&it.isClickable&&
-                    it.className?.toString()=="android.widget.TextView"&&ui.label(it)=="Continue"}.singleOrNull()
+                val resume=activeNodes.filter{it.isVisibleToUser&&it.isEnabled&&
+                    MBridgePlaybackPolicy.continueControl(it.viewIdResourceName,it.className?.toString().orEmpty(),ui.label(it),it.isClickable)}.singleOrNull()
                 if(resume!=null&&AccountSafety.authorize(svc,"mbridge_same_ad_continue")){
                     playbackContinueRequests++
                     Evidence.write(svc,"ad_"+AutoAccessibilityService.currentRunId+"_mbridge_continue_"+System.currentTimeMillis()+".txt",

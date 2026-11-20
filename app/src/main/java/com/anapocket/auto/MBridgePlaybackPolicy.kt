@@ -2,13 +2,23 @@ package com.anapocket.auto
 
 /** Observed early-close warning pauses playback; Continue resumes this same ad, never a new one. */
 object MBridgePlaybackPolicy {
-    fun remaining(labels:List<String>):Int?=labels.mapNotNull{
-        Regex("^(\\d{1,3})s left to be rewarded$").matchEntire(it.trim())?.groupValues?.get(1)?.toIntOrNull()
+    // 11/21 #19 showed the same countdown in Chinese: "29s后即可获得奖励".
+    private val countdowns=listOf(Regex("^(\\d{1,3})s left to be rewarded$"),Regex("^(\\d{1,3})s后即可获得奖励$"))
+    fun remaining(labels:List<String>):Int?=labels.mapNotNull{l->
+        countdowns.firstNotNullOfOrNull{it.matchEntire(l.trim())}?.groupValues?.get(1)?.toIntOrNull()
     }.maxOrNull()
     fun warning(labels:List<String>)=labels.contains("Confirm to close?")&&
         labels.contains("You will not be rewarded after closing the window")&&labels.contains("Close it")&&labels.contains("Continue")
     fun mustWait(labels:List<String>)=warning(labels)||(remaining(labels)?:0)>0
     fun mayContinue(labels:List<String>,requests:Int)=warning(labels)&&requests in 0..1
+    /**
+     * 11/21 02:30: the warning's Continue is an android.widget.Button
+     * (mbridge_video_common_alertview_cancel_button, 390,916-600,972); a TextView-only match never found it and the
+     * dialog stayed up through two retries. Close it (the confirm_button) is never accepted.
+     */
+    fun continueControl(id:String?,nodeClass:String,label:String,clickable:Boolean)=clickable&&label.trim()=="Continue"&&
+        nodeClass in setOf("android.widget.Button","android.widget.TextView")&&
+        (id==null||id.substringAfterLast('/')=="mbridge_video_common_alertview_cancel_button")
     fun playableControl(id:String?,nodeClass:String,clickable:Boolean,left:Int,top:Int,width:Int,height:Int,
         screenWidth:Int,screenHeight:Int,density:Float,labels:List<String>):Boolean =
         // "close" is the end-card X (Nov 9, 630,78-690,140), a blank TextView beside the left-hand "privacyIcon".
