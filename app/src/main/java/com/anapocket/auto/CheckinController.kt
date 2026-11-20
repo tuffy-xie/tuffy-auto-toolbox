@@ -592,9 +592,10 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
     }
     private suspend fun tiktokClaim(){
         set("claim",CheckinState.RUNNING)
-        val f=tiktokSeek("claim"){reachable(TikTokCheckinPolicy.claimButton(it))||TikTokCheckinPolicy.unlockTitle(it)!=null||TikTokCheckinPolicy.unlockDone(it)}
-            ?:error("claim_area_not_found")
+        val f=tiktokSeek("claim"){reachable(TikTokCheckinPolicy.claimButton(it))||TikTokCheckinPolicy.unlockTitle(it)!=null||TikTokCheckinPolicy.unlockDone(it)||
+            TikTokCheckinPolicy.claimClaimed(it)}?:error("claim_area_not_found")
         val button=TikTokCheckinPolicy.claimButton(f.lines)
+        if(TikTokCheckinPolicy.claimClaimed(f.lines)){set("claim",CheckinState.ALREADY_DONE,"official_claim_button_claimed",capture("tiktok_claim_claimed"));return}
         if(button==null&&!TikTokCheckinPolicy.claimPresent(f.lines)){set("claim",CheckinState.ALREADY_DONE,"no_claimable_reward_card_today",capture("tiktok_claim_absent"));return}
         check(button!=null&&reachable(button)){"claim_button_not_in_reach"}
         if(reserved("claim")){set("claim",CheckinState.UNCONFIRMED,"prior_claim_submission_no_replay",capture("tiktok_claim_review"));return}
@@ -608,13 +609,19 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             if(!TikTokCheckinPolicy.claimPresent(r.lines)&&(TikTokCheckinPolicy.giftPage(r.lines)||TikTokCheckinPolicy.unlockTitle(r.lines)!=null||TikTokCheckinPolicy.checkinTitle(r.lines)!=null)){
                 set("claim",CheckinState.SUCCESS,"official_claim_card_removed_after_tap",capture("tiktok_claim_done"),"TikTokポイント",amount,amount!=null);return
             }
+            if(TikTokCheckinPolicy.claimClaimed(r.lines)){
+                set("claim",CheckinState.SUCCESS,"official_claim_button_claimed_after_tap",capture("tiktok_claim_done"),"TikTokポイント",amount,amount!=null);return
+            }
         }
         set("claim",CheckinState.UNCONFIRMED,"claim_card_still_present",capture("tiktok_claim_unconfirmed"))
     }
     private suspend fun tiktokUnlock(){
         set("unlock",CheckinState.RUNNING)
-        val f=tiktokSeek("unlock"){TikTokCheckinPolicy.unlockDone(it)||reachable(TikTokCheckinPolicy.unlockButton(it))}?:error("unlock_card_not_found")
+        val f=tiktokSeek("unlock"){TikTokCheckinPolicy.unlockDone(it)||reachable(TikTokCheckinPolicy.unlockButton(it))||TikTokCheckinPolicy.unlockNotOffered(it)}
+            ?:error("unlock_card_not_found")
         val button=TikTokCheckinPolicy.unlockButton(f.lines)
+        if(button==null&&TikTokCheckinPolicy.unlockNotOffered(f.lines)){
+            set("unlock",CheckinState.ALREADY_DONE,TikTokCheckinPolicy.UNLOCK_NOT_OFFERED,capture("tiktok_unlock_not_offered"));return}
         if(TikTokCheckinPolicy.unlockDone(f.lines)&&button==null){set("unlock",CheckinState.ALREADY_DONE,"official_unlock_done_today",capture("tiktok_unlock_done"));return}
         if(reserved("unlock")){set("unlock",CheckinState.UNCONFIRMED,"prior_unlock_submission_no_replay",capture("tiktok_unlock_review"));return}
         check(button!=null&&reachable(button)){"unlock_button_not_in_reach"}

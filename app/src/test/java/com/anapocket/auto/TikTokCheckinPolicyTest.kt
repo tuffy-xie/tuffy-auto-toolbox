@@ -47,6 +47,27 @@ class TikTokCheckinPolicyTest {
         assertNull(TikTokCheckinPolicy.claimButton(listOf(l("報酬 607",153,600,330,640),l("獲得する",284,1351,436,1390))))
         assertFalse(TikTokCheckinPolicy.claimPresent(listOf(l("明日チェックインしてを獲",127,502,600,540))))
     }
+    /** 11/20 12:31 and 13:12 (page reopened), 720x1650: the claimed card stays; no アンロック card anywhere. */
+    private val nov20=listOf(l("今すぐ広告を見てポイントを",160,210,550,245),l("GET 90",160,250,290,285),
+        l("今日の報酬を受け取る",60,425,465,475),l("報酬 830",155,520,325,560),l("獲得しました",270,630,450,670),
+        l("ボーナス報酬を",60,810,345,855),l("受け取る",500,830,620,875))
+    @Test fun nov20ClaimedButtonIsTheOfficialClaimedState(){
+        assertTrue(TikTokCheckinPolicy.claimClaimed(nov20))
+        assertNull(TikTokCheckinPolicy.claimButton(nov20))
+        assertFalse("the card is not a popup",TikTokCheckinPolicy.popup(nov20))
+        assertTrue(TikTokCheckinPolicy.unlockNotOffered(nov20))
+        // Before the tap: 獲得する, not claimed. A lone 獲得しました with no card is not proof either.
+        assertFalse(TikTokCheckinPolicy.claimClaimed(listOf(claimTitle,reward,claim)))
+        assertFalse(TikTokCheckinPolicy.claimClaimed(listOf(l("獲得しました",270,630,450,670))))
+        // The real receipt popup is still a popup.
+        assertTrue(TikTokCheckinPolicy.popup(nov20+l("おめでとう",250,300,470,340)))
+    }
+    @Test fun nov20UnlockStillPreferredWhenItsCardIsThere(){
+        val unlock=listOf(l("翌日報酬が受け取れます",60,1000,470,1040),l("アンロック",280,1300,440,1340))
+        assertFalse(TikTokCheckinPolicy.unlockNotOffered(nov20+unlock))
+        assertFalse(TikTokCheckinPolicy.unlockNotOffered(nov20+l("明日受け取りに来てください",60,1000,560,1040)))
+        assertFalse("claim not yet made",TikTokCheckinPolicy.unlockNotOffered(listOf(claimTitle,reward,claim)))
+    }
     @Test fun claimWithTitleStillWorks(){
         assertEquals(claim,TikTokCheckinPolicy.claimButton(listOf(title,checkin,claimTitle,reward,claim)))
         assertEquals("608",TikTokCheckinPolicy.claimAmount(listOf(claimTitle,reward,claim)))

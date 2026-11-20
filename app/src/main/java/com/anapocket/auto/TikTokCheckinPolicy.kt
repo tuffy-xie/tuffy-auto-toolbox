@@ -26,7 +26,7 @@ object TikTokCheckinPolicy {
     fun loaded(lines:List<CheckinLine>)=lines.any{val t=n(it.text);giftLabel.matches(t)||t.contains("獲得ポイント")||Regex("^首[页頁]$").matches(t)}
     /** OCR returns lines in block order, not reading order; a sentence split over two lines is only whole when sorted. */
     private fun reading(lines:List<CheckinLine>)=lines.sortedWith(compareBy({it.top},{it.left})).joinToString(""){n(it.text)}
-    fun popup(lines:List<CheckinLine>):Boolean {val t=reading(lines)
+    fun popup(lines:List<CheckinLine>):Boolean {val kept=claimedButton(lines);val t=reading(if(kept==null)lines else lines-kept)
         // 11/11 07:30: on launch the feed showed 「14日連続でチェックインして獲得しよう」 over the ギフト tab; it is closed with
         // its round ✕ and the check-in is then done on the gift page like any other day.
         return Regex("参加する|始める|リマインドする|おめでとう|獲得しました|受け取りに来て|チャンス|連続チェックインに失敗|$STREAK_INVITE").containsMatchIn(t)}
@@ -57,6 +57,23 @@ object TikTokCheckinPolicy {
         val r=claimReward(lines)?:return null
         return below(lines,r,200).firstOrNull{n(it.text)=="獲得する"}
     }
+    /**
+     * 11/20 12:31: after 獲得する the claim card stayed and its button read 「獲得しました」; 20 s later Tuffy still called it
+     * unconfirmed. The page reopened at 13:12 showed the same card (報酬 830 · 獲得しました). That button is the official
+     * claimed state. It sits inside the card, so it is not a popup and is never tapped.
+     */
+    fun claimedButton(lines:List<CheckinLine>):CheckinLine?{
+        claimTitle(lines)?.let{a->return below(lines,a,360).firstOrNull{n(it.text)=="獲得しました"}}
+        val r=claimReward(lines)?:return null
+        return below(lines,r,200).firstOrNull{n(it.text)=="獲得しました"}
+    }
+    fun claimClaimed(lines:List<CheckinLine>)=claimedButton(lines)!=null&&claimButton(lines)==null
+    /**
+     * Until 11/19 the claimed card turned into 翌日報酬が受け取れます / アンロック at once. On 11/20 the claimed card stayed
+     * in that place, also after the page was reopened, and no アンロック card appeared anywhere: nothing to unlock today.
+     */
+    const val UNLOCK_NOT_OFFERED="official_unlock_not_offered_claimed_card_kept"
+    fun unlockNotOffered(lines:List<CheckinLine>)=claimClaimed(lines)&&unlockTitle(lines)==null&&!unlockDone(lines)
     /** 「報酬 608」 between the claim title and its button. */
     fun claimAmount(lines:List<CheckinLine>):String?{val b=claimButton(lines)?:return null
         val a=claimTitle(lines);val r=claimReward(lines)

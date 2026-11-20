@@ -181,6 +181,6 @@ class CheckinStore(private val ctx:Context,val app:CheckinApp) {
     fun log(run:String,message:String){File(dir(run),"events.log").appendText(TokyoDate.time()+" "+message+"\n")}
     fun summary(date:String=TokyoDate.of()):String {
         val rows=all(date);if(rows.isEmpty())return "今日尚未执行"
-        return tasks().joinToString("\n"){task->val r=read(task,date);taskLabel(task)+"："+stateLabel(r?.optString("state"))+(if(r?.optString("failureReason")?.endsWith("_no_prize")==true)" · 未中奖" else if(r!=null&&r.has("rewardAmount")&&!r.isNull("rewardAmount"))" · "+r.optString("rewardAmount")+" "+r.optString("rewardType")+(if(r.optBoolean("rewardConfirmed"))" 已到账" else " 待入账核对") else "")}
+        return tasks().joinToString("\n"){task->val r=read(task,date);taskLabel(task)+"："+(if(r?.optString("failureReason")==TikTokCheckinPolicy.UNLOCK_NOT_OFFERED)"官方今日未提供" else stateLabel(r?.optString("state")))+(if(r?.optString("failureReason")?.endsWith("_no_prize")==true)" · 未中奖" else if(r!=null&&r.has("rewardAmount")&&!r.isNull("rewardAmount"))" · "+r.optString("rewardAmount")+" "+r.optString("rewardType")+(if(r.optBoolean("rewardConfirmed"))" 已到账" else " 待入账核对") else "")}
     }
 }
