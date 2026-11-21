@@ -97,4 +97,27 @@ class StallSingleBackTest {
         assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(listOf(cap),date,date,6,true,false,60_000,emptySet(),false))
         assertFalse(OfficialLoadFailurePolicy.blankStall(a.copy(failureReason="completion_not_confirmed")))
     }
+    @Test fun nov21UnprovenTimeoutIsReviewedOnlyAfterThirtyQuietMinutes() {
+        val date="2026-11-21"
+        // Real rows: #13 timed out at 12 and was reviewed; #19 timed out at 17 behind a Mintegral dialog, no frozen proof.
+        val r13=AdAttempt(date=date,runId="ADb215930c",index=13,startedAt=1795195104356L,finishedAt=1795195199785L,officialBefore=12,
+            state=AdState.UNCONFIRMED,dispatchPhase="DISPATCHED",adDepartureObserved=true,failureReason="ad_timeout_95s")
+        val r19=r13.copy(runId="AD970f78de",index=19,startedAt=1795195743552L,finishedAt=1795195839153L,officialBefore=17)
+        val rows=listOf(r13,r19);val reviewed=setOf(OfficialLoadFailurePolicy.key(r13))
+        val m30=OfficialLoadFailurePolicy.QUIET_RETURN_MS
+        // 04:12 review: 102 minutes later, window gone, counter still 17.
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,true,false,1795201926452L-r19.finishedAt,reviewed,false))
+        assertTrue(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,true,false,m30,reviewed,false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,true,false,m30-1,reviewed,false))
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,false,false,m30,reviewed,false))  // ad window still there
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,18,true,false,m30,reviewed,false))   // counter moved
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,true,true,m30,reviewed,false))    // a receipt exists
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,true,false,m30,emptySet(),false)) // #13 unresolved
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,"2026-11-22",17,true,false,m30,reviewed,false))
+        val four=(1..4).map{"x$it"}.toSet()
+        assertFalse(OfficialLoadFailurePolicy.mayReviewBlank(rows,date,date,17,true,false,m30,reviewed+four,false))
+        // After the review #19 counts as resolved, while its own row stays UNCONFIRMED.
+        assertTrue(OfficialLoadFailurePolicy.resolved(r19,reviewed+OfficialLoadFailurePolicy.key(r19)))
+        assertEquals(AdState.UNCONFIRMED,r19.state)
+    }
 }

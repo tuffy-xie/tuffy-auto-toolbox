@@ -49,12 +49,15 @@ object OfficialLoadFailurePolicy {
     /**
      * [stallVerified]: the original ad was proven frozen (same evidence unchanged for 30 s) before its window went away.
      * A window that closed without that proof (a person watched or closed it, the SDK ended on its own) and an unchanged
-     * counter cannot show that no reward is still coming, so it never frees a new attempt; the day's ADS stay BLOCKED.
+     * counter cannot show at 60 s that no reward is still coming, so it waits [QUIET_RETURN_MS] like a quiet return.
+     * 11/21 #19 (user-approved): a Mintegral "Confirm to close?" dialog paused the ad, so no frozen proof was recorded; its
+     * window was gone and the counter stayed 17 for four hours while the remaining 8 ads were blocked all day.
+     * The original row stays UNCONFIRMED and is never replayed; only one new attempt is freed, within [MAX_REVIEWS].
      */
     fun mayReviewBlank(rows:List<AdAttempt>,date:String,today:String,counter:Int?,adClosed:Boolean,receipt:Boolean,elapsed:Long,reviewed:Set<String>,stallVerified:Boolean):Boolean {
         val a=rows.lastOrNull()?:return false
         return date==today&&a.date==date&&adClosed&&!receipt&&reviewed.size<MAX_REVIEWS&&key(a) !in reviewed&&
-            (blankStall(a)&&stallProofSatisfied(a,stallVerified)&&elapsed>=60_000||quietReturn(a)&&elapsed>=QUIET_RETURN_MS||
+            (blankStall(a)&&(stallProofSatisfied(a,stallVerified)&&elapsed>=60_000||elapsed>=QUIET_RETURN_MS)||quietReturn(a)&&elapsed>=QUIET_RETURN_MS||
                 undispatched(a)&&elapsed>=60_000)&&
             counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }

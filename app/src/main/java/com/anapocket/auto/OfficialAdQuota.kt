@@ -94,11 +94,14 @@ object OfficialAdStore {
     }
     @Synchronized fun reviewBlankStall(c:Context,date:String,run:String,counter:Int,adClosed:Boolean):Boolean{
         val rows=attempts(c,date);val a=rows.lastOrNull()?:return false;val keys=reviewKeys(c,date,rows)
+        val stallVerified=StalledAdRestart.dailyStallReviewed(c,date,a)
         if(!OfficialLoadFailurePolicy.mayReviewBlank(rows,date,TokyoDate.of(),counter,adClosed,hasRecordedReceipt(c,date,a),System.currentTimeMillis()-a.finishedAt,keys,
-                StalledAdRestart.dailyStallReviewed(c,date,a)))return false
+                stallVerified))return false
         val list=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));list.put(JSONObject().put("key",OfficialLoadFailurePolicy.key(a))
             .put("date",date).put("counter",counter).put("source",if(OfficialLoadFailurePolicy.quietReturn(a))"returned_without_receipt_30min_fresh_unchanged_counter"
-                else if(OfficialLoadFailurePolicy.undispatched(a))"reserved_never_armed_fresh_unchanged_counter" else "timed_out_ad_closed_and_fresh_unchanged_counter")
+                else if(OfficialLoadFailurePolicy.undispatched(a))"reserved_never_armed_fresh_unchanged_counter"
+                else if(!OfficialLoadFailurePolicy.stallProofSatisfied(a,stallVerified))"timed_out_no_frozen_proof_closed_30min_fresh_unchanged_counter"
+                else "timed_out_ad_closed_and_fresh_unchanged_counter")
             .put("reviewRunId",run).put("checkedAt",System.currentTimeMillis()))
         check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
         return true
