@@ -63,6 +63,13 @@ object TaskExitPolicy {
     fun lockConfirmed(screenOff:Boolean,keyguardLocked:Boolean)=screenOff&&keyguardLocked
     fun allowed(finished:Boolean,stopped:Boolean,pending:Boolean,adSurface:Boolean,anaForeground:Boolean)=
         finished&&!stopped&&!pending&&!adSurface&&anaForeground
+    /**
+     * 11/22 user request: every run ends with the screen locked. 11/21 (six BLOCKED retries), 11/22 03:03 (watchdog stop)
+     * and 11/22 10:06 (PARTIALLY_COMPLETED with an unconfirmed travel ad) skipped the whole exit and left ANA on screen.
+     * Such a run keeps its scene (no Home, no app cleanup) for the next retry, which wakes and unlocks the phone first;
+     * only the user's own stop leaves the screen on.
+     */
+    fun lockUnfinished(stopReason:String,sameRun:Boolean,lockAfter:Boolean)=lockAfter&&sameRun&&stopReason!="user"
 }
 
 /** A notification can wake a locked phone shortly after the system lock action. */

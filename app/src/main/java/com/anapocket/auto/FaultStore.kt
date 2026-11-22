@@ -135,7 +135,15 @@ object TaskExit {
         val n=ui.foregroundNodes().filter{it.isVisibleToUser};val labels=n.map{ui.label(it)}
         val ids=n.mapNotNull{it.viewIdResourceName?.substringAfterLast('/')}.toSet()
         val native=HomeNavigationPolicy.nativeDetail(ui.currentPackage(),labels,ids)||labels.any{it in setOf("ホーム","ためる","参加可能","広告視聴")}
-        if(!TaskExitPolicy.allowed(finished,AutoAccessibilityService.stopRequested,pending(),!native&&AdUiClose(svc).isAdSurface(),ui.currentPackage()==StartupPolicy.ANA))return
+        if(!TaskExitPolicy.allowed(finished,AutoAccessibilityService.stopRequested,pending(),!native&&AdUiClose(svc).isAdSurface(),ui.currentPackage()==StartupPolicy.ANA)){
+            fun mayLock()=TaskExitPolicy.lockUnfinished(AutoAccessibilityService.stopReason,AutoAccessibilityService.currentRunId==run,lockAfter)
+            if(!mayLock())return
+            val kept=JSONObject().put("runId",run).put("date",date).put("startedAt",System.currentTimeMillis()).put("finished",finished)
+                .put("scenePreserved",true).put("returnedHome",false).put("foregroundAtExit",ui.currentPackage())
+            Logger.i("EXIT","run=$run unfinished; scene kept, screen lock only")
+            lockScreen(svc,run,kept,{Evidence.write(svc,"exit_"+run+".json",kept.toString(2))},{mayLock()})
+            return
+        }
         val proof=JSONObject().put("runId",run).put("date",date).put("startedAt",System.currentTimeMillis()).put("lockAfter",lockAfter).put("nextStartLaunchesAna",true)
         fun save(){Evidence.write(svc,"exit_"+run+".json",proof.toString(2))}
         proof.put("cleanup",ManagedAppCleanup.clearOthers(svc,{!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.currentRunId==run&&AccountSafetyStore.pending(svc)==null},{block->val owner=CheckinRuntime.ownership.owner();if(owner?.app=="ANA"&&owner.run==run&&!AutoAccessibilityService.stopRequested)CheckinRuntime.ownership.action(owner,android.os.SystemClock.elapsedRealtime(),false,block) else false}));save()
@@ -148,11 +156,16 @@ object TaskExit {
         if(!TaskExitPolicy.canLock(left,AutoAccessibilityService.stopRequested,pending(),AutoAccessibilityService.currentRunId==run)){
             proof.put("lockSkipped","state_changed_before_lock");save();return
         }
+        val confirmed=lockScreen(svc,run,proof,{save()}){TaskExitPolicy.canLock(left,AutoAccessibilityService.stopRequested,pending(),AutoAccessibilityService.currentRunId==run)}?:return
+        if(!confirmed){FaultStore.capture(svc,run,"exit","task_complete_but_lock_not_confirmed");Notifier.finishIssue(svc,run)}
+    }
+    /** Locks and waits for a stable screen-off keyguard; null when [mayLock] turned false during verification. */
+    private suspend fun lockScreen(svc:AutoAccessibilityService,run:String,proof:JSONObject,save:()->Unit,mayLock:()->Boolean):Boolean? {
         val km=svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
         val pm=svc.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
         var confirmed=false;var tries=0
         while(!confirmed&&tries<2){
-            if(!TaskExitPolicy.canLock(left,AutoAccessibilityService.stopRequested,pending(),AutoAccessibilityService.currentRunId==run))break
+            if(!mayLock())break
             tries++;proof.put("lockRequestedAt",System.currentTimeMillis()).put("lockAttempts",tries);save()
             val accepted=android.os.Build.VERSION.SDK_INT>=28&&svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
             proof.put("lockActionAccepted",accepted)
@@ -160,13 +173,13 @@ object TaskExit {
             val verifyUntil=android.os.SystemClock.elapsedRealtime()+6500L
             proof.put("requiredStableMillis",2500).put("verificationWindowMillis",6500)
             while(!confirmed&&android.os.SystemClock.elapsedRealtime()<verifyUntil){
-                if(!TaskExitPolicy.canLock(left,AutoAccessibilityService.stopRequested,pending(),AutoAccessibilityService.currentRunId==run)){proof.put("lockSkipped","state_changed_during_verification");save();return}
+                if(!mayLock()){proof.put("lockSkipped","state_changed_during_verification");save();return null}
                 delay(250)
                 confirmed=stable.observe(android.os.SystemClock.elapsedRealtime(),!pm.isInteractive,km.isKeyguardLocked)
             }
         }
         proof.put("screenOff",!pm.isInteractive).put("keyguardLocked",km.isKeyguardLocked).put("lockConfirmed",confirmed).put("finishedAt",System.currentTimeMillis());save()
         Logger.i("EXIT","run=$run lockConfirmed=$confirmed attempts=$tries screenOff="+!pm.isInteractive+" keyguard="+km.isKeyguardLocked)
-        if(!confirmed){FaultStore.capture(svc,run,"exit","task_complete_but_lock_not_confirmed");Notifier.finishIssue(svc,run)}
+        return confirmed
     }
 }

@@ -149,11 +149,14 @@ object CheckinRuntime {
                         val bonusError=!atTaskHome&&app==CheckinApp.RAKUTEN&&ui.nativeLabel(CheckinBonusPolicy.TITLE)!=null&&CheckinBonusPolicy.loadingError(ui.nativeText())
                         val unfinished=!atTaskHome&&store.all(date).any{it.optBoolean("reserved")&&it.optString("state") in setOf("RUNNING","UNCONFIRMED","PREEMPTED","NEEDS_USER_ACTION")&&!(it.optString("taskId")=="bonus"&&bonusError)}
                         if(CheckinExitPolicy.preserveScene(ui.pkg()==app.pkg,reason=="manual_probe",store.hold().isNotBlank(),unfinished)){
-                            store.dir(id).resolve("exit.json").writeText(org.json.JSONObject().put("runId",id)
+                            val kept=org.json.JSONObject().put("runId",id)
                                 .put("scenePreserved",true).put("returnedHome",false).put("lockConfirmed",false)
                                 .put("forcedProcessTermination",false).put("reason","unfinished_reserved_scene_or_human_required")
-                                .put("finishedAt",System.currentTimeMillis()).toString(2))
+                                .put("finishedAt",System.currentTimeMillis())
+                            store.dir(id).resolve("exit.json").writeText(kept.toString(2))
                             store.log(id,"SCENE_PRESERVED no_new_submission owner_will_be_released=true")
+                            // The scene stays as it is (no Home, no cleanup); only the screen is locked.
+                            withTimeoutOrNull(20_000){ui.lockAfterCheckin(kept){store.dir(id).resolve("exit.json").writeText(kept.toString(2))}}
                         }else withTimeoutOrNull(30_000){ui.finish()}
                     }
                     synchronized(this@CheckinRuntime){ownership.release(token);if(run==id){activeApp=null;job=null;CheckinForeground.stop(ctx);CheckinOcr.stop(ctx)}}
@@ -377,7 +380,7 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
         if(!owns())return
         val store=CheckinStore(svc,app);val proof=org.json.JSONObject().put("runId",token.run).put("forcedProcessTermination",false).put("startedAt",System.currentTimeMillis())
         fun save(){store.dir(token.run).resolve("exit.json").writeText(proof.toString(2))}
-        if(pkg()!=app.pkg){proof.put("returnedHome",false).put("reason","foreground_not_owned_app");save();return}
+        if(pkg()!=app.pkg){proof.put("returnedHome",false).put("reason","foreground_not_owned_app");save();lockAfterCheckin(proof){save()};return}
         // 11/10 user request: when a task is done, close every app except Tuffy, then lock.
         proof.put("cleanup",ManagedAppCleanup.clearOthers(svc,{owns()},{block->if(!owns())false else CheckinRuntime.ownership.action(token,SystemClock.elapsedRealtime(),CheckinRuntime.protected(svc),block)}));save()
         if(!owns())return
@@ -388,7 +391,15 @@ class CheckinUi(val svc:AutoAccessibilityService,val app:CheckinApp,private val 
         while(SystemClock.elapsedRealtime()<until&&stableHome<3){delay(250);if(!owns())return;after=pkg();stableHome=if(after==homePackage)stableHome+1 else 0}
         val returned=stableHome>=3
         proof.put("foregroundAfterHome",after).put("returnedHome",returned).put("processState","not_force_stopped");save()
-        if(!returned||CheckinRuntime.hasPending(svc))return
+        lockAfterCheckin(proof){save()}
+    }
+    /**
+     * 11/22 user request: every check-in ends with the screen locked, also when Home was not confirmed or the scene is kept
+     * for a human (11/22 TikTok NEEDS_USER_ACTION stayed on screen). Skipped only while another check-in is already due,
+     * since it starts 0.7 s later and would unlock again; it locks when it ends.
+     */
+    suspend fun lockAfterCheckin(proof:org.json.JSONObject,save:()->Unit){
+        if(!CheckinExitPolicy.lockAfter(owns(),CheckinRuntime.hasPending(svc)))return
         val km=svc.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         var confirmed=false;var attempts=0
         while(!confirmed&&attempts<2){

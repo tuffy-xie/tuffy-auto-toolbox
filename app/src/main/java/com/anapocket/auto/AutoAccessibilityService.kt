@@ -276,7 +276,9 @@ class AutoAccessibilityService : AccessibilityService() {
                 runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"STOPPED")}
                 Logger.w("ROUTINE","run=$run cancelled reason="+stopReason.ifBlank{"lifecycle"})
                 throw e
-            }catch(e:Exception){endDetail=e.message.orEmpty();runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"BLOCKED")};Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");runCatching{FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}}
+            }catch(e:Exception){endDetail=e.message.orEmpty();runCatching{AnaProcessRecovery.controllerFinished(this@AutoAccessibilityService,"BLOCKED")};Logger.e("ROUTINE","execution failed",e);Notifier.routineSummary(this@AutoAccessibilityService,run,"每日流程中止，请查看手机记录");runCatching{FaultStore.capture(this@AutoAccessibilityService,run,"routine",e.message.orEmpty())}
+                // A failed run also ends with the screen locked (scene kept); the retry wakes and unlocks first.
+                try{TaskExit.finish(this@AutoAccessibilityService,run,false)}catch(c:kotlinx.coroutines.CancellationException){throw c}catch(x:Exception){Logger.e("EXIT","run=$run lock after failure: "+x.message,x)}}
             finally{
                 // Read before the fields are reset below; the retry decision needs the real ending.
                 val finalState=RoutineRetryPolicy.terminalState(endState,if(currentRunId==run)stopReason else "",cancelled)
