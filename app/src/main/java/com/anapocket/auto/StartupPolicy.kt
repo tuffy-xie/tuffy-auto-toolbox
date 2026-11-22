@@ -49,6 +49,14 @@ object StartupPolicy {
      */
     fun mayRepressUnrewardedLogin(date:String,recordedDate:String?,state:String?,reason:String?,adObserved:Boolean,repressRequests:Int,adInFront:Boolean)=
         recordedDate==date&&state=="UNCONFIRMED"&&reason=="login_reward_not_confirmed_after_offer_return"&&adObserved&&repressRequests<1&&!adInFront
+    /**
+     * 11/19, 11/20, 11/22: the video returned with ANA's offer still shown, the run restarted ANA at once (11/18 rule),
+     * and ANA did not show the login dialog again, so the once-a-day press approved on 11/14 never came: three days stayed
+     * UNCONFIRMED. On 11/18 the same press, made on the still-open dialog, got the 100pt. The press now happens right
+     * away on that same dialog; the ANA restart stays as the fallback when the offer is still shown after it.
+     */
+    fun repressInPlace(reason:String?,repressRequests:Int,adObserved:Boolean)=
+        reason=="login_reward_not_confirmed_after_offer_return"&&adObserved&&repressRequests<1
     /** A terminal unknown reward stays unknown; only its recognized native offer may be dismissed. */
     fun mayLeaveUnconfirmedOffer(date:String,recordedDate:String?,state:String?,finishedAt:Long,knownLogin:Boolean,sdkActivity:Boolean)=
         recordedDate==date&&state in setOf("UNCONFIRMED","FAILED")&&finishedAt>0&&knownLogin&&!sdkActivity

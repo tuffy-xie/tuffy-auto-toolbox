@@ -153,7 +153,14 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                     {!blocked()&&TokyoDate.of()==date&&loginButton()?.let{tap(it)}==true})
                 if(!sent){row.put("state","UNCONFIRMED").put("reason","login_dispatch_unconfirmed");LoginBonusStore.save(svc,date,row);return StartupResult(false,"UNCONFIRMED",closed,"签到提交尚未确认，原记录保留待核对")}
                 val watched=observeAd(run,date,row)
-                if(!watched)return StartupResult(false,row.optString("state"),closed,row.optString("reason"))
+                if(!watched){
+                    if(StartupPolicy.repressInPlace(row.optString("reason"),row.optInt("repressRequests"),row.optBoolean("adDepartureObserved"))){
+                        // The loop finds the same dialog and the approved press runs at once ([StartupPolicy.repressInPlace]).
+                        Logger.i("STARTUP","run=$run login offer_still_shown_after_ad; same dialog kept for the one approved press")
+                        stable=0;until=SystemClock.elapsedRealtime()+15_000L;continue
+                    }
+                    return StartupResult(false,row.optString("state"),closed,row.optString("reason"))
+                }
                 stable=0;until=SystemClock.elapsedRealtime()+15_000L;continue
             }
             if(sdkSurface() || AdSignals.playSheet(ui.currentPackage(),ls)){
