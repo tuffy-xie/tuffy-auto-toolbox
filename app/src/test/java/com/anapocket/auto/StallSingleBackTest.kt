@@ -120,6 +120,24 @@ class StallSingleBackTest {
         assertTrue(OfficialLoadFailurePolicy.resolved(r19,reviewed+OfficialLoadFailurePolicy.key(r19)))
         assertEquals(AdState.UNCONFIRMED,r19.state)
     }
+    @Test fun nov22EveryWrittenReviewSourceIsAcceptedWhenReadBack() {
+        val date="2026-11-22"
+        // Real row: daily #2 timed out at 03:30:48 with no frozen proof and was reviewed at 09:21:41.
+        val d2=AdAttempt(date=date,runId="AD2ecadacb-33b6-4601-836e-8aacdaf14db3",index=2,startedAt=1795285752452L,finishedAt=1795285848079L,
+            officialBefore=1,state=AdState.UNCONFIRMED,dispatchPhase="DISPATCHED",adDepartureObserved=true,failureReason="ad_timeout_95s")
+        val unproven=OfficialLoadFailurePolicy.blankReviewSource(d2,false)
+        assertEquals(OfficialLoadFailurePolicy.SOURCE_BLANK_UNPROVEN,unproven)
+        assertTrue(OfficialLoadFailurePolicy.reviewSourceMatches(unproven,d2))
+        assertTrue(OfficialLoadFailurePolicy.reviewSourceMatches(OfficialLoadFailurePolicy.blankReviewSource(d2,true),d2))
+        val quiet=d2.copy(failureReason="completion_not_confirmed")
+        assertTrue(OfficialLoadFailurePolicy.reviewSourceMatches(OfficialLoadFailurePolicy.blankReviewSource(quiet,false),quiet))
+        val reserved=d2.copy(failureReason="process_interrupted",dispatchPhase="RESERVED",adDepartureObserved=false)
+        assertTrue(OfficialLoadFailurePolicy.reviewSourceMatches(OfficialLoadFailurePolicy.blankReviewSource(reserved,false),reserved))
+        // A source never matches a row of another kind, and an unknown source is never accepted.
+        assertFalse(OfficialLoadFailurePolicy.reviewSourceMatches(unproven,quiet))
+        assertFalse(OfficialLoadFailurePolicy.reviewSourceMatches(OfficialLoadFailurePolicy.SOURCE_LOAD_FAILURE,d2))
+        assertFalse(OfficialLoadFailurePolicy.reviewSourceMatches("something_else",d2))
+    }
     @Test fun nov22FinishedTravelUnknownsNoLongerHoldTheTimedOutDailyAdWindow() {
         // Real: the only unresolved travel ad was MOV_ANY 5km #5 (03:02:48-03:03:00, stopped by the watchdog);
         // daily #2 started 03:29:12 and its AppLovin end card stayed open until the day was given up.

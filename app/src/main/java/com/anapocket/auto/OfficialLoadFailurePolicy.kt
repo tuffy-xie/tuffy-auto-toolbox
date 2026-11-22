@@ -61,6 +61,25 @@ object OfficialLoadFailurePolicy {
                 undispatched(a)&&elapsed>=60_000)&&
             counter==a.officialBefore&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
     }
+    const val SOURCE_LOAD_FAILURE="native_load_failure_and_fresh_unchanged_counter"
+    const val SOURCE_BLANK="timed_out_ad_closed_and_fresh_unchanged_counter"
+    const val SOURCE_BLANK_UNPROVEN="timed_out_no_frozen_proof_closed_30min_fresh_unchanged_counter"
+    const val SOURCE_QUIET_RETURN="returned_without_receipt_30min_fresh_unchanged_counter"
+    const val SOURCE_UNDISPATCHED="reserved_never_armed_fresh_unchanged_counter"
+    /** The source a blank/quiet/undispatched review is written with; [reviewSourceMatches] must accept it when read back. */
+    fun blankReviewSource(a:AdAttempt,stallVerified:Boolean)=if(quietReturn(a))SOURCE_QUIET_RETURN else if(undispatched(a))SOURCE_UNDISPATCHED
+        else if(!stallProofSatisfied(a,stallVerified))SOURCE_BLANK_UNPROVEN else SOURCE_BLANK
+    /**
+     * Every written review is re-validated on each read. 11/22 09:21: the 30-minute source added on 11/21 was written but
+     * not accepted here, so the first read after the review threw load_review_invalid and stopped the run.
+     */
+    fun reviewSourceMatches(source:String,row:AdAttempt)=when(source){
+        SOURCE_LOAD_FAILURE->failedLoad(row)
+        SOURCE_BLANK,SOURCE_BLANK_UNPROVEN->blankStall(row)
+        SOURCE_QUIET_RETURN->quietReturn(row)
+        SOURCE_UNDISPATCHED->undispatched(row)
+        else->false
+    }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {
         val a=rows.lastOrNull()?:return false
         return date==today&&a.date==date&&nativeProof&&elapsed>=30_000&&reviewed.size<MAX_REVIEWS&&key(a) !in reviewed&&

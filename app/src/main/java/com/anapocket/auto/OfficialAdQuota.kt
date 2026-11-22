@@ -60,10 +60,7 @@ object OfficialAdStore {
             val p=a.getJSONObject(it);val row=rows.singleOrNull{r->OfficialLoadFailurePolicy.key(r)==p.getString("key")}
                 ?:error("load_review_binding_missing")
             check(p.getString("date")==date&&p.getInt("counter")==row.officialBefore&&
-                (p.getString("source")=="native_load_failure_and_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.failedLoad(row)||
-                    p.getString("source")=="timed_out_ad_closed_and_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.blankStall(row)||
-                    p.getString("source")=="returned_without_receipt_30min_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.quietReturn(row)||
-                    p.getString("source")=="reserved_never_armed_fresh_unchanged_counter"&&OfficialLoadFailurePolicy.undispatched(row))){"load_review_invalid"}
+                OfficialLoadFailurePolicy.reviewSourceMatches(p.getString("source"),row)){"load_review_invalid"}
             p.getString("key")
         };check(keys.distinct().size==keys.size){"duplicate_load_review"};return keys.toSet()
     }
@@ -87,7 +84,7 @@ object OfficialAdStore {
         val proof=nativeLoadFailureProof(c,date,a)?:return false
         if(!OfficialLoadFailurePolicy.mayReview(rows,date,TokyoDate.of(),counter,true,System.currentTimeMillis()-a.finishedAt,keys))return false
         val list=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));list.put(JSONObject().put("key",OfficialLoadFailurePolicy.key(a))
-            .put("date",date).put("counter",counter).put("source","native_load_failure_and_fresh_unchanged_counter")
+            .put("date",date).put("counter",counter).put("source",OfficialLoadFailurePolicy.SOURCE_LOAD_FAILURE)
             .put("nativeFault",proof).put("reviewRunId",run).put("checkedAt",System.currentTimeMillis()))
         check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
         return true
@@ -98,10 +95,7 @@ object OfficialAdStore {
         if(!OfficialLoadFailurePolicy.mayReviewBlank(rows,date,TokyoDate.of(),counter,adClosed,hasRecordedReceipt(c,date,a),System.currentTimeMillis()-a.finishedAt,keys,
                 stallVerified))return false
         val list=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));list.put(JSONObject().put("key",OfficialLoadFailurePolicy.key(a))
-            .put("date",date).put("counter",counter).put("source",if(OfficialLoadFailurePolicy.quietReturn(a))"returned_without_receipt_30min_fresh_unchanged_counter"
-                else if(OfficialLoadFailurePolicy.undispatched(a))"reserved_never_armed_fresh_unchanged_counter"
-                else if(!OfficialLoadFailurePolicy.stallProofSatisfied(a,stallVerified))"timed_out_no_frozen_proof_closed_30min_fresh_unchanged_counter"
-                else "timed_out_ad_closed_and_fresh_unchanged_counter")
+            .put("date",date).put("counter",counter).put("source",OfficialLoadFailurePolicy.blankReviewSource(a,stallVerified))
             .put("reviewRunId",run).put("checkedAt",System.currentTimeMillis()))
         check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
         return true
