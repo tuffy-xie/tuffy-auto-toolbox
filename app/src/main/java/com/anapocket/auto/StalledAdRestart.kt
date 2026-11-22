@@ -81,10 +81,19 @@ object StalledAdRestart {
         }
         else -> null
     }
-    @Synchronized private fun reserve(c:Context,date:String,b:Bound,run:String):Boolean {
+    @Synchronized private fun reserve(c:Context,date:String,b:Bound,run:String,removalTry:Int=1):Boolean {
         val p=prefs(c)
-        val marker=JSONObject().put("date",date).put("identity",b.key).put("controllerRun",run).put("requestedAt",System.currentTimeMillis()).put("state","REQUESTED").put("reason",b.reason).put("noRewardInferred",true)
+        val marker=JSONObject().put("date",date).put("identity",b.key).put("controllerRun",run).put("requestedAt",System.currentTimeMillis()).put("state","REQUESTED").put("reason",b.reason).put("noRewardInferred",true).put("removalTries",removalTry)
         return StalledAdRestartPolicy.reserve(p.contains(b.key),p.getInt("count_"+date,0),StalledAdRestartPolicy.OPEN_AD_RESTART_LIMIT){
+            p.edit().putString(b.key,marker.toString()).putInt("count_"+date,p.getInt("count_"+date,0)+1).commit()
+        }
+    }
+    /** The second try after a removal that left the ANA task in place; it still counts toward the daily restart limit. */
+    @Synchronized private fun reserveAgain(c:Context,date:String,b:Bound,run:String,removalTry:Int):Boolean {
+        val p=prefs(c);val prior=p.getString(b.key,null)?.let{JSONObject(it)}?:return false
+        if(!StalledAdRestartPolicy.mayRetryDailyRemoval(prior.optString("state"),prior.optInt("removalTries",1)))return false
+        val marker=prior.put("controllerRun",run).put("requestedAt",System.currentTimeMillis()).put("state","REQUESTED").put("removalTries",removalTry)
+        return StalledAdRestartPolicy.reserve(false,p.getInt("count_"+date,0),StalledAdRestartPolicy.OPEN_AD_RESTART_LIMIT){
             p.edit().putString(b.key,marker.toString()).putInt("count_"+date,p.getInt("count_"+date,0)+1).commit()
         }
     }
@@ -109,7 +118,10 @@ object StalledAdRestart {
         if(StalledAdRestartPolicy.travelHoldsDailyRestart(a.startedAt,TravelSelection.unresolvedAdTimes(svc,date))){
             Logger.i("ADBLANK","run=$run travel_ad_may_own_window; daily restart held");return false}
         val b=bound(svc,date,"ADS")?:return false
-        if(prefs(svc).contains(b.key)||System.currentTimeMillis()-a.startedAt<95_000L)return false
+        val prior=prefs(svc).getString(b.key,null)?.let{JSONObject(it)}
+        val tries=prior?.optInt("removalTries",1)?:0
+        if(prior!=null&&!StalledAdRestartPolicy.mayRetryDailyRemoval(prior.optString("state"),tries))return false
+        if(System.currentTimeMillis()-a.startedAt<95_000L)return false
         val ui=Ui(svc);val owner=CheckinRuntime.ownership.owner()
         fun live()=!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.isConnected()&&AutoAccessibilityService.currentRunId==run&&TokyoDate.of()==date&&
             owner!=null&&owner.app=="ANA"&&owner.run==run&&CheckinRuntime.ownership.valid(owner,SystemClock.elapsedRealtime())&&!(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked&&AccountSafety.authorize(svc,"blank_ad_restart")
@@ -125,10 +137,12 @@ object StalledAdRestart {
         if(!stallVerified(svc,date,run,b){live()})return false
         Evidence.write(svc,"blank_restart_"+run+"_before.txt","identity="+b.key+";JST="+TokyoDate.time()+";timed_out_ad_still_open;no_new_viewing;no_reward_inferred\n"+ui.dump())
         Evidence.capture(svc,ui,"blank_restart_"+run+"_before.png")
-        if(!reserve(svc,date,b,run))return false
-        Logger.w("ADBLANK","run=$run bound="+b.key+" removing_timed_out_ana_task; unknown preserved")
+        if(!(if(prior==null)reserve(svc,date,b,run,tries+1) else reserveAgain(svc,date,b,run,tries+1)))return false
+        Logger.w("ADBLANK","run=$run bound="+b.key+" removing_timed_out_ana_task try="+(tries+1)+"; unknown preserved")
         val cleanup=ManagedAppCleanup.run(svc,PKG,{live()},{block->live()&&owner!=null&&CheckinRuntime.ownership.action(owner,SystemClock.elapsedRealtime(),false){if(live())block()}})
-        if(!cleanup.optBoolean("recentTaskRemoved")){mark(svc,b,"BLOCKED_NO_REPEAT");Logger.w("ADBLANK","run=$run task_removal_not_confirmed");return false}
+        if(!cleanup.optBoolean("recentTaskRemoved")){
+            mark(svc,b,if(tries+1<StalledAdRestartPolicy.DAILY_REMOVAL_TRIES)StalledAdRestartPolicy.REMOVAL_NOT_CONFIRMED else "BLOCKED_NO_REPEAT")
+            Logger.w("ADBLANK","run=$run task_removal_not_confirmed try="+(tries+1)+" cleanup="+cleanup);return false}
         mark(svc,b,"BLANK_TASK_REMOVED")
         delay(1500L)
         if(!live()||!ui.launchApp(PKG))return false

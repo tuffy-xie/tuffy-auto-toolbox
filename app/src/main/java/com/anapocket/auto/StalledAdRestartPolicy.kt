@@ -59,6 +59,17 @@ object StalledAdRestartPolicy {
         used:Boolean,dailyRestarts:Int,live:Boolean,anaForeground:Boolean,sdk:Boolean,limit:Int=OPEN_AD_RESTART_LIMIT)=
         live&&anaForeground&&!sdk&&stage=="STARTUP"&&date==recordedDate&&state=="UNCONFIRMED"&&reason==LOGIN_OFFER_RETURN&&
             !confirmed&&!used&&dailyRestarts in 0 until limit
+    /**
+     * 11/23 03:00: daily ad #7 (AppLovin) was still open 12 min after it started. Its ANA task was to be removed, but the
+     * recents card was never swiped (the task stayed, the ad stayed in front), and the attempt was marked BLOCKED_NO_REPEAT,
+     * which held the daily ads at 6/25 for every later retry. A removal that left the task in place removed nothing, so the
+     * same timed-out daily ad may be tried once more; the open-ad window, the cap and the daily restart limit still apply.
+     * A marker written before this change carries no count and counts as the first try.
+     */
+    const val DAILY_REMOVAL_TRIES=2
+    const val REMOVAL_NOT_CONFIRMED="REMOVAL_NOT_CONFIRMED"
+    fun mayRetryDailyRemoval(markerState:String?,tries:Int)=
+        markerState in setOf(REMOVAL_NOT_CONFIRMED,"BLOCKED_NO_REPEAT")&&tries in 1 until DAILY_REMOVAL_TRIES
     fun mayRelaunch(date:String,recordedDate:String,state:String,marker:String) =
         date==recordedDate && state=="UNCONFIRMED" && marker in setOf("SYSTEM_STOP_CONFIRMED","RELAUNCHED_REVIEW_REQUIRED")
     fun appInfo(pkg:String,activity:String,labels:List<String>) =

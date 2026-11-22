@@ -7,6 +7,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
 object ManagedCleanupPolicy {
+    /** About 7 s for the recents screen (24 x 300 ms, as the travel recovery), then about 2.7 s to see the card gone. */
+    const val RECENTS_POLLS=24
+    const val REMOVAL_CHECKS=6
     fun card(description:String,aliases:Set<String>):Boolean {
         val t=description.trim()
         return aliases.any{t.startsWith(it+",")||t.startsWith(it+"，")}&&
@@ -39,30 +42,48 @@ object ManagedAppCleanup {
                 if(!accepted&&c.isActive)c.resumeWith(Result.success(Unit))
             }
         }
-        withTimeoutOrNull(7000){
+        // 11/23 03:00: from a full-screen AppLovin ad the recents screen was not up 0.6 s after the request and the task
+        // was left in place. Wait for it the way the travel recovery does (which removed the task at 01:12), count only
+        // visible cards, and confirm the card is gone over a short window.
+        var stage="RECENTS_NOT_OBSERVED"
+        suspend fun recents():List<android.view.accessibility.AccessibilityNodeInfo>? {
+            repeat(ManagedCleanupPolicy.RECENTS_POLLS){
+                if(!safe())return null
+                ui.refreshCache();val nodes=ui.activeNodes(pkg="com.miui.home").filter{it.isVisibleToUser}
+                if(nodes.any{it.viewIdResourceName=="com.miui.home:id/recents_view"})return nodes
+                delay(300)
+            }
+            return null
+        }
+        withTimeoutOrNull(15_000){
             if(!safe())return@withTimeoutOrNull
             act{svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)};delay(600)
             repeat(3){
-                if(!safe())return@withTimeoutOrNull
-                ui.refreshCache();val nodes=ui.activeNodes(pkg="com.miui.home")
-                if(nodes.none{it.viewIdResourceName=="com.miui.home:id/recents_view"})return@withTimeoutOrNull
+                val nodes=recents()?:return@withTimeoutOrNull
                 val cards=nodes.filter{it.isClickable&&ManagedCleanupPolicy.card(it.contentDescription?.toString().orEmpty(),aliases)}
+                stage="CARDS_"+cards.size
                 if(cards.size!=1)return@withTimeoutOrNull
                 val card=cards.single();val b=Rect();card.getBoundsInScreen(b);val width=svc.resources.displayMetrics.widthPixels
                 if(b.width()<width*.45||b.left<=0||b.right>=width){
+                    stage="CARD_NOT_CENTERED"
                     val direction=if(b.centerX()>width/2)-1 else 1
                     if(safe())swipe(b.centerX().coerceIn(width/5,width*4/5),b.centerY(),(b.centerX()+direction*width*.52).toInt().coerceIn(width/8,width*7/8),b.centerY(),350)
-                    delay(450)
+                    delay(700)
                 }else{
-                    if(!safe()||!card.refresh()||!ManagedCleanupPolicy.card(card.contentDescription?.toString().orEmpty(),aliases))return@withTimeoutOrNull
-                    swipe(b.centerX(),b.centerY(),b.centerX(),(b.top-b.height()/4).coerceAtLeast(80),450);delay(650);ui.refreshCache()
-                    val after=ui.activeNodes(pkg="com.miui.home")
-                    if(after.any{it.viewIdResourceName=="com.miui.home:id/recents_view"}&&after.none{ManagedCleanupPolicy.card(it.contentDescription?.toString().orEmpty(),aliases)})
-                        out.put("recentTaskRemoved",true).put("closeState","RECENT_TASK_REMOVED")
+                    if(!safe()||!card.refresh()||!ManagedCleanupPolicy.card(card.contentDescription?.toString().orEmpty(),aliases)){stage="CARD_CHANGED";return@withTimeoutOrNull}
+                    stage="SWIPED"
+                    swipe(b.centerX(),b.centerY(),b.centerX(),(b.top-b.height()/4).coerceAtLeast(80),500)
+                    repeat(ManagedCleanupPolicy.REMOVAL_CHECKS){
+                        delay(450);if(!safe())return@withTimeoutOrNull;ui.refreshCache()
+                        val after=ui.activeNodes(pkg="com.miui.home").filter{it.isVisibleToUser}
+                        if(after.any{it.viewIdResourceName=="com.miui.home:id/recents_view"}&&after.none{ManagedCleanupPolicy.card(it.contentDescription?.toString().orEmpty(),aliases)}){
+                            stage="REMOVED";out.put("recentTaskRemoved",true).put("closeState","RECENT_TASK_REMOVED");return@withTimeoutOrNull}
+                    }
                     return@withTimeoutOrNull
                 }
             }
         }
+        out.put("removalStage",stage)
         if(safe()){act{svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)};delay(650);ui.refreshCache();
             val home=android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME)
             val homePkg=svc.packageManager.resolveActivity(home,0)?.activityInfo?.packageName
