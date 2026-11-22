@@ -20,6 +20,10 @@ object TravelSelection {
     }
     suspend fun <T> reserve(ctx:Context,cat:Cat,block:()->T):T?=reserveIf({enabled(ctx,cat)},block)
     internal suspend fun <T> reserveIf(selected:suspend()->Boolean,block:()->T):T?=mutex.withLock{if(!selected())null else block()}
-    fun hasUnresolvedAd(ctx:Context,date:String):Boolean {val rows=ChallengeStore.rows(ctx,date);return (0 until rows.length()).any{val ads=rows.getJSONObject(it).optJSONArray("ads");val last=ads?.optJSONObject(ads.length()-1);last!=null&&!last.optBoolean("confirmed")&&!last.optBoolean("officialNoGain")&&last.optString("state") in setOf("AD_OPENING","AD_PLAYING","AD_CLOSE_AVAILABLE","UNCONFIRMED")}}
+    private fun unresolvedLast(rows:org.json.JSONArray)=(0 until rows.length()).mapNotNull{val ads=rows.getJSONObject(it).optJSONArray("ads");ads?.optJSONObject(ads.length()-1)}
+        .filter{!it.optBoolean("confirmed")&&!it.optBoolean("officialNoGain")&&it.optString("state") in setOf("AD_OPENING","AD_PLAYING","AD_CLOSE_AVAILABLE","UNCONFIRMED")}
+    fun hasUnresolvedAd(ctx:Context,date:String):Boolean=unresolvedLast(ChallengeStore.rows(ctx,date)).isNotEmpty()
+    /** (startedAt, finishedAt) of each unresolved travel ad; finishedAt is 0 while that ad has not ended. */
+    fun unresolvedAdTimes(ctx:Context,date:String)=unresolvedLast(ChallengeStore.rows(ctx,date)).map{it.optLong("startedAt") to it.optLong("finishedAt")}
     fun hasSelectedPending(ctx:Context,date:String):Boolean {val rows=ChallengeStore.rows(ctx,date);return (0 until rows.length()).any{val r=rows.getJSONObject(it);Cat.ofName(r.optString("cat"))?.let{enabled(ctx,it)}==true&&r.optString("state") !in setOf("BOOST_MAX_CONFIRMED","BOOST_MAX_OBSERVED")}}
 }

@@ -105,7 +105,9 @@ object StalledAdRestart {
     suspend fun recoverBlankDaily(svc:AutoAccessibilityService,date:String,run:String):Boolean {
         val rows=OfficialAdStore.attempts(svc,date);val a=rows.lastOrNull()?:return false
         if(!OfficialLoadFailurePolicy.blankStall(a)||OfficialLoadFailurePolicy.key(a) in OfficialAdStore.reviewedKeys(svc,date)||
-            OfficialAdStore.hasRecordedReceipt(svc,date,a)||TravelSelection.hasUnresolvedAd(svc,date))return false
+            OfficialAdStore.hasRecordedReceipt(svc,date,a))return false
+        if(StalledAdRestartPolicy.travelHoldsDailyRestart(a.startedAt,TravelSelection.unresolvedAdTimes(svc,date))){
+            Logger.i("ADBLANK","run=$run travel_ad_may_own_window; daily restart held");return false}
         val b=bound(svc,date,"ADS")?:return false
         if(prefs(svc).contains(b.key)||System.currentTimeMillis()-a.startedAt<95_000L)return false
         val ui=Ui(svc);val owner=CheckinRuntime.ownership.owner()

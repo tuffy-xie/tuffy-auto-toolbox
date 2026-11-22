@@ -17,6 +17,15 @@ object StalledAdRestartPolicy {
      */
     fun dailyHolds(stage:String,openDailyAd:Boolean,terminalUnconfirmedDailyAd:Boolean)=
         openDailyAd||(terminalUnconfirmedDailyAd&&stage!="CHALLENGES")
+    /**
+     * 11/22 03:31: daily ad #2 (an AppLovin end card) timed out and stayed open. Travel Boosts earlier that night had ended
+     * UNCONFIRMED long before it started, and any such row refused the blank-daily restart, so every retry stopped in front
+     * of the daily ad until the day was given up at 04:01 with 1/25. The window in front belongs to the last ad dispatched:
+     * only a travel ad that has not ended, or that started or ended after this daily ad started, holds the restart.
+     * Finished earlier travel unknowns stay UNKNOWN and are not touched by removing the daily ad's task.
+     */
+    fun travelHoldsDailyRestart(dailyStartedAt:Long,travel:List<Pair<Long,Long>>)=
+        dailyStartedAt<=0L||travel.any{(started,finished)->started<=0L||finished<=0L||started>=dailyStartedAt||finished>=dailyStartedAt}
     fun refused(stage:String,sdkWindowOpen:Boolean,unresolvedTravelAd:Boolean,unresolvedDailyAd:Boolean)=
         unresolvedDailyAd||(sdkWindowOpen&&stage !in setOf("STARTUP","CHALLENGES"))||(unresolvedTravelAd&&stage!="CHALLENGES")
     /**

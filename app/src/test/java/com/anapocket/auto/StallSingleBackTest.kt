@@ -120,4 +120,18 @@ class StallSingleBackTest {
         assertTrue(OfficialLoadFailurePolicy.resolved(r19,reviewed+OfficialLoadFailurePolicy.key(r19)))
         assertEquals(AdState.UNCONFIRMED,r19.state)
     }
+    @Test fun nov22FinishedTravelUnknownsNoLongerHoldTheTimedOutDailyAdWindow() {
+        // Real: the only unresolved travel ad was MOV_ANY 5km #5 (03:02:48-03:03:00, stopped by the watchdog);
+        // daily #2 started 03:29:12 and its AppLovin end card stayed open until the day was given up.
+        val daily=1795285752452L
+        val car15=1795284168739L to 1795284180412L
+        assertFalse(StalledAdRestartPolicy.travelHoldsDailyRestart(daily,listOf(car15)))
+        assertFalse(StalledAdRestartPolicy.travelHoldsDailyRestart(daily,emptyList()))
+        // A travel ad that has not ended, or that ran after the daily ad started, may own the window in front.
+        assertTrue(StalledAdRestartPolicy.travelHoldsDailyRestart(daily,listOf(car15,1795276600000L to 0L)))
+        assertTrue(StalledAdRestartPolicy.travelHoldsDailyRestart(daily,listOf(daily+1 to daily+90_000)))
+        assertTrue(StalledAdRestartPolicy.travelHoldsDailyRestart(daily,listOf(daily-60_000 to daily+5_000)))
+        assertTrue(StalledAdRestartPolicy.travelHoldsDailyRestart(daily,listOf(0L to 0L)))
+        assertTrue(StalledAdRestartPolicy.travelHoldsDailyRestart(0L,emptyList()))
+    }
 }
