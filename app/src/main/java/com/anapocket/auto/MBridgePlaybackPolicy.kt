@@ -36,4 +36,19 @@ object MBridgePlaybackPolicy {
         ids.size>1&&ids.all{it=="close"} -> ids.lastIndex
         else -> null
     }
+
+    /** The native reward end card: only it carries the "猜你喜欢" more-offer row under the store button. */
+    fun nativeEndCard(ids:Set<String>)=ids.any{it.endsWith(":id/mbridge_reward_end_card_more_offer_rl")}
+    /**
+     * 11/23 01:07, 01:26 and 01:44: the native end card's X is an id-less, unlabelled ImageView in the top bar
+     * (650,40-700,90), opposite the "!" feedback icon (20,40-70,90). Over a bright blurred backdrop the white-pixel cross
+     * test saw the backdrop as part of the icon, so the X was never found and three Boost ads ran to the 300 s cap; the
+     * last of them left 汽车 15km at Boost 3. Only the top-right one of these small corner icons is the close, and only
+     * on the end card, where no countdown or warning is showing.
+     */
+    fun endCardCornerClose(ids:Set<String>,id:String?,nodeClass:String,clickable:Boolean,label:String,childCount:Int,
+        left:Int,top:Int,width:Int,height:Int,screenWidth:Int,screenHeight:Int,density:Float,labels:List<String>):Boolean =
+        nativeEndCard(ids)&&!mustWait(labels)&&id==null&&nodeClass=="android.widget.ImageView"&&clickable&&label.isBlank()&&
+            childCount==0&&density>0&&width/density in 16f..48f&&height/density in 16f..48f&&
+            width.toFloat()/height in .8f..1.25f&&left>=screenWidth*.75&&left+width<=screenWidth&&top>=0&&top<screenHeight*.1
 }

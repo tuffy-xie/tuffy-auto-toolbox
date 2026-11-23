@@ -387,6 +387,16 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
                 Logger.i("ADCLOSE", "sdk=mbridge observedCloseResource=" + it.viewIdResourceName)
                 return it
             }
+            val visibleIds=activeNodes.filter{it.isVisibleToUser}.mapNotNull{it.viewIdResourceName}.toSet()
+            activeNodes.filter{n->val r=android.graphics.Rect();n.getBoundsInScreen(r)
+                n.isVisibleToUser&&n.isEnabled&&MBridgePlaybackPolicy.endCardCornerClose(visibleIds,n.viewIdResourceName,
+                    n.className?.toString().orEmpty(),n.isClickable,ui.label(n),n.childCount,r.left,r.top,r.width(),r.height(),
+                    m.widthPixels,m.heightPixels,m.density,activeLabels)}.singleOrNull()?.let{
+                observedTapOnly=true
+                val r=android.graphics.Rect();it.getBoundsInScreen(r)
+                Logger.i("ADCLOSE","sdk=mbridge observedEndCardCornerClose=true bounds="+r)
+                return it
+            }
         }
         paintedCanvasControl()?.let { return it }
         val fyber = fyberSurface()
