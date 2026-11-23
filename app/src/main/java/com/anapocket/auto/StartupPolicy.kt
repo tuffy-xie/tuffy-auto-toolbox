@@ -85,6 +85,7 @@ object RoutinePolicy {
         "STARTUP" -> "打开ANA Pocket与签到"
         "CHALLENGES" -> "接取出行任务并升满Boost"
         "ADS" -> "观看每日广告"
+        "REWARDS" -> "领取已完成挑战的报酬"
         "NOTIFY" -> "发送结果通知"
         "DONE" -> "本次执行已结束"
         "STOPPED" -> "任务已停止"

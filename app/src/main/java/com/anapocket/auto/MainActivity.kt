@@ -45,6 +45,9 @@ class MainActivity:AppCompatActivity(){
   tv(R.id.tvVersion).text="Tuffy的自动百宝箱 · "+BuildConfig.VERSION_NAME+(if(BuildConfig.DEBUG)" debug" else "")
   findViewById<ImageView>(R.id.ivLoginIcon).background=squircle(color(R.color.icon_login))
   findViewById<ImageView>(R.id.ivAdsIcon).background=squircle(color(R.color.icon_ads))
+  findViewById<ImageView>(R.id.ivRewardIcon).background=squircle(color(R.color.icon_reward))
+  findViewById<View>(R.id.homeRewardRow).setOnClickListener{chooseRewardRange()}
+  sw(R.id.swReward).setOnCheckedChangeListener{_,on->if(!applying&&saveSettings(true)&&on)startRewardsIfOnly()}
   TelegramSettingsPanel(this,scope).bind();buildCats();buildHome();checkinPanel=CheckinPanel(this).also{it.bind()}
   listOf(R.id.navToday,R.id.navRecords,R.id.navSettings).forEachIndexed{i,id->btn(id).setOnClickListener{showPage(i)}}
   findViewById<View>(R.id.btnHomeSettings).setOnClickListener{showPage(2)};btn(R.id.btnAdjustRange).setOnClickListener{showPage(2)}
@@ -125,11 +128,30 @@ class MainActivity:AppCompatActivity(){
    val toggle=SwitchCompat(this).apply{layoutParams=LinearLayout.LayoutParams(-2,-2);contentDescription="启用"+cat.title;isChecked=!cat.longDistance};line.addView(toggle);host.addView(line);rows.add(CatRow(cat,input,stat,toggle))
   }
  }
- private fun applySettings(){applying=true;sw(R.id.swRoutineSchedule).isChecked=current.enabled;sw(R.id.swAd).isChecked=current.adEnabled;for(r in rows){r.input.setText(current.kmOf(r.cat).takeIf{it>0}?.toString().orEmpty());r.toggle.isChecked=current.catOn(r.cat)};applying=false}
+ /** 按受取期限选择领取范围；选好即开启领取。 */
+ private fun chooseRewardRange(){
+  val ranges=RewardRange.values();val now=RewardRange.of(current.rewardRange)
+  AlertDialog.Builder(this).setTitle("领取报酬范围（按受取期限）")
+   .setSingleChoiceItems(ranges.map{it.label}.toTypedArray(),ranges.indexOf(now)){d,i->
+    d.dismiss();current=current.copy(rewardRange=ranges[i].name)
+    applying=true;sw(R.id.swReward).isChecked=true;applying=false
+    if(saveSettings(true)){toast("领取报酬："+ranges[i].label);startRewardsIfOnly()}
+   }.setNegativeButton("取消",null).show()
+ }
+ /** 只勾选了领取报酬（没有出行分类、没有每日广告）时立即开始；否则等其他任务做完后由每日流程执行。 */
+ private fun startRewardsIfOnly(){
+  if(!RewardClaimPolicy.rewardsOnly(current)){toast("将在其他任务完成后领取报酬");return}
+  val svc=AutoAccessibilityService.instance
+  if(svc==null||!AutoAccessibilityService.isConnected()){toast("请先开启无障碍服务");return}
+  if(AutoAccessibilityService.isRunning||CheckinRuntime.activeApp!=null){toast("当前有任务运行，结束后再领取");return}
+  if(AccountSafetyStore.pending(this)!=null){showSafety();return}
+  toast("只开启了领取报酬，立即开始");svc.startDailyRoutine("manual")
+ }
+ private fun applySettings(){applying=true;sw(R.id.swRoutineSchedule).isChecked=current.enabled;sw(R.id.swAd).isChecked=current.adEnabled;sw(R.id.swReward).isChecked=current.rewardEnabled;for(r in rows){r.input.setText(current.kmOf(r.cat).takeIf{it>0}?.toString().orEmpty());r.toggle.isChecked=current.catOn(r.cat)};applying=false}
  private fun saveSettings(quiet:Boolean=false):Boolean{
   val bad=rows.firstOrNull{it.toggle.isChecked&&CategoryDistancePolicy.parse(it.cat,it.input.text.toString())==null}
   if(bad!=null){bad.input.error="请输入1至"+bad.cat.maxKm+"的整数公里";toast("请先设置"+bad.cat.title+"公里上限");return false}
-  current=current.copy(enabled=sw(R.id.swRoutineSchedule).isChecked,adEnabled=sw(R.id.swAd).isChecked,adTarget=DAILY_AD_LIMIT,dayToday=true,dayTomorrow=false,
+  current=current.copy(enabled=sw(R.id.swRoutineSchedule).isChecked,adEnabled=sw(R.id.swAd).isChecked,rewardEnabled=sw(R.id.swReward).isChecked,adTarget=DAILY_AD_LIMIT,dayToday=true,dayTomorrow=false,
    catEnabled=rows.associate{it.cat.name to it.toggle.isChecked},catKm=rows.associate{it.cat.name to (CategoryDistancePolicy.parse(it.cat,it.input.text.toString())?:if(it.cat.longDistance)0 else it.cat.defaultKm)})
   Prefs.saveBlocking(this,current);if(!current.enabled)RoutineRetry.revoke(this,"schedule_disabled");Scheduler.schedule(this,current.hour,current.minute);CheckinRuntime.updateAnaWindow(this);CheckinScheduler.protection(this);if(!quiet)toast("设置已保存");refresh();return true
  }
@@ -216,7 +238,7 @@ class MainActivity:AppCompatActivity(){
  private class TileSnap(val enabled:Boolean,val km:Int,val covered:Boolean,val unknown:Boolean,val total:Int,val done:Int,val scanLabel:String,val maxed:Int)
  private class Snap(val date:String,val running:Boolean,val c:AdCounters,val official:Int?,val tiles:Map<Cat,TileSnap>,val login:String,
   val routine:JSONObject?,val safety:JSONObject?,val recovery:String?,val incomplete:Boolean,val hasTodayWork:Boolean,
-  val chalSummary:String?,val history:String?,val nextPlan:String?,val telegram:String?)
+  val chalSummary:String?,val history:String?,val nextPlan:String?,val telegram:String?,val reward:String)
  private fun snapshot(s:AppSettings,records:Boolean,settings:Boolean,diagnostics:Boolean):Snap{
   val date=TokyoDate.of();val running=AutoAccessibilityService.isRunning
   val c=DailyAdStore.counters(this,date);val official=OfficialAdStore.counter(this,date)
@@ -227,10 +249,12 @@ class MainActivity:AppCompatActivity(){
    TileSnap(enabled,km,complete&&!unknown,unknown,catRows.size,catRows.count{it.optString("state") in maxedStates},
     if(enabled&&km>0&&catRows.isEmpty()&&!complete)ChallengeScanPolicy.label(ChallengeScanStore.status(this,date,cat,km)) else "",catRows.count{it.optInt("boost")==5})}
   val hasTodayWork=routine!=null||items.isNotEmpty()||c.started>0||login in setOf("UNCONFIRMED","FAILED","REWARD_CONFIRMED")
-  val incomplete=hasTodayWork&&(modes.filter{s.catOn(it)}.any{!ChallengeScanStore.complete(this,date,it,s.kmOf(it))}||(s.adEnabled&&official!=25)||login in setOf("UNCONFIRMED","FAILED"))
+  val rewardPending=s.rewardEnabled&&!RewardClaimStore.done(this,date,RewardRange.of(s.rewardRange))
+  val incomplete=hasTodayWork&&(modes.filter{s.catOn(it)}.any{!ChallengeScanStore.complete(this,date,it,s.kmOf(it))}||(s.adEnabled&&official!=25)||login in setOf("UNCONFIRMED","FAILED")||rewardPending)
   val history=if(records)RoutineStore.history(this).let{h->(0 until h.length()).map{h.getJSONObject(it)}.takeLast(5).reversed().joinToString("\n\n"){it.optString("date")+" · "+RoutinePolicy.stageLabel(it.optString("state"))+"\n"+it.optString("summary",it.optString("detail"))}.ifBlank{"尚无执行结果"}} else null
   return Snap(date,running,c,official,tiles,login,routine,AccountSafetyStore.pending(this),AnaProcessRecovery.describe(this),incomplete,hasTodayWork,
-   if(records)ChallengeStore.summary(this,date) else null,history,if(diagnostics)"下次计划："+Scheduler.describeNext(s.hour,s.minute) else null,if(settings)TelegramSettingsStore(this).status() else null)
+   if(records)ChallengeStore.summary(this,date) else null,history,if(diagnostics)"下次计划："+Scheduler.describeNext(s.hour,s.minute) else null,if(settings)TelegramSettingsStore(this).status() else null,
+   RewardClaimStore.label(this,date,s))
  }
  private fun refresh(){
   if(isFinishing)return
@@ -273,6 +297,7 @@ class MainActivity:AppCompatActivity(){
   findViewById<View>(R.id.ringLegend).contentDescription="出行 "+tv(R.id.tvRingTravel).text+"，广告 "+tv(R.id.tvRingAds).text+"，签到 "+loginText
   tv(R.id.tvHomeLogin).text=when(login){"REWARD_CONFIRMED"->"已领取";"UNCONFIRMED","FAILED"->"需核对";"NOT_PRESENT"->"未出现弹窗";else->"待检查"}
   tv(R.id.tvHomeAds).text=when{!adsOn->"未开启";official!=null->"官方 "+official+"/25"+(if(c.unconfirmed>0)" · 待核对 "+c.unconfirmed else "");c.started>0->"本机确认 "+c.completed+" 次";else->"最多 25 次"}
+  tv(R.id.tvHomeReward).text=s.reward
   val failed=!running&&routine?.optString("state") in setOf("BLOCKED","STOPPED")
   btn(R.id.btnSafety).text=if(safety==null)"账号保护：正常" else "账号保护：需要人工处理"
   findViewById<View>(R.id.homeNotice).visibility=if(!running&&(safety!=null||failed||s.incomplete))View.VISIBLE else View.GONE

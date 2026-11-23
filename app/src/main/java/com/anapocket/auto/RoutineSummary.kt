@@ -35,6 +35,10 @@ object RoutineSummary {
    if(counts.unconfirmed>0)unknown.add("广告"+counts.unconfirmed+"次")
    (official?.let{"官方"+it+"/25"}?:"官方次数未核对")+"；本机确认"+counts.completed+"次"
   }
+  if(!s.rewardEnabled)disabled.add("领取报酬") else {
+   val range=RewardRange.of(s.rewardRange);val n=RewardClaimStore.claimed(RewardClaimStore.read(c,date))
+   if(RewardClaimStore.done(c,date,range))done.add("领取报酬（"+range.label+"，"+n+"条）") else pending.add("领取报酬（"+range.label+"，已领"+n+"条）")
+  }
   return RoutineMessage.render(date,done,pending,disabled,unknown,ads,login,if(safety!=null)"请手动处理后回Tuffy复核" else if(outcome.state in setOf("BLOCKED","STOPPED","PARTIALLY_COMPLETED"))TaskFailureText.short(outcome.detail) else "",outcome.state in setOf("BLOCKED","STOPPED","PARTIALLY_COMPLETED"))
  }
 }

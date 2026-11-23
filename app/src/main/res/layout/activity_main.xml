@@ -63,7 +63,15 @@
 <TextView android:id="@+id/tvHomeAds" style="@style/RowValue" android:maxWidth="190dp" android:gravity="end"/>
 <ImageView android:layout_width="8dp" android:layout_height="14dp" android:layout_marginStart="10dp" android:src="@drawable/ic_chevron" android:importantForAccessibility="no"/>
 </LinearLayout>
+<View style="@style/Divider" android:layout_marginLeft="58dp"/>
+<LinearLayout android:id="@+id/homeRewardRow" style="@style/Row" android:layout_height="56dp" android:background="@drawable/bg_row" android:clickable="true" android:focusable="true">
+<ImageView android:id="@+id/ivRewardIcon" android:layout_width="30dp" android:layout_height="30dp" android:padding="6dp" android:src="@drawable/ic_glyph_gift" android:importantForAccessibility="no"/>
+<TextView style="@style/RowTitle" android:layout_marginStart="12dp" android:text="领取报酬"/>
+<TextView android:id="@+id/tvHomeReward" style="@style/RowValue" android:maxWidth="150dp" android:gravity="end"/>
+<androidx.appcompat.widget.SwitchCompat android:id="@+id/swReward" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:contentDescription="领取报酬"/>
 </LinearLayout>
+</LinearLayout>
+<TextView style="@style/SectionFooter" android:text="点「领取报酬」选择范围（按受取期限）。只开这一项时立即执行，否则在其他任务完成后执行。"/>
 
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:layout_marginBottom="8dp" android:paddingLeft="4dp" android:text="其他 App" android:textColor="@color/text" android:textSize="21sp" android:textStyle="bold"/>
 <LinearLayout android:id="@+id/homeCheckins" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"/>

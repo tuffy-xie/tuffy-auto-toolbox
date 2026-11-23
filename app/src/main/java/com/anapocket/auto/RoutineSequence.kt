@@ -10,16 +10,19 @@ interface RoutinePort {
     suspend fun startup():RoutineStepResult
     suspend fun challenges():RoutineStepResult
     suspend fun ads():RoutineStepResult
+    /** Last, after every other task (user, 11/23). Earlier stopped stages defer it; it never blocks the day. */
+    suspend fun rewards(blockedBefore:Boolean):RoutineStepResult = RoutineStepResult("DISABLED","")
 }
 class RoutineSequence(private val port:RoutinePort) {
     suspend fun run():RoutineOutcome {
         val results=linkedMapOf<String,RoutineStepResult>()
-        for(stage in listOf("STARTUP","CHALLENGES","ADS")){
+        for(stage in listOf("STARTUP","CHALLENGES","ADS","REWARDS")){
             if(!port.connected())return RoutineOutcome("BLOCKED","accessibility_disconnected",results)
             if(port.stopped())return RoutineOutcome("STOPPED","已按请求停止",results)
             if(!port.sameDate())return RoutineOutcome("BLOCKED","手机任务日期已变化，下次使用新日期",results)
             port.progress(stage,RoutineStepResult("RUNNING",RoutinePolicy.stageLabel(stage)))
-            val result=when(stage){"STARTUP"->port.startup();"CHALLENGES"->port.challenges();else->port.ads()}
+            val result=when(stage){"STARTUP"->port.startup();"CHALLENGES"->port.challenges();"ADS"->port.ads()
+                else->port.rewards(results.values.any{it.state=="BLOCKED"}).let{if(it.continueRun)it else it.copy(continueRun=true)}}
             results[stage]=result;port.progress(stage,result)
             if(!port.connected())return RoutineOutcome("BLOCKED","accessibility_disconnected",results)
             if(!result.continueRun)return RoutineOutcome(if(port.stopped())"STOPPED" else "BLOCKED",result.detail,results)

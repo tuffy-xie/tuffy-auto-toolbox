@@ -66,7 +66,12 @@ data class AppSettings(
     val notifySummary: Boolean = true,
 
     /** 默认关闭：仅在节点不可读时，用「位置猜测 + 详情页强校验」作为兜底。 */
-    val allowPositionalFallback: Boolean = false
+    val allowPositionalFallback: Boolean = false,
+
+    /** 领取已完成挑战的报酬（看广告的选项），在其他任务之后执行。默认关闭。 */
+    val rewardEnabled: Boolean = false,
+    /** RewardRange 名称：按受取期限筛选。 */
+    val rewardRange: String = RewardRange.TODAY.name
 ) {
     fun catOn(c: Cat): Boolean = catEnabled[c.name] ?: !c.longDistance
     fun kmOf(c: Cat): Int = (catKm[c.name] ?: c.defaultKm).let{if(c.longDistance && it==0)0 else it.coerceIn(1,c.maxKm)}
@@ -83,6 +88,8 @@ data class AppSettings(
         o.put("dayTomorrow", dayTomorrow)
         o.put("notifySummary", notifySummary)
         o.put("allowPositionalFallback", allowPositionalFallback)
+        o.put("rewardEnabled", rewardEnabled)
+        o.put("rewardRange", RewardRange.of(rewardRange).name)
         val ce = JSONObject()
         val ck = JSONObject()
         for (c in Cat.values()) {
@@ -126,7 +133,9 @@ data class AppSettings(
                     catEnabled = en,
                     catKm = km,
                     notifySummary = o.optBoolean("notifySummary", d.notifySummary),
-                    allowPositionalFallback = o.optBoolean("allowPositionalFallback", d.allowPositionalFallback)
+                    allowPositionalFallback = o.optBoolean("allowPositionalFallback", d.allowPositionalFallback),
+                    rewardEnabled = o.optBoolean("rewardEnabled", d.rewardEnabled),
+                    rewardRange = RewardRange.of(o.optString("rewardRange", d.rewardRange)).name
                 )
             } catch (t: Throwable) {
                 AppSettings()

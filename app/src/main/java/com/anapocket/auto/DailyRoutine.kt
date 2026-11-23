@@ -111,6 +111,15 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 return RoutineStepResult(if(!ok)"BLOCKED" else if(r.limitReached)"LIMIT_REACHED" else "DONE" ,
                     "官方 "+(OfficialAdStore.counter(svc,date)?.toString()?:"未核对")+"/25 · 本机确认 "+r.completed+" · 待核对 "+r.unconfirmed+(if(ok)"" else "；"+TelegramText.reason(r.blockedReason.ifBlank{r.detail})),ok)
             }
+            override suspend fun rewards(blockedBefore:Boolean):RoutineStepResult{
+                val latest=Prefs.loadBlocking(svc)
+                if(!latest.rewardEnabled)return RoutineStepResult("DISABLED","领取报酬未开启")
+                if(challengesOnly)return RoutineStepResult("UNCHANGED","本次仅处理出行；领取报酬留到下次")
+                // Unfinished work comes first; an open ad or receipt must not be walked away from to claim rewards.
+                if(blockedBefore||MaxBoostCoordinator.visible(svc)||AccountSafetyStore.pending(svc)!=null)
+                    return RoutineStepResult("DEFERRED","前面的任务还没处理完，领取报酬留到之后继续")
+                return RewardClaimTask(svc).run(run,date,RewardRange.of(latest.rewardRange))
+            }
         }
         val result:RoutineOutcome
         try{

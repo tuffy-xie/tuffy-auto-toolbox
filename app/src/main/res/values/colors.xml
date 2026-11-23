@@ -40,6 +40,7 @@
 <color name="mode_flight">#FF2D55</color>
 <color name="icon_login">#FF9500</color>
 <color name="icon_ads">#007AFF</color>
+<color name="icon_reward">#34C759</color>
 <color name="icon_checkin">#AF52DE</color>
 <color name="hero_text">#D6E0FF</color>
 </resources>
