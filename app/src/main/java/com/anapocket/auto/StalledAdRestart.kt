@@ -110,6 +110,31 @@ object StalledAdRestart {
         val marker=prefs(c).getString(b.key,null)?.let{JSONObject(it)}?:return false
         return StalledAdRestartPolicy.mayRelaunch(date,b.date,b.state,marker.optString("state"))
     }
+    /**
+     * 11/24 (user): a reward ad that never started, or one that ended with ANA still on 「受け取りたい報酬を選んでください」:
+     * remove the ANA task from Recents and reopen it, the same way as the login offer (removeTaskAndRelaunch).
+     * Once per card, its own daily budget; never over an ad window. Nothing is claimed, viewed or inferred.
+     */
+    suspend fun restartForRewardSheet(svc:AutoAccessibilityService,date:String,run:String,cardKey:String,why:String):Boolean {
+        val p=prefs(svc);val key="REWARD|"+date+"|"+cardKey
+        if(!RewardClaimPolicy.sheetRestartAllowed(p.contains(key),p.getInt("reward_count_"+date,0),AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))){
+            Logger.i("REWARD","run=$run ana_restart_not_allowed card_used="+p.contains(key)+" today="+p.getInt("reward_count_"+date,0));return false}
+        val ui=Ui(svc);val owner=CheckinRuntime.ownership.owner()
+        fun live()=!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.isConnected()&&AutoAccessibilityService.currentRunId==run&&TokyoDate.of()==date&&
+            owner!=null&&owner.app=="ANA"&&owner.run==run&&CheckinRuntime.ownership.valid(owner,SystemClock.elapsedRealtime())&&!(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked&&AccountSafety.authorize(svc,"reward_sheet_restart")
+        if(!live()){Logger.w("REWARD","run=$run ana_restart not_live");return false}
+        ui.refreshCache()
+        Evidence.write(svc,"reward_restart_"+run+"_before_"+System.currentTimeMillis()+".txt","card="+cardKey+";why="+why+";JST="+TokyoDate.time()+";choice_sheet_left;nothing_claimed\n"+ui.dump())
+        check(p.edit().putString(key,JSONObject().put("date",date).put("card",cardKey).put("why",why).put("controllerRun",run).put("requestedAt",System.currentTimeMillis()).toString())
+            .putInt("reward_count_"+date,p.getInt("reward_count_"+date,0)+1).commit())
+        Logger.w("REWARD","run=$run restarting ANA ($why); choice sheet still shown")
+        val cleanup=ManagedAppCleanup.run(svc,PKG,{live()},{block->live()&&owner!=null&&CheckinRuntime.ownership.action(owner,SystemClock.elapsedRealtime(),false){if(live())block()}})
+        if(!cleanup.optBoolean("recentTaskRemoved")){Logger.w("REWARD","run=$run ana_task_removal_not_confirmed");return false}
+        delay(1500L)
+        if(!live()||!ui.launchApp(PKG))return false
+        for(i in 0 until 50){delay(400);ui.refreshCache();if(ui.currentPackage()==PKG&&!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)){Logger.i("REWARD","run=$run ana_relaunched");return true}}
+        Logger.w("REWARD","run=$run ana_relaunch_not_observed");return false
+    }
     /** User-directed for a timed-out daily ad: remove the observed ANA task and reopen. No ledger write, no new viewing. */
     suspend fun recoverBlankDaily(svc:AutoAccessibilityService,date:String,run:String):Boolean {
         val rows=OfficialAdStore.attempts(svc,date);val a=rows.lastOrNull()?:return false

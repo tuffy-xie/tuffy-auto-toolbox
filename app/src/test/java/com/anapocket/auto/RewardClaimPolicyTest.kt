@@ -84,6 +84,13 @@ class RewardClaimPolicyTest {
         assertFalse(RewardClaimPolicy.closableChoiceSheet(ana,ls,ids-"close",false))
         assertFalse(RewardClaimPolicy.closableChoiceSheet(ana,listOf("ホーム","ためる"),ids,false))
     }
+    @Test fun aStuckChoiceSheetRestartsAnaOncePerCard() {
+        assertTrue(RewardClaimPolicy.sheetRestartAllowed(false,0,false))
+        assertTrue(RewardClaimPolicy.sheetRestartAllowed(false,RewardClaimPolicy.SHEET_RESTART_LIMIT-1,false))
+        assertFalse(RewardClaimPolicy.sheetRestartAllowed(true,0,false))
+        assertFalse(RewardClaimPolicy.sheetRestartAllowed(false,RewardClaimPolicy.SHEET_RESTART_LIMIT,false))
+        assertFalse(RewardClaimPolicy.sheetRestartAllowed(false,0,true))
+    }
     @Test fun aLateLoginOfferIsHandledOnceBeforeTheScanReruns() {
         // 11/24 00:03: STARTUP NOT_PRESENT at 00:03:23, the ログインボーナス sheet at 00:03:24, every category SCAN_FAILED.
         val seen="挑战执行中止：startup_popup_blocks_category_navigation"

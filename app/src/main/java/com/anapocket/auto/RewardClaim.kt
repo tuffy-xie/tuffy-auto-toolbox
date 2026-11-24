@@ -55,6 +55,9 @@ object RewardClaimPolicy {
     /** Plain points are taken instead of the ad only when the ad cannot be had and the reward would expire today. */
     fun plainFallback(adOffered:Boolean,adAttempts:Int,daysLeft:Long)=daysLeft==0L&&(!adOffered||adAttempts>=MAX_AD_ATTEMPTS)
     const val MAX_AD_ATTEMPTS=2
+    /** 11/24 (user): ANA restarts for a choice sheet left after the ad; once per card, at most this many a day. */
+    const val SHEET_RESTART_LIMIT=4
+    fun sheetRestartAllowed(usedForCard:Boolean,usedToday:Int,adWindow:Boolean)=!usedForCard&&!adWindow&&usedToday<SHEET_RESTART_LIMIT
     /** Only the user's reward switch: with no travel category and no daily ads, the run is for the rewards alone. */
     fun rewardsOnly(s:AppSettings)=s.rewardEnabled&&!s.adEnabled&&Cat.values().none{s.catOn(it)}
     /** Nothing open is left behind: no MAX dialog, safety check, daily viewing in flight, unresolved travel ad or ad on screen. */
@@ -149,6 +152,8 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
                     "AD_FAILED"->{adAttempts[target.key]=adAttempts.getOrDefault(target.key,0)+1
                         if(adAttempts.getValue(target.key)>=RewardClaimPolicy.MAX_AD_ATTEMPTS&&RewardClaimPolicy.daysLeft(target.deadline,today)>0)failed.add(target.key)}
                     "AD_STUCK"->{reason="ad_stuck";break}
+                    "SHEET_STUCK"->{reason="choice_sheet_stuck";break}
+                    "restart_startup_blocked"->{failed.add(target.key);reason="restart_startup_blocked";break}
                     else->{failed.add(target.key);RewardClaimStore.item(svc,date,target.key,"FAILED",reason=r)}
                 }
             }
@@ -294,19 +299,35 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         if(!AccountSafety.authorize(svc,"reward_claim_ad")){leaveToList(date);return "account_safety"}
         RewardClaimStore.item(svc,date,card.key,"AD_DISPATCHED",adPoints)
         tapNode(adButton)
-        var watched=watchAd(run,date)
-        // 11/24 14:58: 「動画を見て 500pt」 was tapped, no ad came up in 20 s and the choice sheet stayed. ANA never left its own
-        // page, so nothing was viewed; the same button is pressed once more after a pause.
-        if(watched=="NOT_STARTED"&&RewardClaimPolicy.choiceSheet(labels())){
-            delay(3000);ui.refreshCache()
-            byId("button_reward_ad")?.let{Logger.i("REWARD","run=$run ad_not_started; choice sheet still shown; one more press");tapNode(it);watched=watchAd(run,date)}
-        }
+        val watched=watchAd(run,date)
         if(watched=="STUCK"){evidence(run,"ad_stuck");FaultStore.capture(svc,run,"reward","ad_timeout_300s");return "AD_STUCK"}
+        // 11/24 14:58: 「動画を見て 500pt」 was tapped, no ad came up in 20 s and the choice sheet stayed (user: restart ANA).
+        if(watched=="NOT_STARTED"&&RewardClaimPolicy.choiceSheet(labels())){
+            RewardClaimStore.item(svc,date,card.key,"AD_NOT_CONFIRMED",adPoints,watched)
+            return restartAna(run,date,card,"ad_not_started")
+        }
         val ok=afterReward(date)
         if(ok){RewardClaimStore.item(svc,date,card.key,"CLAIMED_AD",adPoints);leaveToList(date);return "CLAIMED_AD"}
         RewardClaimStore.item(svc,date,card.key,"AD_NOT_CONFIRMED",adPoints,watched);evidence(run,"ad_not_confirmed")
+        // The ad closed and no receipt came, ANA still on the choice sheet (user: restart ANA).
+        ui.refreshCache()
+        if(ui.currentPackage()==pkg&&!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)&&RewardClaimPolicy.choiceSheet(labels()))
+            return restartAna(run,date,card,"sheet_after_ad")
         leaveToList(date)
         return "AD_FAILED"
+    }
+
+    /** ANA restarted from Recents, then its startup popups handled; the card is tried again later in this run. */
+    private suspend fun restartAna(run:String,date:String,card:RewardCard,why:String):String {
+        evidence(run,"sheet_"+why)
+        if(StalledAdRestart.restartForRewardSheet(svc,date,run,card.key,why)){
+            val gate=StartupFlow(svc).prepare(run+"_reward_restart",launch=false)
+            Logger.i("REWARD","run=$run after_restart startup ok="+gate.ok+" "+gate.reason)
+            return if(gate.ok)"AD_FAILED" else "restart_startup_blocked"
+        }
+        // No restart left for this card or today: its own header × as a fallback.
+        leaveToList(date);ui.refreshCache()
+        return if(RewardClaimPolicy.choiceSheet(labels()))"SHEET_STUCK" else "AD_FAILED"
     }
 
     /** The OK on 「報酬を受け取りました」, then the sheet's own 「報酬受け取り済み」. */
