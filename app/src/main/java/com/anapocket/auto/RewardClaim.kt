@@ -47,6 +47,9 @@ object RewardClaimPolicy {
     fun claimed(status:String)=n(status)=="報酬受け取り済み"
     fun receiptDialog(labels:List<String>)=labels.any{n(it).startsWith("報酬を受け取りました")}
     fun choiceSheet(labels:List<String>)=labels.any{n(it)=="受け取りたい報酬を選んでください"}
+    /** 11/24 16:35: the choice sheet an earlier run left open. Its own header × (id close) shuts it without choosing; never over an ad. */
+    fun closableChoiceSheet(fgPkg:String?,labels:List<String>,ids:Set<String>,adWindow:Boolean)=
+        fgPkg=="us.ana_pocket.ANAPocket"&&!adWindow&&choiceSheet(labels)&&"close" in ids&&"headerLayout" in ids
     fun receiveButton(label:String)=n(label)=="報酬を受け取る"
     fun points(label:String)=Regex("^([\\d,]{1,7})pt$").matchEntire(n(label))?.groupValues?.get(1)?.replace(",","")?.toIntOrNull()
     /** Plain points are taken instead of the ad only when the ad cannot be had and the reward would expire today. */
@@ -169,7 +172,11 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         repeat(3){
             ui.refreshCache()
             byId("close_button")?.let{tapNode(it);delay(1200);return@repeat}
-            // 11/24 14:58: ANA's own 「受け取りたい報酬を選んでください」 sheet has no close control; Back closes it (no ad is up).
+            // 11/24 16:36: Back did not shut the 「受け取りたい報酬を選んでください」 sheet; its header × (id close) does.
+            val ids=nodes().mapNotNull{it.viewIdResourceName?.takeIf{v->v.startsWith("$pkg:id/")}?.substringAfterLast('/')}.toSet()
+            if(RewardClaimPolicy.closableChoiceSheet(ui.currentPackage(),labels(),ids,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))){
+                byId("close")?.let{tapNode(it);delay(1200);return@repeat}
+            }
             if(ui.currentPackage()==pkg&&!close.isRecoverableSurface()&&RewardClaimPolicy.choiceSheet(labels())){ui.back();delay(1200);return@repeat}
             if(byId("button_receive")!=null||byId("text_attended")!=null){byId("close")?.let{tapNode(it);delay(1200)}}
         }

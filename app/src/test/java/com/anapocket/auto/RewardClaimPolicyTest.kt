@@ -74,6 +74,16 @@ class RewardClaimPolicyTest {
         assertFalse(RewardClaimPolicy.mayRun(false,false,false,true,false))
         assertFalse(RewardClaimPolicy.mayRun(false,false,false,false,true))
     }
+    @Test fun aLeftoverChoiceSheetIsClosedByItsOwnCross() {
+        val ana="us.ana_pocket.ANAPocket"
+        val ls=listOf("受け取りたい報酬を選んでください","動画を見て","500pt","または","450pt")
+        val ids=setOf("design_bottom_sheet","headerLayout","title","close","button_reward_ad","button_reward")
+        assertTrue(RewardClaimPolicy.closableChoiceSheet(ana,ls,ids,false))
+        assertFalse(RewardClaimPolicy.closableChoiceSheet(ana,ls,ids,true))
+        assertFalse(RewardClaimPolicy.closableChoiceSheet("com.android.vending",ls,ids,false))
+        assertFalse(RewardClaimPolicy.closableChoiceSheet(ana,ls,ids-"close",false))
+        assertFalse(RewardClaimPolicy.closableChoiceSheet(ana,listOf("ホーム","ためる"),ids,false))
+    }
     @Test fun aLateLoginOfferIsHandledOnceBeforeTheScanReruns() {
         // 11/24 00:03: STARTUP NOT_PRESENT at 00:03:23, the ログインボーナス sheet at 00:03:24, every category SCAN_FAILED.
         val seen="挑战执行中止：startup_popup_blocks_category_navigation"

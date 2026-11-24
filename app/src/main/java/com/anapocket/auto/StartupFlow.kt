@@ -163,6 +163,14 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 }
                 stable=0;until=SystemClock.elapsedRealtime()+15_000L;continue
             }
+            if(RewardClaimPolicy.closableChoiceSheet(ui.currentPackage(),ls,ii,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))){
+                // 11/24 16:35: a reward choice sheet an earlier run left open blocked the scan and the daily ads.
+                val x=node("close")?:return StartupResult(false,"BLOCKED",closed,"报酬选择框关闭控件不可用")
+                proof(run,"reward_choice_sheet_before_close","left_from_earlier_reward_claim;nothing_chosen;no_ad")
+                if(!tap(x))return StartupResult(false,"BLOCKED",closed,"报酬选择框关闭失败")
+                closed++;if(closed>=6)return StartupResult(false,"BLOCKED",closed,"报酬选择框关闭次数已达上限")
+                delay(900);stable=0;continue
+            }
             if(sdkSurface() || AdSignals.playSheet(ui.currentPackage(),ls)){
                 val prior=LoginBonusStore.read(svc,date)
                 if(prior?.optString("state")=="UNCONFIRMED"){
