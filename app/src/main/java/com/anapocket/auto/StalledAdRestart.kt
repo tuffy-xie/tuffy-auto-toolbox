@@ -117,9 +117,9 @@ object StalledAdRestart {
      */
     suspend fun restartForRewardSheet(svc:AutoAccessibilityService,date:String,run:String,cardKey:String,why:String):Boolean {
         val p=prefs(svc);val key="REWARD|"+date+"|"+cardKey
-        val login=LoginBonusStore.read(svc,date)?.optString("state")
-        if(!RewardClaimPolicy.sheetRestartAllowed(p.contains(key),p.getInt("reward_count_"+date,0),AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),RewardClaimPolicy.loginOpen(login))){
-            Logger.i("REWARD","run=$run ana_restart_not_allowed card_used="+p.contains(key)+" today="+p.getInt("reward_count_"+date,0)+" login="+login);return false}
+        val login=LoginBonusStore.read(svc,date)?.optString("state");val loginRelaunched=mayRelaunchLogin(svc,date)
+        if(!RewardClaimPolicy.sheetRestartAllowed(p.contains(key),p.getInt("reward_count_"+date,0),AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity),RewardClaimPolicy.loginHoldsRestart(login,loginRelaunched))){
+            Logger.i("REWARD","run=$run ana_restart_not_allowed card_used="+p.contains(key)+" today="+p.getInt("reward_count_"+date,0)+" login="+login+" loginRelaunched="+loginRelaunched);return false}
         val ui=Ui(svc);val owner=CheckinRuntime.ownership.owner()
         fun live()=!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.isConnected()&&AutoAccessibilityService.currentRunId==run&&TokyoDate.of()==date&&
             owner!=null&&owner.app=="ANA"&&owner.run==run&&CheckinRuntime.ownership.valid(owner,SystemClock.elapsedRealtime())&&!(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked&&AccountSafety.authorize(svc,"reward_sheet_restart")

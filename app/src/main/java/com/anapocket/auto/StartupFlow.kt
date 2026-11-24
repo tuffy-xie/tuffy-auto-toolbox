@@ -171,6 +171,13 @@ class StartupFlow(private val svc:AutoAccessibilityService) {
                 closed++;if(closed>=6)return StartupResult(false,"BLOCKED",closed,"报酬选择框关闭次数已达上限")
                 delay(900);stable=0;continue
             }
+            if(RewardClaimPolicy.closableDetailSheet(ui.currentPackage(),ls,ii,AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity))){
+                val x=node("close")?:return StartupResult(false,"BLOCKED",closed,"报酬详情页关闭控件不可用")
+                proof(run,"reward_detail_sheet_before_close","left_from_earlier_reward_claim;nothing_received;no_ad")
+                if(!tap(x))return StartupResult(false,"BLOCKED",closed,"报酬详情页关闭失败")
+                closed++;if(closed>=6)return StartupResult(false,"BLOCKED",closed,"报酬详情页关闭次数已达上限")
+                delay(900);stable=0;continue
+            }
             if(sdkSurface() || AdSignals.playSheet(ui.currentPackage(),ls)){
                 val prior=LoginBonusStore.read(svc,date)
                 if(prior?.optString("state")=="UNCONFIRMED"){

@@ -50,17 +50,33 @@ object RewardClaimPolicy {
     /** 11/24 16:35: the choice sheet an earlier run left open. Its own header × (id close) shuts it without choosing; never over an ad. */
     fun closableChoiceSheet(fgPkg:String?,labels:List<String>,ids:Set<String>,adWindow:Boolean)=
         fgPkg=="us.ana_pocket.ANAPocket"&&!adWindow&&choiceSheet(labels)&&"close" in ids&&"headerLayout" in ids
+    /**
+     * 11/24 20:38: a finished challenge's reward sheet (🏅デイリーチャレンジ, 報酬を受け取る, 受取期限：2026/11/25) left open
+     * blocked the travel scan and the daily ads. Its own header × closes it; nothing is received. Never over an ad.
+     */
+    fun closableDetailSheet(fgPkg:String?,labels:List<String>,ids:Set<String>,adWindow:Boolean)=
+        fgPkg=="us.ana_pocket.ANAPocket"&&!adWindow&&!choiceSheet(labels)&&
+            listOf("design_bottom_sheet","headerLayout","close","text_period").all{it in ids}&&labels.any{detailDeadline(it)!=null}&&
+            ("button_receive" in ids&&labels.any{receiveButton(it)}||labels.any{claimed(it)})
     fun receiveButton(label:String)=n(label)=="報酬を受け取る"
     fun points(label:String)=Regex("^([\\d,]{1,7})pt$").matchEntire(n(label))?.groupValues?.get(1)?.replace(",","")?.toIntOrNull()
     /** Plain points are taken instead of the ad only when the ad cannot be had and the reward would expire today. */
     fun plainFallback(adOffered:Boolean,adAttempts:Int,daysLeft:Long)=daysLeft==0L&&(!adOffered||adAttempts>=MAX_AD_ATTEMPTS)
     const val MAX_AD_ATTEMPTS=2
-    /** 11/24 (user): ANA restarts for a choice sheet left after the ad; once per card, at most this many a day. */
-    const val SHEET_RESTART_LIMIT=4
+    /**
+     * 11/24 (user): ANA restarts for a choice sheet left after the ad; once per card, at most this many a day.
+     * 4 ran out at 20:49 with six cards still open (動物園 skipped), so it now covers a full list of open cards.
+     */
+    const val SHEET_RESTART_LIMIT=10
     /** [loginOpen]: a login ad still being confirmed needs its original ANA task (AdTaskReturn), so ANA is not restarted. */
     fun sheetRestartAllowed(usedForCard:Boolean,usedToday:Int,adWindow:Boolean,loginOpen:Boolean)=
         !usedForCard&&!adWindow&&!loginOpen&&usedToday<SHEET_RESTART_LIMIT
     fun loginOpen(state:String?)=state in setOf("UNCONFIRMED","AD_OPENING","AD_PLAYING")
+    /**
+     * 11/25 00:08: the login ad timed out and the startup restart already removed its ANA task, so the login stayed
+     * UNCONFIRMED all day with nothing left to return to; that alone no longer holds the reward restart back.
+     */
+    fun loginHoldsRestart(state:String?,loginTaskRelaunched:Boolean)=loginOpen(state)&&!(state=="UNCONFIRMED"&&loginTaskRelaunched)
     /** Only the user's reward switch: with no travel category and no daily ads, the run is for the rewards alone. */
     fun rewardsOnly(s:AppSettings)=s.rewardEnabled&&!s.adEnabled&&Cat.values().none{s.catOn(it)}
     /** Nothing open is left behind: no MAX dialog, safety check, daily viewing in flight, unresolved travel ad or ad on screen. */
@@ -212,6 +228,9 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
             }
             if(!onChallengeList()){if(attempt>=1)ui.back();delay(1500);return@repeat}
             nodes().firstOrNull{ui.label(it).trim()=="参加中"}?.let{tapNode(it)}
+            // 11/25 01:53 and 02:02: back on 参加中 after the last cards failed, the list was still scrolled down and the
+            // 報酬未受取 chip above the first card was out of view, so every attempt ended unclaimed_list_unreachable.
+            if(!waitFor(2500,date){unclaimedChip()!=null})revealChip(date)
             if(!waitFor(4000,date){unclaimedChip()!=null}){delay(800);return@repeat}
             unclaimedChip()?.let{tapNode(it)};delay(1500)
             if(waitFor(5000,date){listVerified()}){scrollTop(date);return true}
@@ -224,6 +243,14 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         val statuses=nodes().filter{it.viewIdResourceName=="$pkg:id/text_status"}.map{ui.label(it)}
         return statuses.isEmpty()&&nodes().none{it.viewIdResourceName=="$pkg:id/text_name"}||
             statuses.isNotEmpty()&&statuses.all{it.contains("まで報酬を受け取りましょう")}
+    }
+    /** Scrolls the 参加中 list back to its top, then drags it down once in case the chip row only follows a touch scroll. */
+    private suspend fun revealChip(date:String){
+        scrollTop(date);ui.refreshCache()
+        if(unclaimedChip()!=null||stopped(date))return
+        val l=list()?:return;val r=Rect();l.getBoundsInScreen(r)
+        if(r.height()>300)ui.swipe(r.centerX(),r.top+120,r.centerX(),r.bottom-80,450)
+        delay(900);ui.refreshCache()
     }
     private suspend fun scrollTop(date:String){
         repeat(80){if(stopped(date))return;val l=list()?:return;if(!l.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD))return;delay(150);ui.refreshCache()}
@@ -327,7 +354,9 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         evidence(run,"sheet_"+why)
         if(StalledAdRestart.restartForRewardSheet(svc,date,run,card.key,why)){
             // Same rule as the gate before the daily ads: no new login submission while a daily viewing awaits review.
-            val allowLogin=OfficialAdStore.attempts(svc,date).none{!it.terminal||it.state==AdState.UNCONFIRMED}&&!TravelSelection.hasUnresolvedAd(svc,date)
+            // A login still awaiting review (its task already restarted) is never pressed again from here either.
+            val allowLogin=OfficialAdStore.attempts(svc,date).none{!it.terminal||it.state==AdState.UNCONFIRMED}&&!TravelSelection.hasUnresolvedAd(svc,date)&&
+                !RewardClaimPolicy.loginOpen(LoginBonusStore.read(svc,date)?.optString("state"))
             val gate=StartupFlow(svc).prepare(run+"_reward_restart",launch=false,allowLoginSubmission=allowLogin)
             Logger.i("REWARD","run=$run after_restart startup ok="+gate.ok+" "+gate.reason)
             return if(gate.ok)"AD_FAILED" else "restart_startup_blocked"

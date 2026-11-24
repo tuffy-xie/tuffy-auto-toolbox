@@ -94,6 +94,29 @@ class RewardClaimPolicyTest {
         assertTrue(RewardClaimPolicy.loginOpen("UNCONFIRMED"));assertTrue(RewardClaimPolicy.loginOpen("AD_PLAYING"))
         assertFalse(RewardClaimPolicy.loginOpen("REWARD_CONFIRMED"));assertFalse(RewardClaimPolicy.loginOpen("NOT_PRESENT"));assertFalse(RewardClaimPolicy.loginOpen(null))
     }
+    @Test fun aLeftoverDetailSheetIsClosedByItsOwnCross() {
+        // 11/24 20:38 on the phone: the 徒歩で3km sheet an earlier claim left open blocked the scan and the daily ads.
+        val ana="us.ana_pocket.ANAPocket"
+        val ls=listOf("🏅デイリーチャレンジ（バッジ対象）","徒歩で3km移動しよう！","450","pt","ブースト5回","報酬を受け取る","受取期限：2026/11/25","参加日時：2026/10/25 01:05")
+        val ids=setOf("design_bottom_sheet","headerLayout","title","close","text_name","button_receive","text_period","text_attended")
+        assertTrue(RewardClaimPolicy.closableDetailSheet(ana,ls,ids,false))
+        assertTrue(RewardClaimPolicy.closableDetailSheet(ana,ls-"報酬を受け取る"+"報酬受け取り済み",ids-"button_receive",false))
+        assertFalse(RewardClaimPolicy.closableDetailSheet(ana,ls,ids,true))                       // never over an ad
+        assertFalse(RewardClaimPolicy.closableDetailSheet("com.android.vending",ls,ids,false))
+        assertFalse(RewardClaimPolicy.closableDetailSheet(ana,ls,ids-"close",false))
+        assertFalse(RewardClaimPolicy.closableDetailSheet(ana,ls-"受取期限：2026/11/25",ids,false))    // not a reward sheet
+        assertFalse(RewardClaimPolicy.closableDetailSheet(ana,ls+"受け取りたい報酬を選んでください",ids,false)) // the choice sheet goes first
+    }
+    @Test fun anUnconfirmedLoginWhoseTaskWasAlreadyRestartedNoLongerHoldsTheRewardRestart() {
+        // 11/25 00:08: the login ad timed out, the startup restart removed its task; at 01:50 every reward restart was refused.
+        assertFalse(RewardClaimPolicy.loginHoldsRestart("UNCONFIRMED",true))
+        assertTrue(RewardClaimPolicy.loginHoldsRestart("UNCONFIRMED",false))
+        assertTrue(RewardClaimPolicy.loginHoldsRestart("AD_PLAYING",true))
+        assertTrue(RewardClaimPolicy.loginHoldsRestart("AD_OPENING",true))
+        assertFalse(RewardClaimPolicy.loginHoldsRestart("REWARD_CONFIRMED",false))
+        assertFalse(RewardClaimPolicy.loginHoldsRestart(null,false))
+        assertTrue(RewardClaimPolicy.SHEET_RESTART_LIMIT>=8)
+    }
     @Test fun aLateLoginOfferIsHandledOnceBeforeTheScanReruns() {
         // 11/24 00:03: STARTUP NOT_PRESENT at 00:03:23, the ログインボーナス sheet at 00:03:24, every category SCAN_FAILED.
         val seen="挑战执行中止：startup_popup_blocks_category_navigation"
