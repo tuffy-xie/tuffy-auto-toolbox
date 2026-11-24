@@ -169,6 +169,8 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         repeat(3){
             ui.refreshCache()
             byId("close_button")?.let{tapNode(it);delay(1200);return@repeat}
+            // 11/24 14:58: ANA's own 「受け取りたい報酬を選んでください」 sheet has no close control; Back closes it (no ad is up).
+            if(ui.currentPackage()==pkg&&!close.isRecoverableSurface()&&RewardClaimPolicy.choiceSheet(labels())){ui.back();delay(1200);return@repeat}
             if(byId("button_receive")!=null||byId("text_attended")!=null){byId("close")?.let{tapNode(it);delay(1200)}}
         }
     }
@@ -285,7 +287,13 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         if(!AccountSafety.authorize(svc,"reward_claim_ad")){leaveToList(date);return "account_safety"}
         RewardClaimStore.item(svc,date,card.key,"AD_DISPATCHED",adPoints)
         tapNode(adButton)
-        val watched=watchAd(run,date)
+        var watched=watchAd(run,date)
+        // 11/24 14:58: 「動画を見て 500pt」 was tapped, no ad came up in 20 s and the choice sheet stayed. ANA never left its own
+        // page, so nothing was viewed; the same button is pressed once more after a pause.
+        if(watched=="NOT_STARTED"&&RewardClaimPolicy.choiceSheet(labels())){
+            delay(3000);ui.refreshCache()
+            byId("button_reward_ad")?.let{Logger.i("REWARD","run=$run ad_not_started; choice sheet still shown; one more press");tapNode(it);watched=watchAd(run,date)}
+        }
         if(watched=="STUCK"){evidence(run,"ad_stuck");FaultStore.capture(svc,run,"reward","ad_timeout_300s");return "AD_STUCK"}
         val ok=afterReward(date)
         if(ok){RewardClaimStore.item(svc,date,card.key,"CLAIMED_AD",adPoints);leaveToList(date);return "CLAIMED_AD"}
