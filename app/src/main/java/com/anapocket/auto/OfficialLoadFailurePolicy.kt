@@ -43,7 +43,31 @@ object OfficialLoadFailurePolicy {
      */
     fun adWindowInFront(sdkActivityRecorded:Boolean,currentPkg:String?,homePkg:String?)=
         sdkActivityRecorded&&!(currentPkg!=null&&currentPkg==homePkg)
-    fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)||undispatched(a)
+    /**
+     * 11/24 #9 and 11/25 #8: ANA's 「報酬を受け取りました」 receipt was seen, but 「今日の視聴済み回数」 never moved
+     * (8/25 for 17 hours on 11/24), so one uncounted viewing stopped the remaining 17-18 ads all day. User 11/25 02:3x
+     * ("大概率是网络问题,建议重启后继续按照你的方案打开"): restart ANA, read the fresh counter twice; still unchanged, the
+     * viewing is recorded as not counted (the row stays UNCONFIRMED, never GAIN) and the next official slot is watched.
+     */
+    fun receiptUncounted(a:AdAttempt)=a.terminal&&a.state==AdState.UNCONFIRMED&&!a.completed&&a.rewardConfirmed&&
+        a.failureReason=="completion_not_confirmed"&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&a.officialBefore in 0..24
+    /** At most this many uncounted receipts are let through a day; the next one stops the ads as before. */
+    const val MAX_UNCOUNTED=2
+    const val UNCOUNTED_MIN_AGE_MS=3*60_000L
+    /** Before ANA is restarted for the review: the last row is such a receipt and the day still has a review left for it. */
+    fun mayStartUncounted(rows:List<AdAttempt>,date:String,today:String,receipt:Boolean,elapsed:Long,reviewed:Set<String>,uncountedReviews:Int):Boolean {
+        val a=rows.lastOrNull()?:return false
+        return date==today&&a.date==date&&receipt&&receiptUncounted(a)&&elapsed>=UNCOUNTED_MIN_AGE_MS&&
+            reviewed.size<MAX_REVIEWS&&uncountedReviews<MAX_UNCOUNTED&&key(a) !in reviewed&&rows.dropLast(1).all{it.date==date&&resolved(it,reviewed)}
+    }
+    /** After the restart: both fresh counters, read minutes apart, still at the viewing's own baseline. */
+    fun mayReviewUncounted(rows:List<AdAttempt>,date:String,today:String,receipt:Boolean,relaunched:Boolean,adClosed:Boolean,
+                           first:Int?,second:Int?,elapsed:Long,reviewed:Set<String>,uncountedReviews:Int):Boolean {
+        val a=rows.lastOrNull()?:return false
+        return mayStartUncounted(rows,date,today,receipt,elapsed,reviewed,uncountedReviews)&&relaunched&&adClosed&&
+            first==a.officialBefore&&second==a.officialBefore
+    }
+    fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)||undispatched(a)||receiptUncounted(a)
     fun resolved(a:AdAttempt,reviewed:Set<String>)=
         a.terminal&&a.state==AdState.REWARD_CONFIRMED&&a.completed&&a.rewardConfirmed||reviewable(a)&&key(a) in reviewed
     /**
@@ -66,6 +90,7 @@ object OfficialLoadFailurePolicy {
     const val SOURCE_BLANK_UNPROVEN="timed_out_no_frozen_proof_closed_30min_fresh_unchanged_counter"
     const val SOURCE_QUIET_RETURN="returned_without_receipt_30min_fresh_unchanged_counter"
     const val SOURCE_UNDISPATCHED="reserved_never_armed_fresh_unchanged_counter"
+    const val SOURCE_RECEIPT_UNCOUNTED="receipt_seen_ana_restarted_two_fresh_unchanged_counters"
     /** The source a blank/quiet/undispatched review is written with; [reviewSourceMatches] must accept it when read back. */
     fun blankReviewSource(a:AdAttempt,stallVerified:Boolean)=if(quietReturn(a))SOURCE_QUIET_RETURN else if(undispatched(a))SOURCE_UNDISPATCHED
         else if(!stallProofSatisfied(a,stallVerified))SOURCE_BLANK_UNPROVEN else SOURCE_BLANK
@@ -78,6 +103,7 @@ object OfficialLoadFailurePolicy {
         SOURCE_BLANK,SOURCE_BLANK_UNPROVEN->blankStall(row)
         SOURCE_QUIET_RETURN->quietReturn(row)
         SOURCE_UNDISPATCHED->undispatched(row)
+        SOURCE_RECEIPT_UNCOUNTED->receiptUncounted(row)
         else->false
     }
     fun mayReview(rows:List<AdAttempt>,date:String,today:String,counter:Int?,nativeProof:Boolean,elapsed:Long,reviewed:Set<String>):Boolean {

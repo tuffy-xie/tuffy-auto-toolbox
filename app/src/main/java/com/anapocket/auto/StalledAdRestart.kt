@@ -136,6 +136,38 @@ object StalledAdRestart {
         for(i in 0 until 50){delay(400);ui.refreshCache();if(ui.currentPackage()==PKG&&!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)){Logger.i("REWARD","run=$run ana_relaunched");return true}}
         Logger.w("REWARD","run=$run ana_relaunch_not_observed");return false
     }
+    private fun uncountedKey(date:String,a:AdAttempt)="UNCOUNTED|"+dailyKey(date,a)
+    /** ANA was removed from Recents and reopened for this very uncounted receipt. */
+    fun uncountedRelaunched(c:Context,date:String,a:AdAttempt)=
+        prefs(c).getString(uncountedKey(date,a),null)?.let{JSONObject(it).optString("state")}=="RELAUNCHED"
+    /**
+     * 11/25 (user): a daily receipt the official counter never took. ANA is removed from Recents and reopened once for that
+     * viewing before its counter is read again. Never over an ad window, an open login or travel ad; no ledger change here.
+     */
+    suspend fun restartForUncountedDaily(svc:AutoAccessibilityService,date:String,run:String,a:AdAttempt):Boolean {
+        val p=prefs(svc);val key=uncountedKey(date,a)
+        if(uncountedRelaunched(svc,date,a))return true
+        val login=LoginBonusStore.read(svc,date)?.optString("state")
+        if(p.contains(key)||AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)||TravelSelection.hasUnresolvedAd(svc,date)||
+            RewardClaimPolicy.loginHoldsRestart(login,mayRelaunchLogin(svc,date))){
+            Logger.i("ADUNCOUNTED","run=$run restart_not_allowed used="+p.contains(key)+" login="+login);return false}
+        val ui=Ui(svc);val owner=CheckinRuntime.ownership.owner()
+        fun live()=!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.isConnected()&&AutoAccessibilityService.currentRunId==run&&TokyoDate.of()==date&&
+            owner!=null&&owner.app=="ANA"&&owner.run==run&&CheckinRuntime.ownership.valid(owner,SystemClock.elapsedRealtime())&&!(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked&&AccountSafety.authorize(svc,"uncounted_daily_restart")
+        if(!live()){Logger.w("ADUNCOUNTED","run=$run not_live");return false}
+        ui.refreshCache()
+        Evidence.write(svc,"uncounted_restart_"+run+"_before_"+System.currentTimeMillis()+".txt","identity="+dailyKey(date,a)+";before="+a.officialBefore+";JST="+TokyoDate.time()+";receipt_seen_counter_unchanged;no_new_viewing\n"+ui.dump())
+        check(p.edit().putString(key,JSONObject().put("date",date).put("identity",dailyKey(date,a)).put("controllerRun",run).put("state","REQUESTED").put("requestedAt",System.currentTimeMillis()).toString()).commit())
+        Logger.w("ADUNCOUNTED","run=$run removing_ana_task for uncounted receipt index="+a.index+" before="+a.officialBefore)
+        val cleanup=ManagedAppCleanup.run(svc,PKG,{live()},{block->live()&&owner!=null&&CheckinRuntime.ownership.action(owner,SystemClock.elapsedRealtime(),false){if(live())block()}})
+        if(!cleanup.optBoolean("recentTaskRemoved")){Logger.w("ADUNCOUNTED","run=$run task_removal_not_confirmed");return false}
+        delay(1500L)
+        if(!live()||!ui.launchApp(PKG))return false
+        for(i in 0 until 50){delay(400);ui.refreshCache();if(ui.currentPackage()==PKG&&!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)){
+            check(p.edit().putString(key,JSONObject(p.getString(key,"{}")!!).put("state","RELAUNCHED").put("relaunchedAt",System.currentTimeMillis()).toString()).commit())
+            Logger.i("ADUNCOUNTED","run=$run ana_relaunched");return true}}
+        Logger.w("ADUNCOUNTED","run=$run relaunch_not_observed");return false
+    }
     /** User-directed for a timed-out daily ad: remove the observed ANA task and reopen. No ledger write, no new viewing. */
     suspend fun recoverBlankDaily(svc:AutoAccessibilityService,date:String,run:String):Boolean {
         val rows=OfficialAdStore.attempts(svc,date);val a=rows.lastOrNull()?:return false

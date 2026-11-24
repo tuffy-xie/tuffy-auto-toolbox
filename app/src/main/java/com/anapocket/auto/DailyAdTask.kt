@@ -629,6 +629,37 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
         Logger.i("ADBLANK","run=$runId reviewed originalRun="+a.runId+" index="+a.index+" unchanged="+fresh+" originalUnconfirmedKept=true")
         return true
     }
+    /**
+     * 11/25 (user): the receipt was seen but the official counter stayed at the viewing's baseline. Restart ANA, read the
+     * fresh counter, wait, read it again. A counter that moved by exactly one commits the original receipt; two unchanged
+     * reads record the viewing as not counted (UNCONFIRMED kept) and free the next official slot. Nothing is replayed here.
+     */
+    private suspend fun reviewUncountedReceipt(runId:String,date:String,a:AdAttempt):Boolean {
+        fun live()=TokyoDate.of()==date&&!blocked()&&!AutoAccessibilityService.stopRequested&&AccountSafety.authorize(svc,"daily_uncounted_review")
+        if(!OfficialLoadFailurePolicy.mayStartUncounted(OfficialAdStore.attempts(svc,date),date,TokyoDate.of(),OfficialAdStore.hasRecordedReceipt(svc,date,a),
+                System.currentTimeMillis()-a.finishedAt,OfficialAdStore.reviewedKeys(svc,date),OfficialAdStore.uncountedReviews(svc,date)))return false
+        val controller=AutoAccessibilityService.currentRunId?:return false
+        if(!live()||!StalledAdRestart.restartForUncountedDaily(svc,date,controller,a))return false
+        fun gained(fresh:Int):Boolean{
+            if(fresh!=a.officialBefore+1||!OfficialAdStore.reconcileRecordedReceipt(svc,date,a,fresh))return false
+            OfficialAdStore.observe(svc,date,fresh,runId,"uncounted_receipt_counted_after_ana_restart_no_new_start")
+            Logger.i("ADUNCOUNTED","run=$runId index="+a.index+" counted_after_restart after="+fresh);return true
+        }
+        if(!live()||!navigate(runId,reviewOnly=true))return false
+        val first=refreshOfficialEntry(runId)?:return false
+        if(first!=a.officialBefore)return gained(first)
+        repeat(150){if(!live())return false;delay(800L)}   // two minutes between the reads
+        if(!live()||!navigate(runId,reviewOnly=true))return false
+        val second=refreshOfficialEntry(runId)?:return false
+        if(second!=a.officialBefore)return gained(second)
+        val adClosed=!AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)
+        if(!live()||!OfficialAdStore.reviewUncountedReceipt(svc,date,runId,first,second,adClosed)){
+            Logger.w("ADUNCOUNTED","run=$runId review_rejected index="+a.index+" first=$first second=$second");return false}
+        OfficialAdStore.observe(svc,date,second,runId,"uncounted_receipt_review_two_fresh_unchanged_counters_original_unconfirmed_kept")
+        evidence(runId,"uncounted_"+a.index+"_reviewed_not_counted",a.toJson().toString()+";first=$first;second=$second;ana_restarted;original_unconfirmed_preserved")
+        Logger.i("ADUNCOUNTED","run=$runId index="+a.index+" not_counted unchanged=$second originalUnconfirmedKept=true")
+        return true
+    }
     suspend fun run(runId: String, reason: String, maxAttempts: Int = DAILY_AD_LIMIT, manualNew: Boolean = false): DailyAdResult {
         val date = TokyoDate.of()
         var detail = ""
@@ -669,8 +700,11 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                         val reconciled=OfficialAdStore.reconcileRecordedReceipt(svc,date,original,fresh)
                         // An observed counter is not a receipt for this UNKNOWN. Keep both facts separately.
                         OfficialAdStore.observe(svc,date,fresh,runId,if(reconciled)"original_durable_receipt_fresh_exact_counter_no_new_start" else "recorded_receipt_review_counter_only_no_reward_inferred")
-                        if(!reconciled)return blockedResult(runId,date,"recorded_daily_receipt_counter_unconfirmed_no_replay")
-                        Logger.i("ADRECOVER","run=$runId originalRun="+original.runId+" index="+original.index+" recorded_receipt_committed no_new_start=true")
+                        if(!reconciled){
+                            // 11/25 (user): restart ANA, read twice; still unchanged, it is recorded as not counted and the ads go on.
+                            if(fresh!=original.officialBefore||!reviewUncountedReceipt(runId,date,original))
+                                return blockedResult(runId,date,"recorded_daily_receipt_counter_unconfirmed_no_replay")
+                        }else Logger.i("ADRECOVER","run=$runId originalRun="+original.runId+" index="+original.index+" recorded_receipt_committed no_new_start=true")
                     }else if(original!=null&&(OfficialAdRecoveryPolicy.mayBind(old,date,TokyoDate.of(),OfficialAdStore.counter(svc,date),true)||
                         ReviewedAdRecoveryPolicy.mayBind(old,date,TokyoDate.of(),OfficialAdStore.counter(svc,date),true,OfficialAdStore.reviewedKeys(svc,date)))){
                         val recoveryFailure=recoverExisting(runId,date,original)

@@ -100,6 +100,23 @@ object OfficialAdStore {
         check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
         return true
     }
+    /** Uncounted-receipt reviews already written today ([OfficialLoadFailurePolicy.MAX_UNCOUNTED]). */
+    @Synchronized fun uncountedReviews(c:Context,date:String):Int {
+        val a=JSONArray(sp(c).getString("load_reviews_"+date,"[]"))
+        return (0 until a.length()).count{a.getJSONObject(it).optString("source")==OfficialLoadFailurePolicy.SOURCE_RECEIPT_UNCOUNTED}
+    }
+    /** Writes the review only from two fresh counters at the viewing's own baseline after ANA was restarted for it. */
+    @Synchronized fun reviewUncountedReceipt(c:Context,date:String,run:String,first:Int,second:Int,adClosed:Boolean):Boolean{
+        val rows=attempts(c,date);val a=rows.lastOrNull()?:return false;val keys=reviewKeys(c,date,rows)
+        val relaunched=StalledAdRestart.uncountedRelaunched(c,date,a)
+        if(!OfficialLoadFailurePolicy.mayReviewUncounted(rows,date,TokyoDate.of(),hasRecordedReceipt(c,date,a),relaunched,adClosed,
+                first,second,System.currentTimeMillis()-a.finishedAt,keys,uncountedReviews(c,date)))return false
+        val list=JSONArray(sp(c).getString("load_reviews_"+date,"[]"));list.put(JSONObject().put("key",OfficialLoadFailurePolicy.key(a))
+            .put("date",date).put("counter",second).put("firstCounter",first).put("source",OfficialLoadFailurePolicy.SOURCE_RECEIPT_UNCOUNTED)
+            .put("anaRestarted",true).put("reviewRunId",run).put("checkedAt",System.currentTimeMillis()))
+        check(sp(c).edit().putString("load_reviews_"+date,list.toString()).commit()){"load_review_write_failed"}
+        return true
+    }
     @Synchronized fun reserve(c:Context,date:String,run:String,before:Int):AdAttempt?{
         val rows=attempts(c,date)
         if(!OfficialAdQuota.canReserve(before,counter(c,date),TokyoDate.of()==date,AutoAccessibilityService.stopRequested,rows)&&
