@@ -66,15 +66,35 @@ class RewardClaimPolicyTest {
         assertEquals(RewardRange.WEEK,RewardRange.of("WEEK"));assertEquals(RewardRange.TODAY,RewardRange.of("bogus"));assertEquals(RewardRange.TODAY,RewardRange.of(null))
     }
 
-    private class Port(val blockChallenges:Boolean=false,val adsContinue:Boolean=true):RoutinePort {
+    @Test fun rewardsNeverLeaveSomethingOpen() {
+        assertTrue(RewardClaimPolicy.mayRun(false,false,false,false,false))
+        assertFalse(RewardClaimPolicy.mayRun(true,false,false,false,false))
+        assertFalse(RewardClaimPolicy.mayRun(false,true,false,false,false))
+        assertFalse(RewardClaimPolicy.mayRun(false,false,true,false,false))
+        assertFalse(RewardClaimPolicy.mayRun(false,false,false,true,false))
+        assertFalse(RewardClaimPolicy.mayRun(false,false,false,false,true))
+    }
+    @Test fun aLateLoginOfferIsHandledOnceBeforeTheScanReruns() {
+        // 11/24 00:03: STARTUP NOT_PRESENT at 00:03:23, the ログインボーナス sheet at 00:03:24, every category SCAN_FAILED.
+        val seen="挑战执行中止：startup_popup_blocks_category_navigation"
+        assertTrue(LateLoginPolicy.retry(seen,"NOT_PRESENT",false,false))
+        assertTrue(LateLoginPolicy.retry("category_popup_blocks_navigation",null,false,false))
+        assertFalse(LateLoginPolicy.retry(seen,"REWARD_CONFIRMED",false,false))   // the offer is not a login one
+        assertFalse(LateLoginPolicy.retry(seen,"UNCONFIRMED",false,false))        // never resubmit an unconfirmed login
+        assertFalse(LateLoginPolicy.retry(seen,"NOT_PRESENT",true,false))         // a daily viewing is still open
+        assertFalse(LateLoginPolicy.retry(seen,"NOT_PRESENT",false,true))         // travel review only
+        assertFalse(LateLoginPolicy.retry("join_not_confirmed_CAR","NOT_PRESENT",false,false))
+    }
+
+    private class Port(val blockChallenges:Boolean=false,val adsContinue:Boolean=true,val startupContinue:Boolean=true):RoutinePort {
         val calls=mutableListOf<String>();var blockedSeen:Boolean?=null
         override fun stopped()=false
         override fun sameDate()=true
         override suspend fun progress(stage:String,result:RoutineStepResult){}
-        override suspend fun startup():RoutineStepResult{calls.add("startup");return RoutineStepResult("DONE","")}
+        override suspend fun startup():RoutineStepResult{calls.add("startup");return RoutineStepResult(if(startupContinue)"DONE" else "BLOCKED","login",startupContinue)}
         override suspend fun challenges():RoutineStepResult{calls.add("challenges")
             return if(blockChallenges)RoutineStepResult("BLOCKED","x",true) else RoutineStepResult("DONE","")}
-        override suspend fun ads():RoutineStepResult{calls.add("ads");return RoutineStepResult("DONE","",adsContinue)}
+        override suspend fun ads():RoutineStepResult{calls.add("ads");return if(adsContinue)RoutineStepResult("DONE","") else RoutineStepResult("BLOCKED","unknown kept",false)}
         override suspend fun rewards(blockedBefore:Boolean):RoutineStepResult{calls.add("rewards");blockedSeen=blockedBefore
             return RoutineStepResult("PARTIALLY_COMPLETED","left",false)}
     }
@@ -88,7 +108,12 @@ class RewardClaimPolicyTest {
     @Test fun anEarlierBlockReachesTheRewardStep() = runBlocking {
         val p=Port(blockChallenges=true);val r=RoutineSequence(p).run()
         assertEquals(true,p.blockedSeen);assertEquals("BLOCKED",r.state)
-        val stop=Port(adsContinue=false);RoutineSequence(stop).run()
-        assertFalse(stop.calls.contains("rewards"))
+        // 11/24: the daily-ad stop (UNKNOWN kept) lasted all day; the rewards still run and the day stays BLOCKED.
+        val ads=Port(adsContinue=false);val r2=RoutineSequence(ads).run()
+        assertEquals(listOf("startup","challenges","ads","rewards"),ads.calls);assertEquals(true,ads.blockedSeen)
+        assertEquals("BLOCKED",r2.state);assertEquals("unknown kept",r2.detail)
+        // Any earlier stop still ends the run before the rewards.
+        val login=Port(startupContinue=false);assertEquals("BLOCKED",RoutineSequence(login).run().state)
+        assertEquals(listOf("startup"),login.calls)
     }
 }

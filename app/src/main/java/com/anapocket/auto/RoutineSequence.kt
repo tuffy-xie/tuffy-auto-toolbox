@@ -16,7 +16,10 @@ interface RoutinePort {
 class RoutineSequence(private val port:RoutinePort) {
     suspend fun run():RoutineOutcome {
         val results=linkedMapOf<String,RoutineStepResult>()
+        var halted:RoutineStepResult?=null
         for(stage in listOf("STARTUP","CHALLENGES","ADS","REWARDS")){
+            // 11/24: a stopped daily-ad stage (UNKNOWN kept, no replay) lasts all day; the reward stage still runs and checks itself.
+            if(halted!=null&&!(stage=="REWARDS"&&results["ADS"]===halted))break
             if(!port.connected())return RoutineOutcome("BLOCKED","accessibility_disconnected",results)
             if(port.stopped())return RoutineOutcome("STOPPED","已按请求停止",results)
             if(!port.sameDate())return RoutineOutcome("BLOCKED","手机任务日期已变化，下次使用新日期",results)
@@ -25,8 +28,9 @@ class RoutineSequence(private val port:RoutinePort) {
                 else->port.rewards(results.values.any{it.state=="BLOCKED"}).let{if(it.continueRun)it else it.copy(continueRun=true)}}
             results[stage]=result;port.progress(stage,result)
             if(!port.connected())return RoutineOutcome("BLOCKED","accessibility_disconnected",results)
-            if(!result.continueRun)return RoutineOutcome(if(port.stopped())"STOPPED" else "BLOCKED",result.detail,results)
+            if(!result.continueRun){if(port.stopped())return RoutineOutcome("STOPPED",result.detail,results);halted=result}
         }
+        halted?.let{return RoutineOutcome(if(port.stopped())"STOPPED" else "BLOCKED",it.detail,results)}
         if(port.stopped())return RoutineOutcome("STOPPED","已按请求停止",results)
         if(!port.sameDate())return RoutineOutcome("BLOCKED","手机任务日期已变化，下次使用新日期",results)
         // A stage may stop yet let a later, independent stage run (travel blocked, daily ads still done); the day stays unfinished.

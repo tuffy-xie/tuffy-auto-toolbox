@@ -22,7 +22,7 @@ class RoutineResumeRegressionTest {
         }
         val result=RoutineSequence(p).run()
         assertEquals(0,challengeUICalls);assertEquals(1,adsCalls);assertEquals("ALREADY_DONE",result.steps["CHALLENGES"]!!.state)
-        assertEquals("BLOCKED",result.state);assertEquals("ADS:BLOCKED",events.last());assertEquals(before,savedReceipts)
+        assertEquals("BLOCKED",result.state);assertEquals(listOf("ADS:BLOCKED","REWARDS:RUNNING","REWARDS:DISABLED"),events.takeLast(3));assertTrue(result.detail.contains("UNKNOWN"));assertEquals(before,savedReceipts)
         assertTrue(TaskFailureText.short(result.detail).contains("已停止且未重播"));assertFalse(result.detail.contains("执行中止"))
     }
     @Test fun completeCategoryProofSurvivesAnUnrelatedAggregateBlock(){assertTrue(reuse());assertFalse(reuse(day=false));assertFalse(reuse(scan=false));assertFalse(reuse(rows=false))}

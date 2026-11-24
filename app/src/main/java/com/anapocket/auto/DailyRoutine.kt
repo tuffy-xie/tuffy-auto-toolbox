@@ -81,8 +81,15 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                     return RoutineStepResult(if(partialReuse)"PARTIALLY_COMPLETED" else "ALREADY_DONE",
                         if(partialReuse)"完整扫描已保存；隔离项仍UNKNOWN，未重复扫描或观看" else "已开启的交通任务范围已处理，未重复观看")
                 }
-                val child="CH"+java.util.UUID.randomUUID().toString()
-                val result=ChallengeTaskController(svc).run(child,selected,allCards=true,reuseCompleted=!challengesOnly)
+                var result=ChallengeTaskController(svc).run("CH"+java.util.UUID.randomUUID().toString(),selected,allCards=true,reuseCompleted=!challengesOnly)
+                // 11/24 00:03: ANA stayed open across midnight, STARTUP saw no login offer for 23 s, then the offer appeared and
+                // blocked the travel scan. The ADS gate later handled the same offer; do that here once and scan again.
+                if(LateLoginPolicy.retry(result.detail,LoginBonusStore.read(svc,date)?.optString("state"),
+                        OfficialAdStore.attempts(svc,date).any{!it.terminal},challengesOnly)){
+                    val gate=StartupFlow(svc).prepare(run+"_late_login",launch=false)
+                    Logger.i("ROUTINE","run=$run late_login_offer ok="+gate.ok+" login="+gate.loginState+" "+gate.reason)
+                    if(gate.ok)result=ChallengeTaskController(svc).run("CH"+java.util.UUID.randomUUID().toString(),selected,allCards=true,reuseCompleted=true)
+                }
                 val maxBoost=MaxBoostDialogPolicy.blocksRoutine(result.detail,MaxBoostCoordinator.hasPending(svc,date)||MaxBoostCoordinator.visible(svc))
                 val independent=ChallengeStore.blocksIndependentNavigation(svc,date)
                 if(!result.continueRun||independent||maxBoost)
@@ -115,9 +122,13 @@ class DailyRoutineController(private val svc:AutoAccessibilityService){
                 val latest=Prefs.loadBlocking(svc)
                 if(!latest.rewardEnabled)return RoutineStepResult("DISABLED","领取报酬未开启")
                 if(challengesOnly)return RoutineStepResult("UNCHANGED","本次仅处理出行；领取报酬留到下次")
-                // Unfinished work comes first; an open ad or receipt must not be walked away from to claim rewards.
-                if(blockedBefore||MaxBoostCoordinator.visible(svc)||AccountSafetyStore.pending(svc)!=null)
+                // An open ad, a viewing still in flight or a safety check is never walked away from. A settled stop (11/24: a daily
+                // UNKNOWN kept without replay) no longer defers the rewards: they expire, and that stop lasts the whole day.
+                if(!RewardClaimPolicy.mayRun(MaxBoostCoordinator.visible(svc),AccountSafetyStore.pending(svc)!=null,
+                        OfficialAdStore.attempts(svc,date).any{!it.terminal},TravelSelection.hasUnresolvedAd(svc,date),
+                        AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)))
                     return RoutineStepResult("DEFERRED","前面的任务还没处理完，领取报酬留到之后继续")
+                if(blockedBefore)Logger.i("ROUTINE","run=$run rewards after a settled stop; no open ad or viewing")
                 return RewardClaimTask(svc).run(run,date,RewardRange.of(latest.rewardRange))
             }
         }

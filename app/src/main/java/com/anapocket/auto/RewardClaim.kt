@@ -54,6 +54,16 @@ object RewardClaimPolicy {
     const val MAX_AD_ATTEMPTS=2
     /** Only the user's reward switch: with no travel category and no daily ads, the run is for the rewards alone. */
     fun rewardsOnly(s:AppSettings)=s.rewardEnabled&&!s.adEnabled&&Cat.values().none{s.catOn(it)}
+    /** Nothing open is left behind: no MAX dialog, safety check, daily viewing in flight, unresolved travel ad or ad on screen. */
+    fun mayRun(maxBoost:Boolean,safety:Boolean,openDaily:Boolean,openTravel:Boolean,adOnScreen:Boolean)=
+        !maxBoost&&!safety&&!openDaily&&!openTravel&&!adOnScreen
+}
+
+/** 11/24: a login offer that appears after STARTUP gave up blocks the travel scan; it is handled once, then the scan reruns. */
+object LateLoginPolicy {
+    private val reasons=listOf("startup_popup_blocks_category_navigation","category_popup_blocks_navigation")
+    fun retry(detail:String,loginState:String?,openDaily:Boolean,challengesOnly:Boolean)=
+        !challengesOnly&&!openDaily&&(loginState==null||loginState=="NOT_PRESENT")&&reasons.any{detail.contains(it)}
 }
 
 object RewardClaimStore {
