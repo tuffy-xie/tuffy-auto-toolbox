@@ -57,7 +57,10 @@ object RewardClaimPolicy {
     const val MAX_AD_ATTEMPTS=2
     /** 11/24 (user): ANA restarts for a choice sheet left after the ad; once per card, at most this many a day. */
     const val SHEET_RESTART_LIMIT=4
-    fun sheetRestartAllowed(usedForCard:Boolean,usedToday:Int,adWindow:Boolean)=!usedForCard&&!adWindow&&usedToday<SHEET_RESTART_LIMIT
+    /** [loginOpen]: a login ad still being confirmed needs its original ANA task (AdTaskReturn), so ANA is not restarted. */
+    fun sheetRestartAllowed(usedForCard:Boolean,usedToday:Int,adWindow:Boolean,loginOpen:Boolean)=
+        !usedForCard&&!adWindow&&!loginOpen&&usedToday<SHEET_RESTART_LIMIT
+    fun loginOpen(state:String?)=state in setOf("UNCONFIRMED","AD_OPENING","AD_PLAYING")
     /** Only the user's reward switch: with no travel category and no daily ads, the run is for the rewards alone. */
     fun rewardsOnly(s:AppSettings)=s.rewardEnabled&&!s.adEnabled&&Cat.values().none{s.catOn(it)}
     /** Nothing open is left behind: no MAX dialog, safety check, daily viewing in flight, unresolved travel ad or ad on screen. */
@@ -319,9 +322,13 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
 
     /** ANA restarted from Recents, then its startup popups handled; the card is tried again later in this run. */
     private suspend fun restartAna(run:String,date:String,card:RewardCard,why:String):String {
+        // A stop or a new day ends the step the old way: close what is up, the loop then breaks with "stopped".
+        if(stopped(date)){leaveToList(date);return "AD_FAILED"}
         evidence(run,"sheet_"+why)
         if(StalledAdRestart.restartForRewardSheet(svc,date,run,card.key,why)){
-            val gate=StartupFlow(svc).prepare(run+"_reward_restart",launch=false)
+            // Same rule as the gate before the daily ads: no new login submission while a daily viewing awaits review.
+            val allowLogin=OfficialAdStore.attempts(svc,date).none{!it.terminal||it.state==AdState.UNCONFIRMED}&&!TravelSelection.hasUnresolvedAd(svc,date)
+            val gate=StartupFlow(svc).prepare(run+"_reward_restart",launch=false,allowLoginSubmission=allowLogin)
             Logger.i("REWARD","run=$run after_restart startup ok="+gate.ok+" "+gate.reason)
             return if(gate.ok)"AD_FAILED" else "restart_startup_blocked"
         }
