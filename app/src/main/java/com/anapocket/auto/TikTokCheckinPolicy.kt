@@ -2,7 +2,8 @@ package com.anapocket.auto
 
 /**
  * TikTok Lite gift page (Lynx-rendered: no accessibility text, so everything is read from screenshots).
- * Only three daily controls are ever tapped: the 14-day チェックイン, the 翌日報酬 獲得する claim and アンロック.
+ * Only the four daily controls are ever tapped: the 14-day チェックイン, the 翌日報酬 獲得する claim, アンロック and the bonus 受け取る
+ * (since the 11/25 感謝祭 layout the first two read 受け取る too, always taken beside their own card title).
  * Invite, campaign, ad, reminder and exchange controls are never targets.
  */
 object TikTokCheckinPolicy {
@@ -17,6 +18,15 @@ object TikTokCheckinPolicy {
     /** Words that must never be inside the box of anything Tuffy taps on this app. */
     private val forbidden=Regex("AD|広告|リマインド|参加|始める|開始|招待|交換|換金|シェア|スタート|回す|受け取る$")
     fun safeTarget(line:CheckinLine)=!forbidden.containsMatchIn(n(line.text))
+    /** A 受け取る that one of the daily cards' own button finders returned (never any other 受け取る on the page). */
+    fun cardReceive(line:CheckinLine)=n(line.text)=="受け取る"
+    /**
+     * 11/25 感謝祭 layout: the daily cards (「14日間連続チェックインで獲得」, 「今日の報酬を受け取ろう」) carry a red 受け取る on the
+     * title's own row, right of it, where the old ones had チェックイン / 獲得する under the title.
+     */
+    private fun receiveBeside(lines:List<CheckinLine>,a:CheckinLine)=lines.firstOrNull{n(it.text)=="受け取る"&&it.left>=a.right-20&&it.top>=a.top-60&&it.top<=a.bottom+80}
+    private fun doneBeside(lines:List<CheckinLine>,a:CheckinLine)=lines.firstOrNull{it!==a&&it.left>=a.right-20&&it.top>=a.top-60&&it.top<=a.bottom+80&&
+        Regex("済み|獲得しました|明日").containsMatchIn(n(it.text))}
     /**
      * Header of the red points card. 11/25 12:38 (感謝祭 layout) it read 「あなたのポイント」 · 「1,337円分 =133,723」 ·
      * 「換金可能」 instead of 「獲得ポイント」 · 「クーポンと交換」, so the loaded page was never recognised and all four
@@ -46,11 +56,13 @@ object TikTokCheckinPolicy {
     /** Card anchors. */
     fun checkinTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("連続チェックイン")&&!n(it.text).contains("失敗")}
     private fun below(lines:List<CheckinLine>,anchor:CheckinLine,max:Int)=lines.filter{it.top>anchor.bottom&&it.top-anchor.bottom<max}
-    fun checkinButton(lines:List<CheckinLine>):CheckinLine?{val a=checkinTitle(lines)?:return null;return below(lines,a,650).firstOrNull{n(it.text)=="チェックイン"}}
+    fun checkinButton(lines:List<CheckinLine>):CheckinLine?{val a=checkinTitle(lines)?:return null
+        return below(lines,a,650).firstOrNull{n(it.text)=="チェックイン"}?:receiveBeside(lines,a)}
     /** After today's check-in the button turns grey (明日チェックインして…) or becomes an optional ad offer. */
     fun checkinDone(lines:List<CheckinLine>):Boolean{val a=checkinTitle(lines)?:return false
+        if(receiveBeside(lines,a)==null&&doneBeside(lines,a)!=null)return true
         return below(lines,a,650).any{val t=n(it.text);t.startsWith("明日チェックインして")||Regex("^[0-9,]+ポイントを獲得").containsMatchIn(t)}}
-    fun claimTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("今日の報酬を受け取る")}
+    fun claimTitle(lines:List<CheckinLine>)=lines.firstOrNull{val t=n(it.text);t.contains("今日の報酬を受け取る")||t.contains("今日の報酬を受け取ろう")}
     /**
      * 「報酬 607」 inside the claim card. 11/15 07:32 a floating 「300ポイントを獲得 AD」 offer covered the card title and OCR
      * read the amount as 「報酬D607×」; this line still anchors the card. Ad offers never match.
@@ -60,7 +72,7 @@ object TikTokCheckinPolicy {
     /** The claim card is on screen: its title, or its 報酬 line when the title is covered. */
     fun claimPresent(lines:List<CheckinLine>)=claimTitle(lines)!=null||claimReward(lines)!=null
     fun claimButton(lines:List<CheckinLine>):CheckinLine?{
-        claimTitle(lines)?.let{a->return below(lines,a,360).firstOrNull{n(it.text)=="獲得する"}}
+        claimTitle(lines)?.let{a->return below(lines,a,360).firstOrNull{n(it.text)=="獲得する"}?:receiveBeside(lines,a)}
         val r=claimReward(lines)?:return null
         return below(lines,r,200).firstOrNull{n(it.text)=="獲得する"}
     }
@@ -70,7 +82,7 @@ object TikTokCheckinPolicy {
      * claimed state. It sits inside the card, so it is not a popup and is never tapped.
      */
     fun claimedButton(lines:List<CheckinLine>):CheckinLine?{
-        claimTitle(lines)?.let{a->return below(lines,a,360).firstOrNull{n(it.text)=="獲得しました"}}
+        claimTitle(lines)?.let{a->return below(lines,a,360).firstOrNull{n(it.text)=="獲得しました"}?:if(receiveBeside(lines,a)==null)doneBeside(lines,a) else null}
         val r=claimReward(lines)?:return null
         return below(lines,r,200).firstOrNull{n(it.text)=="獲得しました"}
     }
@@ -84,15 +96,20 @@ object TikTokCheckinPolicy {
     /** 「報酬 608」 between the claim title and its button. */
     fun claimAmount(lines:List<CheckinLine>):String?{val b=claimButton(lines)?:return null
         val a=claimTitle(lines);val r=claimReward(lines)
-        val rows=if(a!=null)lines.filter{it.top>a.bottom&&it.bottom<=b.top} else listOfNotNull(r)
+        val rows=if(a!=null&&b.top<a.bottom)lines.filter{it.top>a.bottom&&it.top-a.bottom<120}.sortedBy{it.top}.take(1)
+            else if(a!=null)lines.filter{it.top>a.bottom&&it.bottom<=b.top} else listOfNotNull(r)
         return rows.mapNotNull{Regex("([0-9][0-9,]*)\\D{0,2}$").find(n(it.text))?.groupValues?.get(1)?.replace(",","")}.singleOrNull()}
     /**
      * 「ボーナス報酬をGET！最大2,500」 card (seen 11/15): its 受け取る credits at once, shows 「N/10回 受け取り済み」 and turns into a
      * cooldown timer. The user asked for one press a day (11/15); 受け取る is allowed on this card only.
      */
-    fun bonusTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("ボーナス報酬を")}
-    fun bonusCount(lines:List<CheckinLine>):Int?{val a=bonusTitle(lines)?:return null
-        return below(lines,a,330).firstNotNullOfOrNull{Regex("([0-9]+)/10回受け取り済み").find(n(it.text))?.groupValues?.get(1)?.toInt()}}
+    // 11/25 感謝祭 layout: the same card reads 「報酬を受け取ろう 2,400 · 0/10回 受け取り済み」. 「今日の報酬を受け取ろう」 is the claim card.
+    private fun bonusTitleText(t:String)=t.contains("ボーナス報酬を")||t.startsWith("報酬を受け取ろう")
+    private fun counter(lines:List<CheckinLine>,a:CheckinLine)=
+        below(lines,a,330).firstNotNullOfOrNull{Regex("([0-9]+)/10回受け取り済み").find(n(it.text))?.groupValues?.get(1)?.toInt()}
+    fun bonusTitle(lines:List<CheckinLine>):CheckinLine?{val all=lines.filter{bonusTitleText(n(it.text))}
+        return all.firstOrNull{counter(lines,it)!=null}?:all.firstOrNull()}
+    fun bonusCount(lines:List<CheckinLine>):Int?{val a=bonusTitle(lines)?:return null;return counter(lines,a)}
     fun bonusButton(lines:List<CheckinLine>,width:Int):CheckinLine?{val a=bonusTitle(lines)?:return null
         return lines.firstOrNull{n(it.text)=="受け取る"&&it.left>width*.5&&it.top>=a.top-60&&it.top<=a.bottom+80}}
     fun unlockTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("翌日報酬が受け取れます")}

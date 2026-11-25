@@ -491,7 +491,9 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
     // ---- TikTok Lite: 14-day check-in, yesterday's unlocked reward, today's unlock ----
     private val screenHeight get()=ui.svc.resources.displayMetrics.heightPixels
     /** Taps stay in the upper part of the page, clear of the floating bottom campaign banner. */
-    private fun reachable(l:CheckinLine?)=l!=null&&l.bottom<screenHeight*.78&&l.top>screenHeight*.1&&TikTokCheckinPolicy.safeTarget(l)
+    // Only called with what a card's own button finder returned, so a 受け取る here is that card's (11/25 感謝祭 layout).
+    private fun reachable(l:CheckinLine?)=l!=null&&l.bottom<screenHeight*.78&&l.top>screenHeight*.1&&
+        (TikTokCheckinPolicy.safeTarget(l)||TikTokCheckinPolicy.cardReceive(l))
     private fun closeX(f:CheckinFrame,fromY:Int):Pair<Int,Int>? {
         val bmp=android.graphics.BitmapFactory.decodeByteArray(f.png,0,f.png.size)?:return null
         try{

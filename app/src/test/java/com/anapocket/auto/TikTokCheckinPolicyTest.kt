@@ -134,6 +134,41 @@ class TikTokCheckinPolicyTest {
         assertFalse(TikTokCheckinPolicy.popup(f))
         assertFalse(TikTokCheckinPolicy.giftPage(listOf(l("あなたのポイント",68,480,273,503))))   // header alone is not enough
     }
+    /** 11/25 15:48 感謝祭 layout, 720x1650 (manual screenshots): each daily card's 受け取る sits right of its title. */
+    private val nov25Cards=listOf(l("本日のおすすめ",32,632,295,672),
+        l("14日間連続チェックインで獲",66,745,460,780),l("得",66,785,100,815),l("受け取る",522,752,625,790),l("40,320",100,825,206,860),
+        l("11月23日~12月6日:日数の連続記録が途切れると、1日目",66,882,640,910),l("今日",245,978,280,998),l("2,880",236,1065,288,1085),
+        l("今日の報酬を受け取ろう",66,1203,395,1238),l("984",100,1245,160,1280),l("受け取る",522,1210,625,1248),
+        l("報酬を受け取ろう",66,1390,305,1425),l("2,400",100,1432,188,1468),l("受け取る",522,1398,625,1435),l("0/10回 受け取り済み",66,1490,270,1518))
+    @Test fun thanksgivingDailyCardsUseTheirOwnReceiveButton(){
+        val f=nov25Cards
+        assertEquals(752,TikTokCheckinPolicy.checkinButton(f)?.top)
+        assertFalse(TikTokCheckinPolicy.checkinDone(f))
+        assertEquals(1210,TikTokCheckinPolicy.claimButton(f)?.top)
+        assertTrue(TikTokCheckinPolicy.claimPresent(f))
+        assertFalse(TikTokCheckinPolicy.claimClaimed(f))
+        assertEquals("984",TikTokCheckinPolicy.claimAmount(f))
+        assertEquals("報酬を受け取ろう",TikTokCheckinPolicy.bonusTitle(f)?.text)
+        assertEquals(0,TikTokCheckinPolicy.bonusCount(f))
+        assertEquals(1398,TikTokCheckinPolicy.bonusButton(f,720)?.top)
+        assertFalse("the cards are not a popup",TikTokCheckinPolicy.popup(f))
+        // A card's 受け取る is the only receive these finders hand out; the general rule still refuses a lone 受け取る.
+        assertTrue(TikTokCheckinPolicy.cardReceive(TikTokCheckinPolicy.checkinButton(f)!!))
+        assertFalse(TikTokCheckinPolicy.safeTarget(l("受け取る",522,752,625,790)))
+        assertNull(TikTokCheckinPolicy.checkinButton(listOf(l("14日間連続チェックインで獲",66,745,460,780),l("受け取る",522,1210,625,1248))))
+        assertNull(TikTokCheckinPolicy.claimButton(listOf(l("今日の報酬を受け取ろう",66,1203,395,1238),l("受け取る",60,1210,200,1248))))
+    }
+    @Test fun thanksgivingCardsDoneStates(){
+        val checked=nov25Cards.map{if(it.text=="受け取る"&&it.top==752)l("受け取り済み",500,752,650,790) else it}
+        assertTrue(TikTokCheckinPolicy.checkinDone(checked))
+        assertNull(TikTokCheckinPolicy.checkinButton(checked))
+        val claimed=nov25Cards.map{if(it.text=="受け取る"&&it.top==1210)l("受け取り済み",500,1210,650,1248) else it}
+        assertTrue(TikTokCheckinPolicy.claimClaimed(claimed))
+        assertNull(TikTokCheckinPolicy.claimButton(claimed))
+        assertTrue(TikTokCheckinPolicy.unlockNotOffered(claimed))
+        val bonus1=nov25Cards.map{if(it.text.startsWith("0/10"))l("1/10回 受け取り済み",66,1490,270,1518) else it}
+        assertEquals(1,TikTokCheckinPolicy.bonusCount(bonus1))
+    }
     @Test fun neverTargetsCampaignReminderInviteOrExchange(){
         for(t in listOf("リマインドする","参加する","始める","招待する","交換","換金","今すぐ回す","300ポイントを獲得 AD","スタート","受け取る"))
             assertFalse(t,TikTokCheckinPolicy.safeTarget(l(t,0,0,10,10)))
