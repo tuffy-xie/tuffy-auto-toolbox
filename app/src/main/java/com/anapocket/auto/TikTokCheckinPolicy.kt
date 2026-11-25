@@ -61,6 +61,10 @@ object TikTokCheckinPolicy {
     /** After today's check-in the button turns grey (明日チェックインして…) or becomes an optional ad offer. */
     fun checkinDone(lines:List<CheckinLine>):Boolean{val a=checkinTitle(lines)?:return false
         if(receiveBeside(lines,a)==null&&doneBeside(lines,a)!=null)return true
+        // 11/25 16:20 感謝祭 layout after the check-in: the 受け取る became a grey ✓ with no text, and the day strip under the
+        // title read 16日目 ✓ · 17日目 ✓ · 明日 where it had read 16日目 ✓ · 今日 before.
+        val strip=below(lines,a,650).map{n(it.text)}
+        if(receiveBeside(lines,a)==null&&strip.none{it=="チェックイン"}&&strip.contains("明日")&&!strip.contains("今日"))return true
         return below(lines,a,650).any{val t=n(it.text);t.startsWith("明日チェックインして")||Regex("^[0-9,]+ポイントを獲得").containsMatchIn(t)}}
     fun claimTitle(lines:List<CheckinLine>)=lines.firstOrNull{val t=n(it.text);t.contains("今日の報酬を受け取る")||t.contains("今日の報酬を受け取ろう")}
     /**
@@ -112,10 +116,24 @@ object TikTokCheckinPolicy {
     fun bonusCount(lines:List<CheckinLine>):Int?{val a=bonusTitle(lines)?:return null;return counter(lines,a)}
     fun bonusButton(lines:List<CheckinLine>,width:Int):CheckinLine?{val a=bonusTitle(lines)?:return null
         return lines.firstOrNull{n(it.text)=="受け取る"&&it.left>width*.5&&it.top>=a.top-60&&it.top<=a.bottom+80}}
-    fun unlockTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("翌日報酬が受け取れます")}
+    /** 11/25 16:08 感謝祭 layout: after the claim, 「報酬をアンロックして、明日 / 受け取ろう ・988」 with アンロック right of the title. */
+    private fun newUnlockTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("報酬をアンロックして")}
+    fun unlockTitle(lines:List<CheckinLine>)=lines.firstOrNull{n(it.text).contains("翌日報酬が受け取れます")}?:newUnlockTitle(lines)
+    private fun unlockBeside(lines:List<CheckinLine>,a:CheckinLine)=
+        lines.firstOrNull{n(it.text)=="アンロック"&&it.left>=a.right-20&&it.top>=a.top-60&&it.top<=a.bottom+80}
     /** The yellow アンロック tag sits under the title; the button is the lowest one in the card. */
-    fun unlockButton(lines:List<CheckinLine>):CheckinLine?{val a=unlockTitle(lines)?:return null;return below(lines,a,560).filter{n(it.text)=="アンロック"&&it.top-a.bottom>200}.maxByOrNull{it.top}}
-    fun unlockDone(lines:List<CheckinLine>)=lines.any{n(it.text).contains("明日受け取りに来てください")}
+    fun unlockButton(lines:List<CheckinLine>):CheckinLine?{val a=unlockTitle(lines)?:return null
+        return below(lines,a,560).filter{n(it.text)=="アンロック"&&it.top-a.bottom>200}.maxByOrNull{it.top}?:unlockBeside(lines,a)}
+    /**
+     * Old card: 「明日受け取りに来てください」. 感謝祭 card: its title and amount are in view and the red アンロック beside the title is
+     * gone (the check-in card turned the same button into a grey ✓ with no text).
+     */
+    fun unlockDone(lines:List<CheckinLine>):Boolean {
+        if(lines.any{n(it.text).contains("明日受け取りに来てください")})return true
+        val a=newUnlockTitle(lines)?:return false
+        val amount=lines.any{it.top>a.bottom&&it.top-a.bottom<140&&Regex("^\\D{0,2}[0-9][0-9,]*$").matches(n(it.text))}
+        return amount&&unlockBeside(lines,a)==null&&below(lines,a,560).none{n(it.text)=="アンロック"}
+    }
     fun unlockPopup(lines:List<CheckinLine>)=lines.any{val t=n(it.text);t.contains("明日再度受け取りに来て")||t=="リマインドする"}
     fun checkinReceipt(lines:List<CheckinLine>):Boolean{val t=lines.joinToString(""){n(it.text)};return t.contains("おめでとう")&&t.contains("獲得しました")}
     /** The amount printed under 獲得しました in the receipt popup; anything ambiguous stays unknown. */

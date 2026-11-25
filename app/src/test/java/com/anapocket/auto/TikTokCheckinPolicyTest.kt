@@ -169,6 +169,35 @@ class TikTokCheckinPolicyTest {
         val bonus1=nov25Cards.map{if(it.text.startsWith("0/10"))l("1/10回 受け取り済み",66,1490,270,1518) else it}
         assertEquals(1,TikTokCheckinPolicy.bonusCount(bonus1))
     }
+    /** 11/25 16:20 the same cards after the check-in and the claim (manual screenshot). */
+    private val nov25After=listOf(l("本日のおすすめ",32,605,295,645),
+        l("14日間連続チェックインで獲",66,718,460,752),l("得",66,757,100,787),l("40,320",100,798,206,832),
+        l("11月23日~12月6日:日数の連続記録が途切れると、1日目",66,855,640,885),l("16日目",102,952,156,970),l("1,440",106,1038,153,1058),
+        l("17日目",235,952,288,970),l("2,880",236,1038,288,1058),l("明日",375,952,408,970),l("1,440",369,1038,415,1058),l("28日目",562,953,620,972),
+        l("報酬をアンロックして、明日",66,1175,450,1210),l("受け取ろう",66,1213,215,1245),l("988",100,1258,160,1290),l("アンロック",515,1185,632,1218),
+        l("報酬を受け取ろう",66,1400,305,1435),l("2,400",100,1445,188,1478),l("11:03",565,1412,618,1440),l("1/10回 受け取り済み",66,1500,270,1530))
+    @Test fun thanksgivingCheckinDoneIsTheTomorrowCellWithNoReceive(){
+        assertTrue(TikTokCheckinPolicy.checkinDone(nov25After))
+        assertNull(TikTokCheckinPolicy.checkinButton(nov25After))
+        assertFalse("before: 今日 cell and 受け取る",TikTokCheckinPolicy.checkinDone(nov25Cards))
+        // 明日 in the strip while 受け取る is still beside the title is not done.
+        assertFalse(TikTokCheckinPolicy.checkinDone(nov25After+l("受け取る",522,725,625,760)))
+        assertFalse(TikTokCheckinPolicy.checkinDone(nov25After+l("今日",245,952,280,970)))
+        assertFalse(TikTokCheckinPolicy.popup(nov25After))
+    }
+    @Test fun thanksgivingUnlockCardIsTappedBesideItsTitle(){
+        assertEquals(1185,TikTokCheckinPolicy.unlockButton(nov25After)?.top)
+        assertFalse(TikTokCheckinPolicy.unlockDone(nov25After))
+        assertNull("the claim card is gone",TikTokCheckinPolicy.claimButton(nov25After))
+        assertFalse(TikTokCheckinPolicy.claimPresent(nov25After))
+        val unlocked=nov25After.filter{it.text!="アンロック"}
+        assertTrue(TikTokCheckinPolicy.unlockDone(unlocked))
+        assertNull(TikTokCheckinPolicy.unlockButton(unlocked))
+        // Title cut off with no amount in view is not proof.
+        assertFalse(TikTokCheckinPolicy.unlockDone(listOf(l("報酬をアンロックして、明日",66,1175,450,1210))))
+        assertEquals(1,TikTokCheckinPolicy.bonusCount(nov25After))
+        assertNull(TikTokCheckinPolicy.bonusButton(nov25After,720))
+    }
     @Test fun neverTargetsCampaignReminderInviteOrExchange(){
         for(t in listOf("リマインドする","参加する","始める","招待する","交換","換金","今すぐ回す","300ポイントを獲得 AD","スタート","受け取る"))
             assertFalse(t,TikTokCheckinPolicy.safeTarget(l(t,0,0,10,10)))
