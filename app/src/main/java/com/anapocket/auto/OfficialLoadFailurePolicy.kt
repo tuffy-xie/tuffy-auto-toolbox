@@ -67,6 +67,25 @@ object OfficialLoadFailurePolicy {
         return mayStartUncounted(rows,date,today,receipt,elapsed,reviewed,uncountedReviews)&&relaunched&&adClosed&&
             first==a.officialBefore&&second==a.officialBefore
     }
+    /**
+     * 11/25 08:58: #8 was reviewed as not counted (7 twice after an ANA restart), then #9's own receipt took the counter
+     * from 7 to 9: #8's late count plus #9. Only that exact pair commits [a] (the last row) on its own durable receipt;
+     * the reviewed row before it stays UNCONFIRMED. A terminal [a] must be that same viewing's recorded +2 jump.
+     */
+    fun lateCountCovers(rows:List<AdAttempt>,a:AdAttempt,receipt:Boolean,fresh:Int?,reviewed:Set<String>):Boolean {
+        val last=rows.lastOrNull()?:return false;val prev=rows.getOrNull(rows.size-2)?:return false
+        return key(last)==key(a)&&receipt&&a.dispatchPhase=="DISPATCHED"&&a.adDepartureObserved&&!a.completed&&
+            a.officialBefore in 0..23&&fresh==a.officialBefore+2&&key(a) !in reviewed&&
+            (!a.terminal||a.state==AdState.UNCONFIRMED&&a.failureReason=="counter_jump_ambiguous"&&a.rewardConfirmed&&a.officialAfter==fresh)&&
+            receiptUncounted(prev)&&key(prev) in reviewed&&prev.officialBefore==a.officialBefore&&
+            rows.dropLast(2).all{resolved(it,reviewed)}
+    }
+    /** The same late count arriving before the next start: the baseline moved by exactly one past a reviewed uncounted receipt. */
+    fun lateCountBeforeNext(rows:List<AdAttempt>,reviewed:Set<String>,expected:Int?,now:Int?):Boolean {
+        val a=rows.lastOrNull()?:return false
+        return expected!=null&&receiptUncounted(a)&&key(a) in reviewed&&a.officialBefore==expected&&expected in 0..24&&now==expected+1&&
+            rows.all{resolved(it,reviewed)}
+    }
     fun reviewable(a:AdAttempt)=failedLoad(a)||blankStall(a)||quietReturn(a)||undispatched(a)||receiptUncounted(a)
     fun resolved(a:AdAttempt,reviewed:Set<String>)=
         a.terminal&&a.state==AdState.REWARD_CONFIRMED&&a.completed&&a.rewardConfirmed||reviewable(a)&&key(a) in reviewed

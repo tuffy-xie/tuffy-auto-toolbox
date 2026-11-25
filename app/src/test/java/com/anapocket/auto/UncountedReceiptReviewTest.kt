@@ -40,6 +40,31 @@ class UncountedReceiptReviewTest {
         // An earlier unresolved row still stops it.
         assertFalse(P.mayStartUncounted(listOf(uncounted(1,0).copy(rewardConfirmed=false))+day.drop(1),date,date,true,old,emptySet(),0))
     }
+    /** 11/25 08:58: #8 reviewed at 7, then #9's own receipt and the counter 7 -> 9. */
+    private fun jumped(i:Int,before:Int)=AdAttempt("s",date,i,i.toLong(),AdState.UNCONFIRMED,false,true,100,"counter_jump_ambiguous",before,before+2,
+        dispatchPhase="DISPATCHED",adDepartureObserved=true)
+    @Test fun theNextReceiptThatJumpsByTwoCarriesTheLateCount() {
+        val reviewed=setOf(P.key(uncounted(8,7)))
+        val rows=day+jumped(9,7)
+        assertTrue(P.lateCountCovers(rows,rows.last(),true,9,reviewed))
+        // While the viewing is still open (not yet finished) the same pair commits it.
+        val open=jumped(9,7).copy(state=AdState.AD_RETURNED,rewardConfirmed=false,failureReason="",officialAfter=-1,finishedAt=0)
+        assertTrue(P.lateCountCovers(day+open,open,true,9,reviewed))
+        assertFalse(P.lateCountCovers(rows,rows.last(),false,9,reviewed))          // no durable receipt of its own
+        assertFalse(P.lateCountCovers(rows,rows.last(),true,10,reviewed))         // +3
+        assertFalse(P.lateCountCovers(rows,rows.last(),true,8,reviewed))          // only +1: the normal path
+        assertFalse(P.lateCountCovers(rows,rows.last(),true,9,emptySet()))        // #8 was never reviewed
+        assertFalse(P.lateCountCovers(day.dropLast(1)+good(8,7)+jumped(9,8).copy(officialAfter=10),jumped(9,8).copy(officialAfter=10),true,10,emptySet()))
+        assertFalse(P.lateCountCovers(rows,rows.last().copy(failureReason="completion_not_confirmed"),true,9,reviewed))
+        assertFalse(P.lateCountCovers(rows,uncounted(8,7),true,9,reviewed))       // not the last row
+    }
+    @Test fun theLateCountBeforeTheNextStartMovesTheBaselineByOne() {
+        val reviewed=setOf(P.key(uncounted(8,7)))
+        assertTrue(P.lateCountBeforeNext(day,reviewed,7,8))
+        assertFalse(P.lateCountBeforeNext(day,reviewed,7,9))
+        assertFalse(P.lateCountBeforeNext(day,emptySet(),7,8))
+        assertFalse(P.lateCountBeforeNext(day+good(9,8),reviewed+P.key(good(9,8)),8,9))
+    }
     @Test fun aReviewedRowFreesExactlyOneNewStartAndStaysUnconfirmed() {
         val reviewed=setOf(P.key(uncounted(8,7)))
         assertTrue(day.all{P.resolved(it,reviewed)})

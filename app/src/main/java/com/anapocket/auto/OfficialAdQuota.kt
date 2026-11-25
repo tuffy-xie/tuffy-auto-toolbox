@@ -166,6 +166,17 @@ object OfficialAdStore {
         save(c,date,rows.dropLast(1)+next) // Existing FULL transaction; original identity and all other attempts unchanged.
         return true
     }
+    /** [OfficialLoadFailurePolicy.lateCountCovers]: the last viewing's own receipt plus the reviewed row's late count. */
+    @Synchronized fun reconcileLateCount(c:Context,date:String,a:AdAttempt,fresh:Int):Boolean {
+        val rows=attempts(c,date);val last=rows.lastOrNull()?:return false
+        if(TokyoDate.of()!=date||!hasRecordedReceipt(c,date,a))return false
+        if(last.completed&&last.rewardConfirmed&&last.state==AdState.REWARD_CONFIRMED)return OfficialLoadFailurePolicy.key(last)==OfficialLoadFailurePolicy.key(a)&&last.officialAfter==fresh
+        if(!OfficialLoadFailurePolicy.lateCountCovers(rows,last,true,fresh,reviewKeys(c,date,rows))||
+            OfficialLoadFailurePolicy.key(last)!=OfficialLoadFailurePolicy.key(a))return false
+        val next=last.copy(state=AdState.REWARD_CONFIRMED,completed=true,rewardConfirmed=true,finishedAt=System.currentTimeMillis(),
+            officialAfter=fresh,failureReason="",evidence=last.evidence+";own_durable_receipt_and_fresh_plus_two_with_prior_reviewed_uncounted_receipt")
+        save(c,date,rows.dropLast(1)+next);return true
+    }
     @Synchronized fun recordReceipt(c:Context,date:String,a:AdAttempt,before:Int){
         val last=attempts(c,date).lastOrNull()?:error("receipt_attempt_missing")
         check(TokyoDate.of()==date&&last.runId==a.runId&&last.index==a.index&&last.startedAt==a.startedAt&&last.officialBefore==before){"receipt_attempt_changed"}

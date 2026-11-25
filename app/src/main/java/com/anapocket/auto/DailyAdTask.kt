@@ -698,9 +698,13 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                         val savedCounter=OfficialAdStore.counter(svc,date)
                         if(savedCounter!=null&&fresh<savedCounter)return blockedResult(runId,date,"official_counter_regressed")
                         val reconciled=OfficialAdStore.reconcileRecordedReceipt(svc,date,original,fresh)
+                        // 11/25 08:58: the reviewed #8 was counted late together with #9's own receipt (7 -> 9).
+                        val late=!reconciled&&OfficialAdStore.reconcileLateCount(svc,date,original,fresh)
                         // An observed counter is not a receipt for this UNKNOWN. Keep both facts separately.
-                        OfficialAdStore.observe(svc,date,fresh,runId,if(reconciled)"original_durable_receipt_fresh_exact_counter_no_new_start" else "recorded_receipt_review_counter_only_no_reward_inferred")
-                        if(!reconciled){
+                        OfficialAdStore.observe(svc,date,fresh,runId,if(reconciled)"original_durable_receipt_fresh_exact_counter_no_new_start"
+                            else if(late)"own_durable_receipt_fresh_plus_two_prior_reviewed_uncounted_late_count" else "recorded_receipt_review_counter_only_no_reward_inferred")
+                        if(late)Logger.i("ADLATECOUNT","run=$runId originalRun="+original.runId+" index="+original.index+" before="+original.officialBefore+" fresh=$fresh prior_uncounted_counted_late no_new_start=true")
+                        else if(!reconciled){
                             // 11/25 (user): restart ANA, read twice; still unchanged, it is recorded as not counted and the ads go on.
                             if(fresh!=original.officialBefore||!reviewUncountedReceipt(runId,date,original))
                                 return blockedResult(runId,date,"recorded_daily_receipt_counter_unconfirmed_no_replay")
@@ -733,6 +737,11 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                         if (rows.size >= OfficialAdStore.startCap(svc,date)) { blockedReason="official_attempt_safety_limit"; break }
                         if (runStarts >= OfficialLoadFailurePolicy.runCap(runLimit,reviewsAtStart,OfficialAdStore.reviewedKeys(svc,date).size)) { detail = "controlled_run_finished"; break }
                         val before = stableCounter()
+                        if (before != expectedCounter && OfficialLoadFailurePolicy.lateCountBeforeNext(rows, OfficialAdStore.reviewedKeys(svc, date), expectedCounter, before)) {
+                            OfficialAdStore.observe(svc, date, before!!, runId, "reviewed_uncounted_receipt_counted_late_before_next_start")
+                            Logger.i("ADLATECOUNT", "run=$runId baseline=$expectedCounter->$before prior uncounted receipt counted late; original unconfirmed kept")
+                            expectedCounter = before
+                        }
                         if (before != expectedCounter) { blockedReason = "official_baseline_changed_before_start"; break }
                         val watch = watchNode()
                         if (!entry() || before == null || watch == null || AdSignals.receipt(l)) {
@@ -763,6 +772,15 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                             if(fresh!=null&&OfficialAdStore.reconcileRecordedReceipt(svc,date,attempt,fresh))
                                 receipt=AdReceipt(AdState.REWARD_CONFIRMED,completed=true,reward=true,after=fresh)
                         }
+                        // 11/25 08:58: own receipt and the counter +2 right after a reviewed uncounted receipt: its late count.
+                        if(receipt.reward&&receipt.reason=="counter_jump_ambiguous"&&receipt.after==before+2&&
+                            !blocked()&&!AutoAccessibilityService.stopRequested&&TokyoDate.of()==date&&entry()&&!closeDriver.isRecoverableSurface()){
+                            val fresh=refreshOfficialEntry(runId)
+                            if(fresh!=null&&OfficialAdStore.reconcileLateCount(svc,date,attempt,fresh)){
+                                Logger.i("ADLATECOUNT","run=$runId #"+attempt.index+" before=$before after=$fresh prior_uncounted_counted_late own_receipt_committed")
+                                receipt=AdReceipt(AdState.REWARD_CONFIRMED,completed=true,reward=true,after=fresh)
+                            }
+                        }
                         OfficialAdStore.finish(svc, date, runId, attempt.index, receipt.state,
                             receipt.completed, receipt.reward, receipt.reason, before, receipt.after,
                             "ad_" + runId + "_" + attempt.index + "_result.txt")
@@ -785,7 +803,8 @@ class DailyAdTaskController(private val svc: AutoAccessibilityService) {
                             if (receipt.state == AdState.LIMIT_REACHED || receipt.after >= DAILY_AD_LIMIT) limit = true
                             break
                         }
-                        OfficialAdStore.observe(svc,date,receipt.after,runId,"new_reserved_ad_fresh_receipt_and_exact_plus_one")
+                        OfficialAdStore.observe(svc,date,receipt.after,runId,if(receipt.after==before+1)"new_reserved_ad_fresh_receipt_and_exact_plus_one"
+                            else "new_reserved_ad_own_receipt_plus_prior_reviewed_late_count")
                         expectedCounter = receipt.after
                         delay(1200L)
                     }
