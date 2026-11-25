@@ -15,15 +15,22 @@ object TikTokCheckinPolicy {
     const val SEEK_SWIPES=18
     private fun n(t:String)=t.replace(Regex("\\s"),"")
     /** Words that must never be inside the box of anything Tuffy taps on this app. */
-    private val forbidden=Regex("AD|広告|リマインド|参加|始める|開始|招待|交換|シェア|スタート|回す|受け取る$")
+    private val forbidden=Regex("AD|広告|リマインド|参加|始める|開始|招待|交換|換金|シェア|スタート|回す|受け取る$")
     fun safeTarget(line:CheckinLine)=!forbidden.containsMatchIn(n(line.text))
-    fun giftPage(lines:List<CheckinLine>):Boolean {val t=lines.joinToString(""){n(it.text)};return t.contains("獲得ポイント")&&(t.contains("ギフトをもらおう")||t.contains("クーポンと交換"))}
+    /**
+     * Header of the red points card. 11/25 12:38 (感謝祭 layout) it read 「あなたのポイント」 · 「1,337円分 =133,723」 ·
+     * 「換金可能」 instead of 「獲得ポイント」 · 「クーポンと交換」, so the loaded page was never recognised and all four
+     * tasks timed out at 90 s.
+     */
+    private val pointsHeader=Regex("獲得ポイント|あなたのポイント")
+    fun giftPage(lines:List<CheckinLine>):Boolean {val t=lines.joinToString(""){n(it.text)}
+        return pointsHeader.containsMatchIn(t)&&(t.contains("ギフトをもらおう")||t.contains("クーポンと交換")||t.contains("換金可能"))}
     /** The bottom navigation entry of the feed. */
     // Under a dimming popup OCR reads ギフト as ギラト and 首页 as 首頁, so the middle glyph is free.
     private val giftLabel=Regex("^ギ.ト$")
     fun giftTab(lines:List<CheckinLine>,height:Int)=lines.firstOrNull{giftLabel.matches(n(it.text))&&it.top>height*.86}
     /** Feed or gift page is on screen (possibly under a popup). */
-    fun loaded(lines:List<CheckinLine>)=lines.any{val t=n(it.text);giftLabel.matches(t)||t.contains("獲得ポイント")||Regex("^首[页頁]$").matches(t)}
+    fun loaded(lines:List<CheckinLine>)=lines.any{val t=n(it.text);giftLabel.matches(t)||pointsHeader.containsMatchIn(t)||Regex("^首[页頁]$").matches(t)}
     /** OCR returns lines in block order, not reading order; a sentence split over two lines is only whole when sorted. */
     private fun reading(lines:List<CheckinLine>)=lines.sortedWith(compareBy({it.top},{it.left})).joinToString(""){n(it.text)}
     fun popup(lines:List<CheckinLine>):Boolean {val kept=claimedButton(lines);val t=reading(if(kept==null)lines else lines-kept)
@@ -102,7 +109,7 @@ object TikTokCheckinPolicy {
     }
     /** Points balance in the red header card. */
     fun balance(lines:List<CheckinLine>):Long?{
-        val head=lines.firstOrNull{n(it.text).contains("獲得ポイント")}?:return null
+        val head=lines.firstOrNull{pointsHeader.containsMatchIn(n(it.text))}?:return null
         return lines.filter{it.top>head.top&&it.top-head.bottom<260}.mapNotNull{Regex("([0-9]{1,3}(?:,[0-9]{3})+)$").find(n(it.text))?.groupValues?.get(1)}
             .map{it.replace(",","").toLong()}.maxOrNull()
     }

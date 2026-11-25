@@ -124,8 +124,18 @@ class TikTokCheckinPolicyTest {
         assertEquals(130478L,TikTokCheckinPolicy.balance(head))
         assertTrue(TikTokCheckinPolicy.giftPage(head+l("クーポンと交換",55,700,255,730)))
     }
+    /** 11/25 12:38 OCR of the 感謝祭 layout (the gift page was loaded but read as not loaded for 90 s). */
+    @Test fun thanksgivingLayoutIsTheGiftPage(){
+        val f=listOf(l("12:38",36,18,100,37),l("あなたのポイント1",68,480,273,503),l("1,337円分",72,517,295,567),l("=133,723",73,586,256,617),
+            l("換金可能",67,689,154,711),l("感謝祭限定!お見逃しなく!",67,815,436,844),l("貯金箱を割ると最大",67,853,336,882),l("換金",530,537,600,570),l("プレイ",540,821,620,850),l("回す",560,1244,620,1270))
+        assertTrue(TikTokCheckinPolicy.giftPage(f))
+        assertTrue(TikTokCheckinPolicy.loaded(f))
+        assertEquals(133723L,TikTokCheckinPolicy.balance(f))
+        assertFalse(TikTokCheckinPolicy.popup(f))
+        assertFalse(TikTokCheckinPolicy.giftPage(listOf(l("あなたのポイント",68,480,273,503))))   // header alone is not enough
+    }
     @Test fun neverTargetsCampaignReminderInviteOrExchange(){
-        for(t in listOf("リマインドする","参加する","始める","招待する","交換","今すぐ回す","300ポイントを獲得 AD","スタート","受け取る"))
+        for(t in listOf("リマインドする","参加する","始める","招待する","交換","換金","今すぐ回す","300ポイントを獲得 AD","スタート","受け取る"))
             assertFalse(t,TikTokCheckinPolicy.safeTarget(l(t,0,0,10,10)))
         for(t in listOf("チェックイン","獲得する","アンロック","OK","ギフト"))assertTrue(t,TikTokCheckinPolicy.safeTarget(l(t,0,0,10,10)))
     }
