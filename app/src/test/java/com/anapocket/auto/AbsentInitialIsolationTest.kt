@@ -11,6 +11,12 @@ class AbsentInitialIsolationTest {
         SubmittedUnknownIsolationPolicy.mayIsolateAbsent(unknown,today,initial,reason,clean,stable,daily)
 
     @Test fun setsAsideTheObservedAttempt(){assertTrue(absent())}
+    /** Nov 27: WALK 5km, a first-join ad still open at 300 s, absent from today's participating list. */
+    @Test fun aFirstJoinStillOpenAtTheCapIsSetAsideToo(){
+        assertTrue(absent(reason="ad_timeout_300s"))
+        assertFalse(absent(initial=false,reason="ad_timeout_300s"))
+        assertFalse(absent(reason="ad_timeout_300s",stable=14_999))
+    }
     @Test fun onlyAFirstJoinThatTimedOut(){
         assertFalse(absent(initial=false))
         assertFalse(absent(reason="process_or_run_interrupted"))

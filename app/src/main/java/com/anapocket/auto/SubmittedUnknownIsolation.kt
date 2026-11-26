@@ -17,7 +17,10 @@ object SubmittedUnknownIsolationPolicy {
      * aside so the rest of the day can run. The recorded attempt still blocks any re-join, so nothing is replayed.
      */
     fun mayIsolateAbsent(a:SubmittedUnknown,today:String,initial:Boolean,reason:String,cleanNative:Boolean,stableMs:Long,dailyPending:Boolean):Boolean =
-        initial&&ChallengeRecoveryPolicy.reviewableFailure(reason,true)&&mayIsolate(a,today,true,cleanNative,stableMs,dailyPending)
+        // 11/27 00:34: 徒歩で5km's first-join ad stayed open the full 300 s (ad_timeout_300s) and was absent from today's
+        // 参加中 list afterwards; every run then stopped for review. Same proof as the 95 s case, nothing replayed.
+        initial&&(ChallengeRecoveryPolicy.reviewableFailure(reason,true)||reason=="ad_timeout_300s")&&
+            mayIsolate(a,today,true,cleanNative,stableMs,dailyPending)
     /** Reuse native navigation classifiers; a Boost modal still owns the screen. */
     fun cleanNativePage(pkg:String?,activity:String?,ids:Set<String>,labels:List<String>,adSurface:Boolean):Boolean =
         pkg=="us.ana_pocket.ANAPocket"&&activity=="us.ana_pocket.ANAPocket.views.home.HomeActivity"&&!adSurface&&
