@@ -339,8 +339,11 @@ class AutomationEngine(
             ui.refreshCache()
             val tab=ui.activeNodes(pkg=pkg,foregroundOnly=true).singleOrNull{it.isVisibleToUser&&it.isEnabled&&ui.label(it)==label}
                 ?:return false
-            val dispatched=ui.clickSemantic(tab)
-            Logger.i("CHTAB","label="+label+" nativeDispatched="+dispatched+" attempt="+attempt)
+            // 11/27 00:36 and 00:42: after an ANA restart the semantic click on 参加中 reported ok twice and the
+            // tab never moved; a plain tap on the same tab switched it at once. The second attempt taps it.
+            val r=android.graphics.Rect().also{tab.getBoundsInScreen(it)}
+            val dispatched=if(attempt>0&&r.width()>0&&r.height()>0)ui.tap(r.centerX(),r.centerY()) else ui.clickSemantic(tab)
+            Logger.i("CHTAB","label="+label+" nativeDispatched="+dispatched+" attempt="+attempt+if(attempt>0)" tap="+r.centerX()+","+r.centerY() else "")
             if(dispatched){
                 delay(1200)
                 repeat(12){ui.refreshCache();if(verified())return true;check(!stop&&AutoAccessibilityService.isConnected()){"challenge_tab_disconnected"};delay(400)}
