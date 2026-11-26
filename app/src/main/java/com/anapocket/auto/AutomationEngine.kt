@@ -354,7 +354,10 @@ class AutomationEngine(
     /** Only 参加中 → 進行中 and this exact business day; yesterday's PROCESSING is excluded. */
     suspend fun auditParticipating(run:String, requiredKeys:Set<String> = emptySet()):List<ChallengeCard> {
         check(ensureListPage() && ensureChallengeTab()) { "participating_list_unreachable" }
-        check(selectNativeChallengeTab("参加中"){ui.activeLabels(pkg=pkg).contains("進行中")}){"participating_tab_not_verified"}
+        val filters={ui.activeLabels(pkg=pkg).contains("進行中")}
+        // 11/27 00:36–01:18: a second audit in the same run found 参加中 already selected but scrolled down by the
+        // first audit, so its すべて/進行中 filter row was off screen and re-selecting the tab does not scroll back.
+        check(selectNativeChallengeTab("参加中",filters)||(scrollToTop().also{ui.refreshCache()}&&filters())){"participating_tab_not_verified"}
         check(selectNativeChallengeTab("進行中"){ui.activeNodes(pkg=pkg,foregroundOnly=true).any{it.isVisibleToUser&&it.viewIdResourceName=="$pkg:id/list"}}){"in_progress_tab_not_verified"}
         check(scrollToTop()){"participating_top_not_verified"}
         val found=linkedMapOf<String,ChallengeCard>();var previous="";var stable=0
