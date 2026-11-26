@@ -94,6 +94,13 @@ class RewardClaimPolicyTest {
         assertTrue(RewardClaimPolicy.loginOpen("UNCONFIRMED"));assertTrue(RewardClaimPolicy.loginOpen("AD_PLAYING"))
         assertFalse(RewardClaimPolicy.loginOpen("REWARD_CONFIRMED"));assertFalse(RewardClaimPolicy.loginOpen("NOT_PRESENT"));assertFalse(RewardClaimPolicy.loginOpen(null))
     }
+    @Test fun aStuckRewardAdRestartsAnaWithinItsOwnBudget() {
+        // 11/26 02:37: the ad was still open at 300 s after the ten sheet restarts were spent; that budget is not this one.
+        assertTrue(RewardClaimPolicy.stuckRestartAllowed(0,false))
+        assertTrue(RewardClaimPolicy.stuckRestartAllowed(RewardClaimPolicy.STUCK_RESTART_LIMIT-1,false))
+        assertFalse(RewardClaimPolicy.stuckRestartAllowed(RewardClaimPolicy.STUCK_RESTART_LIMIT,false))
+        assertFalse(RewardClaimPolicy.stuckRestartAllowed(0,true))
+    }
     @Test fun aLeftoverDetailSheetIsClosedByItsOwnCross() {
         // 11/24 20:38 on the phone: the 徒歩で3km sheet an earlier claim left open blocked the scan and the daily ads.
         val ana="us.ana_pocket.ANAPocket"

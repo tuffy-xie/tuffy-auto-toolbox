@@ -73,6 +73,13 @@ object RewardClaimPolicy {
         !usedForCard&&!adWindow&&!loginOpen&&usedToday<SHEET_RESTART_LIMIT
     fun loginOpen(state:String?)=state in setOf("UNCONFIRMED","AD_OPENING","AD_PLAYING")
     /**
+     * 11/26 02:37: a reward ad was still on its end card after 300 s with no close recognized, and the whole step ended there
+     * (user: a screen that does not go away, restart ANA). ANA is restarted over that ad, the card is left for a later run.
+     * Its own budget, separate from the sheet restarts.
+     */
+    const val STUCK_RESTART_LIMIT=2
+    fun stuckRestartAllowed(usedToday:Int,loginOpen:Boolean)=!loginOpen&&usedToday<STUCK_RESTART_LIMIT
+    /**
      * 11/25 00:08: the login ad timed out and the startup restart already removed its ANA task, so the login stayed
      * UNCONFIRMED all day with nothing left to return to; that alone no longer holds the reward restart back.
      */
@@ -171,6 +178,8 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
                     "AD_FAILED"->{adAttempts[target.key]=adAttempts.getOrDefault(target.key,0)+1
                         if(adAttempts.getValue(target.key)>=RewardClaimPolicy.MAX_AD_ATTEMPTS&&RewardClaimPolicy.daysLeft(target.deadline,today)>0)failed.add(target.key)}
                     "AD_STUCK"->{reason="ad_stuck";break}
+                    // ANA was restarted over the stuck ad: this card waits for a later run, the others go on.
+                    "AD_STUCK_RESTARTED"->{failed.add(target.key);RewardClaimStore.item(svc,date,target.key,"FAILED",reason="ad_stuck_restarted")}
                     "SHEET_STUCK"->{reason="choice_sheet_stuck";break}
                     "restart_startup_blocked"->{failed.add(target.key);reason="restart_startup_blocked";break}
                     else->{failed.add(target.key);RewardClaimStore.item(svc,date,target.key,"FAILED",reason=r)}
@@ -330,7 +339,13 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         RewardClaimStore.item(svc,date,card.key,"AD_DISPATCHED",adPoints)
         tapNode(adButton)
         val watched=watchAd(run,date)
-        if(watched=="STUCK"){evidence(run,"ad_stuck");FaultStore.capture(svc,run,"reward","ad_timeout_300s");return "AD_STUCK"}
+        if(watched=="STUCK"){
+            evidence(run,"ad_stuck");FaultStore.capture(svc,run,"reward","ad_timeout_300s")
+            if(stopped(date)||!StalledAdRestart.restartForRewardStuck(svc,date,run,card.key))return "AD_STUCK"
+            val gate=StartupFlow(svc).prepare(run+"_reward_stuck_restart",launch=false,allowLoginSubmission=restartAllowsLogin(date))
+            Logger.i("REWARD","run=$run after_stuck_restart startup ok="+gate.ok+" "+gate.reason)
+            return if(gate.ok)"AD_STUCK_RESTARTED" else "restart_startup_blocked"
+        }
         // 11/24 14:58: 「動画を見て 500pt」 was tapped, no ad came up in 20 s and the choice sheet stayed (user: restart ANA).
         if(watched=="NOT_STARTED"&&RewardClaimPolicy.choiceSheet(labels())){
             RewardClaimStore.item(svc,date,card.key,"AD_NOT_CONFIRMED",adPoints,watched)
@@ -347,17 +362,18 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         return "AD_FAILED"
     }
 
+    /** Same rule as the gate before the daily ads: no new login submission while a daily viewing awaits review.
+     *  A login still awaiting review (its task already restarted) is never pressed again from here either. */
+    private fun restartAllowsLogin(date:String)=OfficialAdStore.attempts(svc,date).none{!it.terminal||it.state==AdState.UNCONFIRMED}&&
+        !TravelSelection.hasUnresolvedAd(svc,date)&&!RewardClaimPolicy.loginOpen(LoginBonusStore.read(svc,date)?.optString("state"))
+
     /** ANA restarted from Recents, then its startup popups handled; the card is tried again later in this run. */
     private suspend fun restartAna(run:String,date:String,card:RewardCard,why:String):String {
         // A stop or a new day ends the step the old way: close what is up, the loop then breaks with "stopped".
         if(stopped(date)){leaveToList(date);return "AD_FAILED"}
         evidence(run,"sheet_"+why)
         if(StalledAdRestart.restartForRewardSheet(svc,date,run,card.key,why)){
-            // Same rule as the gate before the daily ads: no new login submission while a daily viewing awaits review.
-            // A login still awaiting review (its task already restarted) is never pressed again from here either.
-            val allowLogin=OfficialAdStore.attempts(svc,date).none{!it.terminal||it.state==AdState.UNCONFIRMED}&&!TravelSelection.hasUnresolvedAd(svc,date)&&
-                !RewardClaimPolicy.loginOpen(LoginBonusStore.read(svc,date)?.optString("state"))
-            val gate=StartupFlow(svc).prepare(run+"_reward_restart",launch=false,allowLoginSubmission=allowLogin)
+            val gate=StartupFlow(svc).prepare(run+"_reward_restart",launch=false,allowLoginSubmission=restartAllowsLogin(date))
             Logger.i("REWARD","run=$run after_restart startup ok="+gate.ok+" "+gate.reason)
             return if(gate.ok)"AD_FAILED" else "restart_startup_blocked"
         }

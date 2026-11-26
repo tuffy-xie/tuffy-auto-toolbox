@@ -129,6 +129,32 @@ object StalledAdRestart {
         check(p.edit().putString(key,JSONObject().put("date",date).put("card",cardKey).put("why",why).put("controllerRun",run).put("requestedAt",System.currentTimeMillis()).toString())
             .putInt("reward_count_"+date,p.getInt("reward_count_"+date,0)+1).commit())
         Logger.w("REWARD","run=$run restarting ANA ($why); choice sheet still shown")
+        return relaunchForReward(svc,run,ui,owner,::live)
+    }
+    /**
+     * 11/26 02:37 (user rule: a screen that does not go away, restart ANA): a reward ad still open after the 300 s cap.
+     * Only over that ad, its own small daily budget; the card is not claimed, viewed again or inferred, it waits for a later run.
+     */
+    suspend fun restartForRewardStuck(svc:AutoAccessibilityService,date:String,run:String,cardKey:String):Boolean {
+        val p=prefs(svc);val count="reward_stuck_count_"+date
+        val ui=Ui(svc);ui.refreshCache()
+        val overAd=ui.currentPackage()!=PKG||AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)
+        val login=LoginBonusStore.read(svc,date)?.optString("state")
+        if(!overAd||!RewardClaimPolicy.stuckRestartAllowed(p.getInt(count,0),RewardClaimPolicy.loginHoldsRestart(login,mayRelaunchLogin(svc,date)))){
+            Logger.i("REWARD","run=$run stuck_restart_not_allowed overAd=$overAd today="+p.getInt(count,0)+" login="+login);return false}
+        val owner=CheckinRuntime.ownership.owner()
+        fun live()=!AutoAccessibilityService.stopRequested&&AutoAccessibilityService.isConnected()&&AutoAccessibilityService.currentRunId==run&&TokyoDate.of()==date&&
+            owner!=null&&owner.app=="ANA"&&owner.run==run&&CheckinRuntime.ownership.valid(owner,SystemClock.elapsedRealtime())&&!(svc.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked&&AccountSafety.authorize(svc,"reward_stuck_restart")
+        if(!live()){Logger.w("REWARD","run=$run stuck_restart not_live");return false}
+        val stamp=System.currentTimeMillis()
+        Evidence.write(svc,"reward_stuck_restart_"+run+"_before_"+stamp+".txt","card="+cardKey+";activity="+AutoAccessibilityService.foregroundActivity.take(120)+";JST="+TokyoDate.time()+";ad_open_300s;nothing_claimed\n"+ui.dump())
+        // The picture of the end card that was not recognized, for the close recognizer.
+        runCatching{Evidence.capture(svc,ui,"reward_stuck_restart_"+run+"_before_"+stamp+".png")}
+        check(p.edit().putInt(count,p.getInt(count,0)+1).commit())
+        Logger.w("REWARD","run=$run restarting ANA (ad_stuck); ad window still open")
+        return relaunchForReward(svc,run,ui,owner,::live)
+    }
+    private suspend fun relaunchForReward(svc:AutoAccessibilityService,run:String,ui:Ui,owner:UiOwnership.Token?,live:()->Boolean):Boolean {
         val cleanup=ManagedAppCleanup.run(svc,PKG,{live()},{block->live()&&owner!=null&&CheckinRuntime.ownership.action(owner,SystemClock.elapsedRealtime(),false){if(live())block()}})
         if(!cleanup.optBoolean("recentTaskRemoved")){Logger.w("REWARD","run=$run ana_task_removal_not_confirmed");return false}
         delay(1500L)
