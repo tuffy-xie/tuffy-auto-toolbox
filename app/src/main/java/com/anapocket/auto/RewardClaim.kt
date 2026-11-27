@@ -86,6 +86,19 @@ object RewardClaimPolicy {
     fun loginHoldsRestart(state:String?,loginTaskRelaunched:Boolean)=loginOpen(state)&&!(state=="UNCONFIRMED"&&loginTaskRelaunched)
     /** Only the user's reward switch: with no travel category and no daily ads, the run is for the rewards alone. */
     fun rewardsOnly(s:AppSettings)=s.rewardEnabled&&!s.adEnabled&&Cat.values().none{s.catOn(it)}
+    /**
+     * 11/27 (user-approved): 217 reward ads were tapped from 03:40 to 07:34 and 181 never started (no fill), 45 s each.
+     * After this many in a row the step pauses; RoutineRetry comes back later (45/60/90 min). Every card stays claimable.
+     */
+    const val NO_FILL_PAUSE=8
+    const val NO_FILL_REASON="reward_ad_no_fill"
+    /** A card that expires today never counts: its plain fallback must still be reached in this run. */
+    fun noFillStreak(streak:Int,outcome:String,daysLeft:Long)=when{
+        outcome=="AD_NO_FILL"->if(daysLeft>0)streak+1 else streak
+        outcome in setOf("CLAIMED_AD","CLAIMED_PLAIN","ALREADY","AD_FAILED")->0
+        else->streak
+    }
+    fun pauseForNoFill(streak:Int)=streak>=NO_FILL_PAUSE
     /** Nothing open is left behind: no MAX dialog, safety check, daily viewing in flight, unresolved travel ad or ad on screen. */
     fun mayRun(maxBoost:Boolean,safety:Boolean,openDaily:Boolean,openTravel:Boolean,adOnScreen:Boolean)=
         !maxBoost&&!safety&&!openDaily&&!openTravel&&!adOnScreen
@@ -160,7 +173,7 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         val before=RewardClaimStore.claimed(RewardClaimStore.read(svc,date))
         // failed: given up this run; handled: claimed or found claimed, kept out even if the list is slow to refresh.
         val failed=mutableSetOf<String>();val handled=mutableSetOf<String>();val adAttempts=mutableMapOf<String,Int>()
-        var outcome="PARTIAL";var reason=""
+        var outcome="PARTIAL";var reason="";var noFill=0
         try{
             val until=SystemClock.elapsedRealtime()+BUDGET_MS
             var claims=0
@@ -173,10 +186,13 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
                 val target=findTarget(date,today,range,failed+handled)
                 if(target==null){outcome="DONE";break}
                 RunForegroundService.start(svc,"领取报酬 · "+target.title.take(20))
-                when(val r=claim(run,date,today,target,adAttempts.getOrDefault(target.key,0))){
+                val r=claim(run,date,today,target,adAttempts.getOrDefault(target.key,0))
+                noFill=RewardClaimPolicy.noFillStreak(noFill,r,RewardClaimPolicy.daysLeft(target.deadline,today))
+                when(r){
                     "CLAIMED_AD","CLAIMED_PLAIN","ALREADY"->{claims++;handled.add(target.key)}
-                    "AD_FAILED"->{adAttempts[target.key]=adAttempts.getOrDefault(target.key,0)+1
-                        if(adAttempts.getValue(target.key)>=RewardClaimPolicy.MAX_AD_ATTEMPTS&&RewardClaimPolicy.daysLeft(target.deadline,today)>0)failed.add(target.key)}
+                    "AD_FAILED","AD_NO_FILL"->{adAttempts[target.key]=adAttempts.getOrDefault(target.key,0)+1
+                        if(adAttempts.getValue(target.key)>=RewardClaimPolicy.MAX_AD_ATTEMPTS&&RewardClaimPolicy.daysLeft(target.deadline,today)>0)failed.add(target.key)
+                        if(RewardClaimPolicy.pauseForNoFill(noFill)){reason=RewardClaimPolicy.NO_FILL_REASON;Logger.i("REWARD","run=$run no_fill_pause streak=$noFill");break}}
                     "AD_STUCK"->{reason="ad_stuck";break}
                     // ANA was restarted over the stuck ad: this card waits for a later run, the others go on.
                     "AD_STUCK_RESTARTED"->{failed.add(target.key);RewardClaimStore.item(svc,date,target.key,"FAILED",reason="ad_stuck_restarted")}
@@ -349,7 +365,8 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
         // 11/24 14:58: 「動画を見て 500pt」 was tapped, no ad came up in 20 s and the choice sheet stayed (user: restart ANA).
         if(watched=="NOT_STARTED"&&RewardClaimPolicy.choiceSheet(labels())){
             RewardClaimStore.item(svc,date,card.key,"AD_NOT_CONFIRMED",adPoints,watched)
-            return restartAna(run,date,card,"ad_not_started")
+            // Same handling as before; only the name tells the run loop that no ad came (no fill), for its pause.
+            return restartAna(run,date,card,"ad_not_started").let{if(it=="AD_FAILED")"AD_NO_FILL" else it}
         }
         val ok=afterReward(date)
         if(ok){RewardClaimStore.item(svc,date,card.key,"CLAIMED_AD",adPoints);leaveToList(date);return "CLAIMED_AD"}

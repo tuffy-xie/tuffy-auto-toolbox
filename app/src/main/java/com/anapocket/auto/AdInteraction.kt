@@ -85,7 +85,9 @@ data class AdFrame(
     val nativePangleRender: Boolean = false,
     val unitySkipStoreVideo: Boolean = false,
     val manualRequired:Boolean=false,
-    val advanceControl:Boolean=false
+    val advanceControl:Boolean=false,
+    /** AppLovin playable with its corner video (ids playable/application-canvas/ad_video, a 「Close video」 button). */
+    val animatedPlayable:Boolean=false
 )
 
 data class AdReceipt(
@@ -114,7 +116,7 @@ interface AdInteractionPort {
     suspend fun stallProgressKey():String? = null
     suspend fun stallReviewed(quietMs:Long,key:String) {}
     /** Tier 4: one system Back after proven no-progress. True only when the Back was actually dispatched. */
-    suspend fun stallBack():Boolean = false
+    suspend fun stallBack(animated:Boolean=false):Boolean = false
     suspend fun diagnostic(reason:String) {}
 }
 
@@ -192,6 +194,18 @@ class AdInteraction(private val port: AdInteractionPort) {
                 val key=if(!f.blocked&&!f.error&&!f.manualRequired&&f.adSurface)port.stallProgressKey() else null
                 if(key!=null){
                     if(key!=stallKey){stallKey=key;stallQuietSince=port.now()}
+                    // 11/27 (user-approved): this playable never stops animating, so it never looked quiet and every first
+                    // join waited the full 300 s. Its one Back comes after 65 s of play instead; if the ad stays, the proof
+                    // taken here stands for the restart exactly as after the quiet Back.
+                    if(OpaqueRecoveryPolicy.mayAnimatedPlayableBack(port.now()-partStartedAt,f.adSurface,f.animatedPlayable,backUsed)){
+                        backUsed=true
+                        if(port.stallBack(animated=true)){
+                            reviewBeforeBack=(port.now()-stallQuietSince) to key
+                            backGraceUntil=port.now()+OpaqueRecoveryPolicy.STALL_BACK_GRACE_MS
+                            port.pause(800L)
+                            continue
+                        }
+                    }
                     val quiet=port.now()-stallQuietSince
                     if(quiet>=OpaqueRecoveryPolicy.STALL_QUIET_MS){
                         val mayBack=OpaqueRecoveryPolicy.mayStallBack(port.now()-partStartedAt,quiet,f.adSurface,backUsed)

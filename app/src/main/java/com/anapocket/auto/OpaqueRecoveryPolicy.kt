@@ -75,6 +75,15 @@ object OpaqueRecoveryPolicy {
     fun mayStallBack(partElapsedMs:Long,quietMs:Long,adSurface:Boolean,used:Boolean)=
         !used&&adSurface&&partElapsedMs>=STALL_BACK_MIN_PLAY_MS&&quietMs>=STALL_QUIET_MS
     const val STALL_BACK_GRACE_MS=10_000L
+    /**
+     * 11/27 00:29, 02:24, 02:35: three first joins on one AppLovin playable (full-screen game canvas, a small corner video
+     * with 「Close video」, no ad close ever shown) waited the 300 s cap; the canvas kept moving so no quiet proof came.
+     * User-approved: for this shape only, the single Back after 65 s of play without the 30 s quiet requirement.
+     */
+    fun animatedVideoPlayable(ids:Set<String>,buttonLabels:List<String>)=
+        setOf("playable","application-canvas","ad_video").all{it in ids}&&buttonLabels.any{it.trim()=="Close video"}
+    fun mayAnimatedPlayableBack(partElapsedMs:Long,adSurface:Boolean,animated:Boolean,used:Boolean)=
+        !used&&adSurface&&animated&&partElapsedMs>=STALL_BACK_MIN_PLAY_MS
     fun unlockedAnaCard(description: String): Boolean = description.trim() in setOf(
         "ANA Pocket,未加锁", "ANA Pocket,Unlocked", "ANA Pocket,ロック解除")
     fun outcome(boost: Int, before: Int, expected: Int, originalSteps: List<Int>, labels: List<String>): String? {

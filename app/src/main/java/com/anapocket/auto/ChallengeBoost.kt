@@ -381,7 +381,8 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
                     part = AdSignals.part(ls), storeOverlay = closeDriver.observedStoreOverlay,
                     nativePangleRender = closeDriver.isNativePangleRender(),
                     unitySkipStoreVideo = ui.currentPackage() == pkg && UnityClosePolicy.skipStoreVideo(AutoAccessibilityService.foregroundActivity, ls),
-                    advanceControl=closeDriver.observedAdvanceControl)
+                    advanceControl=closeDriver.observedAdvanceControl,
+                    animatedPlayable=ad&&closeDriver.isAnimatedVideoPlayable())
             }
             override suspend fun close(): Boolean {
                 val n = closeNode ?: return false
@@ -435,15 +436,17 @@ class ChallengeTaskController(private val svc: AutoAccessibilityService) {
             // 11/19 (Gemini review G): the same evidence the outer restart already accepts. Canvas sample when the shape is
             // known, otherwise the node-tree digest, so AppLovin playables get their frozen proof inside this attempt.
             override suspend fun stallProgressKey()=(if(closeDriver.isStallReviewSurface())closeDriver.stallProgressKey() else null)?:closeDriver.stallTreeKey()
-            override suspend fun stallBack():Boolean {
+            override suspend fun stallBack(animated:Boolean):Boolean {
                 ui.refreshCache()
                 if(stopped()||blocked()||a.optBoolean("confirmed")||ui.currentPackage()!=pkg||
                     !AdSdkWindows.contains(AutoAccessibilityService.foregroundActivity)||!AccountSafety.authorize(svc,"stall_single_back"))return false
                 // Persist the one request before the gesture, so a process death can never grant a second Back.
                 if(a.has("stallBackRequestedAt"))return false
                 a.put("stallBackRequestedAt",System.currentTimeMillis()).put("stallBackActivity",AutoAccessibilityService.foregroundActivity.take(120))
+                if(animated)a.put("stallBackTrigger","animated_video_playable_65s")
                 ChallengeStore.save(svc,date,row)
-                evidence(runId,"${row.getString("cat")}_${a.getInt("index")}_stall_single_back","verified no progress 30s; one system Back; returning is never a receipt")
+                evidence(runId,"${row.getString("cat")}_${a.getInt("index")}_stall_single_back",
+                    (if(animated)"animated AppLovin playable, 65s played, no close" else "verified no progress 30s")+"; one system Back; returning is never a receipt")
                 return ui.back()
             }
             override suspend fun stallReviewed(quietMs:Long,key:String){

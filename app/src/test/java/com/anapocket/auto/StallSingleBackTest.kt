@@ -7,8 +7,8 @@ import org.junit.Test
 /** 11/19 Batch 1: Tier 4 single Back (user-approved) and the widened in-card restart gate. JVM only, no device. */
 class StallSingleBackTest {
     /** after: what the screen shows once the Back was dispatched ("ignored", "receipt", "native_no_receipt"). */
-    private class Port(val after:String="ignored",val dispatch:Boolean=true,val moving:Boolean=false):AdInteractionPort {
-        var time=0L;var backs=0;var backAt=-1L;var proofWrites=0;var dismissed=false
+    private class Port(val after:String="ignored",val dispatch:Boolean=true,val moving:Boolean=false,val animated:Boolean=false):AdInteractionPort {
+        var time=0L;var backs=0;var backAt=-1L;var proofWrites=0;var dismissed=false;var animatedBacks=0
         val events=mutableListOf<String>()
         override fun now()=time
         override fun stopped()=false
@@ -17,7 +17,7 @@ class StallSingleBackTest {
         override suspend fun dismissReceipt(){dismissed=true}
         override suspend fun state(state:AdState){events.add(state.name)}
         override suspend fun frame():AdFrame {
-            if(backAt<0||after=="ignored"||time<backAt+1_600)return AdFrame(true,false,adSurface=true)
+            if(backAt<0||after=="ignored"||time<backAt+1_600)return AdFrame(true,false,adSurface=true,animatedPlayable=animated)
             return when(after){
                 "receipt"->if(!dismissed)AdFrame(true,false,receipt=true) else AdFrame(true,true,1)
                 else->AdFrame(true,true,0)
@@ -25,7 +25,42 @@ class StallSingleBackTest {
         }
         override suspend fun stallProgressKey():String=if(moving)"tree:${time/8_000}" else "tree:static"
         override suspend fun stallReviewed(quietMs:Long,key:String){proofWrites++;events.add("stall_committed")}
-        override suspend fun stallBack():Boolean{backs++;if(dispatch)backAt=time;return dispatch}
+        override suspend fun stallBack(animated:Boolean):Boolean{backs++;if(animated)animatedBacks++;if(dispatch)backAt=time;return dispatch}
+    }
+
+    /** Nov 27: the AppLovin playable with a corner video kept animating, so three first joins waited the 300 s cap. */
+    @Test fun animatedPlayableGetsItsOneBackWithoutTheQuietProof()=runBlocking {
+        val p=Port("ignored",moving=true,animated=true);val r=AdInteraction(p).awaitReceipt(0)
+        assertEquals("ad_timeout_95s",r.reason);assertEquals(AdState.UNCONFIRMED,r.state)
+        assertEquals(1,p.backs);assertEquals(1,p.animatedBacks);assertEquals(1,p.proofWrites)
+        // At the 95 s segment check, then the 10 s grace: far before the 300 s cap.
+        assertTrue(p.time in 95_000..110_000)
+        assertFalse(r.reward||r.completed)
+    }
+    @Test fun animatedPlayableBackThatLeadsToTheReceiptConfirms()=runBlocking {
+        val p=Port("receipt",moving=true,animated=true);val r=AdInteraction(p).awaitReceipt(0)
+        assertEquals(AdState.REWARD_CONFIRMED,r.state);assertTrue(r.reward);assertEquals(1,p.backs);assertEquals(0,p.proofWrites)
+    }
+    @Test fun animatedPlayableBackThatReturnsWithoutReceiptStaysUnknown()=runBlocking {
+        val p=Port("native_no_receipt",moving=true,animated=true);val r=AdInteraction(p).awaitReceipt(0)
+        assertEquals("completion_not_confirmed",r.reason);assertFalse(r.reward||r.completed);assertEquals(1,p.backs)
+    }
+    @Test fun refusedAnimatedBackWaitsTheCapAsBefore()=runBlocking {
+        val p=Port(dispatch=false,moving=true,animated=true);val r=AdInteraction(p).awaitReceipt(0)
+        assertEquals("ad_timeout_300s",r.reason);assertEquals(1,p.backs);assertEquals(0,p.proofWrites)
+    }
+    @Test fun animatedPlayableShapeIsTheObservedOneOnly() {
+        val ids=setOf("root","ad_video","playable","application-canvas")
+        assertTrue(OpaqueRecoveryPolicy.animatedVideoPlayable(ids,listOf("Mute video","Close video")))
+        assertTrue(OpaqueRecoveryPolicy.animatedVideoPlayable(ids,listOf("Unmute video","Close video")))
+        assertFalse(OpaqueRecoveryPolicy.animatedVideoPlayable(ids,listOf("Mute video")))
+        assertFalse(OpaqueRecoveryPolicy.animatedVideoPlayable(ids-"ad_video",listOf("Close video")))
+        assertFalse(OpaqueRecoveryPolicy.animatedVideoPlayable(ids-"playable",listOf("Close video")))
+        assertTrue(OpaqueRecoveryPolicy.mayAnimatedPlayableBack(65_000,true,true,false))
+        assertFalse(OpaqueRecoveryPolicy.mayAnimatedPlayableBack(64_999,true,true,false))
+        assertFalse(OpaqueRecoveryPolicy.mayAnimatedPlayableBack(95_000,false,true,false))
+        assertFalse(OpaqueRecoveryPolicy.mayAnimatedPlayableBack(95_000,true,false,false))
+        assertFalse(OpaqueRecoveryPolicy.mayAnimatedPlayableBack(95_000,true,true,true))
     }
 
     @Test fun ignoredBackFallsBackToTheRestartProofOnce()=runBlocking {

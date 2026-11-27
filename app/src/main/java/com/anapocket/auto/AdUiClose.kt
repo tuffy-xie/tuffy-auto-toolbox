@@ -114,6 +114,13 @@ class AdUiClose(private val svc: AutoAccessibilityService) {
         val n = ui.foregroundNodes().filter { it.isVisibleToUser }
         return n.any { it.viewIdResourceName == "playable" } && n.any { it.viewIdResourceName == "application-canvas" }
     }
+    /** Observation only: the corner-video playable that keeps animating (see [OpaqueRecoveryPolicy.animatedVideoPlayable]). */
+    fun isAnimatedVideoPlayable(): Boolean {
+        if (ui.currentPackage() != pkg) return false
+        val n = ui.foregroundNodes().filter { it.isVisibleToUser }
+        return OpaqueRecoveryPolicy.animatedVideoPlayable(n.mapNotNull { it.viewIdResourceName }.toSet(),
+            n.filter { it.className?.toString() == "android.widget.Button" }.map { ui.label(it) })
+    }
     /** One tap reveals hidden player controls. It never creates a completion/reward receipt. */
     suspend fun revealIfNeeded(): Boolean {
         if (AutoAccessibilityService.stopRequested || !isOpaquePlayable()) return false
