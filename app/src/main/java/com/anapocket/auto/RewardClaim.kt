@@ -92,6 +92,9 @@ object RewardClaimPolicy {
      */
     const val NO_FILL_PAUSE=8
     const val NO_FILL_REASON="reward_ad_no_fill"
+    const val LIST_UNREACHABLE_REASON="unclaimed_list_unreachable"
+    /** Pauses the later reward retries may pick up: nothing was left open, the cards simply wait. */
+    fun laterRetry(detail:String?)=detail==NO_FILL_REASON||detail==LIST_UNREACHABLE_REASON
     /** A card that expires today never counts: its plain fallback must still be reached in this run. */
     fun noFillStreak(streak:Int,outcome:String,daysLeft:Long)=when{
         outcome=="AD_NO_FILL"->if(daysLeft>0)streak+1 else streak
@@ -182,7 +185,10 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
                 if(SystemClock.elapsedRealtime()>until){reason="time_budget";break}
                 if(claims>=MAX_CLAIMS){reason="claim_cap";break}
                 if(!AccountSafety.authorize(svc,"reward_claim")){reason="account_safety";break}
-                if(!openUnclaimedList(date)){reason="unclaimed_list_unreachable";evidence(run,"list_unreachable");break}
+                // 11/28 02:50: right after an ANA restart the list was not reached; one settled second pass first.
+                var reached=openUnclaimedList(date)
+                if(!reached&&!stopped(date)){Logger.i("REWARD","run=$run list_unreachable second_pass");delay(4000);reached=openUnclaimedList(date)}
+                if(!reached){reason=RewardClaimPolicy.LIST_UNREACHABLE_REASON;evidence(run,"list_unreachable");break}
                 val target=findTarget(date,today,range,failed+handled)
                 if(target==null){outcome="DONE";break}
                 RunForegroundService.start(svc,"领取报酬 · "+target.title.take(20))
@@ -240,7 +246,8 @@ class RewardClaimTask(private val svc:AutoAccessibilityService) {
     /** ためる → チャレンジ → 参加中 → 報酬未受取, each step checked on the fresh tree. */
     private suspend fun openUnclaimedList(date:String):Boolean {
         repeat(4){attempt->
-            if(stopped(date))return false
+            if(stopped(date)){Logger.i("REWARD","list_open attempt=$attempt stopped stopReq=${AutoAccessibilityService.stopRequested} connected=${AutoAccessibilityService.isConnected()}");return false}
+            if(attempt>0)Logger.i("REWARD","list_open attempt=$attempt pkg=${ui.currentPackage()} onList=${onChallengeList()} chip=${unclaimedChip()!=null} list=${list()!=null}")
             ui.refreshCache()
             if(ui.currentPackage()!=pkg){ui.launchApp(pkg);waitFor(8000,date){ui.currentPackage()==pkg};delay(1500);ui.refreshCache()}
             // A sheet or dialog left from an earlier card.

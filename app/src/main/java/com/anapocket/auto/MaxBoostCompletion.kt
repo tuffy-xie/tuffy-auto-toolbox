@@ -14,6 +14,11 @@ object MaxBoostDialogPolicy {
     const val PACKAGE="us.ana_pocket.ANAPocket"
     const val ACTIVITY="us.ana_pocket.ANAPocket.views.home.HomeActivity"
     const val MAX_ATTEMPTS=3
+    /** Restoring the category filter only re-selects a native filter chip; nothing is submitted, so one fresh try is safe. */
+    const val CATEGORY_RESTORE_ATTEMPTS=2
+    private val retryableCategory=Regex("^(category_selection_not_verified_|category_icon_not_found_|category_strip_|category_all_reset_not_observed|native_category_strip_not_observed)")
+    fun retryCategoryRestore(attempt:Int,message:String?)=
+        attempt<CATEGORY_RESTORE_ATTEMPTS&&message!=null&&retryableCategory.containsMatchIn(message)
     const val RESUME_COPY="ブーストが中断されているチャレンジが存在します。ブーストを再開しますか？"
     fun nativeHost(eventClass:String)=eventClass in setOf(ACTIVITY,"androidx.activity.ComponentDialog","android.app.AlertDialog","androidx.appcompat.app.AlertDialog")
     fun resumeShape(pkg:String?,activity:String,foreground:Boolean,ids:Set<String>,labels:List<String>)=

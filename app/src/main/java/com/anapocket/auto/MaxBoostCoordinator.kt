@@ -247,10 +247,19 @@ object MaxBoostCoordinator {
                 Logger.i("MAXBOOST","run=$run key=${binding.key} closed_verified=true page=$page")
             }
             override suspend fun restoreCategory(cat:String,page:MaxBoostPage):Boolean {
-                if(!allowed()||visible(svc))return false
-                return try{engine.prepareFilteredCategory(Cat.ofName(cat)?:return false,allowLoginSubmission=false)}
-                catch(t:MaxBoostCompletionFailure){throw t}
-                catch(t:Exception){Logger.w("MAXBOOST","category restore failed: "+t.message);false}
+                val c=Cat.ofName(cat)?:return false
+                var attempt=0
+                while(true){
+                    if(!allowed()||visible(svc))return false
+                    attempt++
+                    try{return engine.prepareFilteredCategory(c,allowLoginSubmission=false)}
+                    catch(t:MaxBoostCompletionFailure){throw t}
+                    catch(t:Exception){
+                        Logger.w("MAXBOOST","category restore failed: "+t.message+" attempt=$attempt")
+                        if(!MaxBoostDialogPolicy.retryCategoryRestore(attempt,t.message))return false
+                        delay(1500)
+                    }
+                }
             }
             override suspend fun routed(){
                 MaxBoostCompletionStore.update(svc,binding){it.put("phase","ROUTED")}

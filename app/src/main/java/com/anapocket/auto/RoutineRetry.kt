@@ -43,7 +43,8 @@ object RoutineRetryPolicy {
     fun rewardNoFillDelay(state:String,rewardState:String?,rewardDetail:String?,noFillRetries:Int,nowMinute:Int,
         safetyPending:Boolean,scheduleOn:Boolean,userStopped:Boolean):Int? {
         if(userStopped||!scheduleOn||safetyPending||state!="PARTIALLY_COMPLETED")return null
-        if(rewardState!="PARTIAL"||rewardDetail!=RewardClaimPolicy.NO_FILL_REASON)return null
+        // 11/28: the unclaimed list not reached is the same kind of pause and shares this budget.
+        if(rewardState!="PARTIAL"||!RewardClaimPolicy.laterRetry(rewardDetail))return null
         if(noFillRetries !in noFillDelaysMinutes.indices)return null
         val delay=noFillDelaysMinutes[noFillRetries]
         return if(nowMinute+delay>LAST_START_MINUTE)null else delay
