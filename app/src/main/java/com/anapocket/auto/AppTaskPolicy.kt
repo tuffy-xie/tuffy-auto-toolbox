@@ -131,14 +131,18 @@ object CheckinReceiptPolicy {
     fun homeDartsBanner(text:String):Boolean {
         val t=text.replace(Regex("\\s"),"")
         if(Regex("スクラッチ|注文|購入|おせち|求人|500円以上").containsMatchIn(t))return false
-        return t.contains("ダーツ")&&(t.contains("毎日")||t.contains("チャレンジ")||t.contains("ダーツで当たる"))
+        return dartsWord.containsMatchIn(t)&&(t.contains("毎日")||t.contains("チャレンジ")||t.contains("当たる")||t.contains("DARTS",true))
     }
+    // 11/28 live OCR of the banner: "いきなりダーッで当たる肉マークーポン", "IKJNARI DARTs"; 毎日 and チャレンジ not read at all.
+    private val dartsWord=Regex("ダー[ツッ]|DARTS",RegexOption.IGNORE_CASE)
     /** About 360 px each on this phone; the banner sat three swipes down on 11/28. */
     const val DARTS_HOME_SCROLLS=8
     /** A line naming the darts inside the home banner, clear of the header and of the fixed mileage card at the bottom. */
     fun homeDartsEntry(lines:List<CheckinLine>,height:Int):CheckinLine? {
         val band=height*.07
-        return lines.filter{it.text.contains("ダーツ")&&it.top>height*.08&&it.bottom<height*.70}.firstOrNull{a->
+        // The wide text line under the wheel is preferred as the tap target over the small wheel logo.
+        return lines.filter{dartsWord.containsMatchIn(it.text)&&it.top>height*.08&&it.bottom<height*.70}
+            .sortedByDescending{it.text.contains("当たる")}.firstOrNull{a->
             homeDartsBanner(lines.filter{kotlin.math.abs(it.y-a.y)<band}.joinToString(" "){it.text})
         }
     }

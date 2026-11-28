@@ -16,6 +16,15 @@ class HomeDartsBannerTest {
             l("いきなり!ダーツで当たる♪肉マネークーポン",430),l("肉マイレージランキング",520),l("ホーム",1523))
         assertEquals("いきなり!ダーツで当たる♪肉マネークーポン",CheckinReceiptPolicy.homeDartsEntry(lines,h)?.text)
     }
+    // 11/28 19:26 manual run, the exact OCR after three swipes: ツ read as ッ, 毎日 and チャレンジ missing.
+    @Test fun findsTheBannerFromTheLiveOcr(){
+        fun r(t:String,top:Int,bottom:Int,left:Int,right:Int)=CheckinLine(t,left,top,right,bottom)
+        val lines=listOf(r("2026.",153,168,39,78),r("10/28wed",168,193,42,136),r("Aきなリダーリ/",362,385,51,189),
+            r("IKJNARI DARTs",384,398,67,184),r("いきなりダーッで当たる肉マークーポン",413,443,163,630),
+            r("P肉マイレーシランキング",479,563,27,685),r("オシラインショッピング|",721,778,158,706),
+            r("肉マイレージカード",1294,1321,52,222),r("ホーム",1523,1542,37,104))
+        assertEquals("いきなりダーッで当たる肉マークーポン",CheckinReceiptPolicy.homeDartsEntry(lines,h)?.text)
+    }
     @Test fun theBannerTextAloneIsEnough(){
         assertTrue(CheckinReceiptPolicy.homeDartsBanner("いきなり!ダーツで当たる 肉マネークーポン"))
         assertTrue(CheckinReceiptPolicy.homeDartsBanner("毎日 ダーツ"))
