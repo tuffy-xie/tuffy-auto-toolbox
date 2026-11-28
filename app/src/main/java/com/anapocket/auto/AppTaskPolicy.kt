@@ -123,6 +123,25 @@ object CheckinReceiptPolicy {
         if(Regex("スクラッチ|注文|購入|おせち|求人|500円以上").containsMatchIn(t))return false
         return freeDartsBanner(t)||(t.contains("いきなり!ダーツで当たる")&&t.contains("DARTS",true))
     }
+    /**
+     * 11/27: the daily darts left the top carousel for a fixed banner lower on the home page
+     * ("1日1回 毎日チャレンジ! いきなり!ダーツで当たる♪肉マネークーポン"). Entry discovery only, like the carousel:
+     * the game page must still prove the free rules before anything is pressed.
+     */
+    fun homeDartsBanner(text:String):Boolean {
+        val t=text.replace(Regex("\\s"),"")
+        if(Regex("スクラッチ|注文|購入|おせち|求人|500円以上").containsMatchIn(t))return false
+        return t.contains("ダーツ")&&(t.contains("毎日")||t.contains("チャレンジ")||t.contains("ダーツで当たる"))
+    }
+    /** About 360 px each on this phone; the banner sat three swipes down on 11/28. */
+    const val DARTS_HOME_SCROLLS=8
+    /** A line naming the darts inside the home banner, clear of the header and of the fixed mileage card at the bottom. */
+    fun homeDartsEntry(lines:List<CheckinLine>,height:Int):CheckinLine? {
+        val band=height*.07
+        return lines.filter{it.text.contains("ダーツ")&&it.top>height*.08&&it.bottom<height*.70}.firstOrNull{a->
+            homeDartsBanner(lines.filter{kotlin.math.abs(it.y-a.y)<band}.joinToString(" "){it.text})
+        }
+    }
     /** Exact observed official game instructions, reached from its bound daily carousel entry. */
     fun boundDartsStartPage(text:String,boundDailyEntry:Boolean):Boolean {
         val t=text.replace(Regex("\\s"),"")

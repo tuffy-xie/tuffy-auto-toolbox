@@ -431,27 +431,34 @@ class CheckinController(private val ui:CheckinUi,private val store:CheckinStore,
             else set("darts",CheckinState.UNCONFIRMED,"prior_darts_submission_no_reopen",e)
             return
         }
-        val deadline=SystemClock.elapsedRealtime()+70_000
+        // Stays well inside the task's 180 s: entry, start page and result together.
+        val deadline=SystemClock.elapsedRealtime()+75_000
+        // The carousel is watched first (its banner may come back); then the page is scrolled to the fixed banner.
+        val carouselUntil=SystemClock.elapsedRealtime()+6_000
+        var scrolls=0
         var selected=liveEntry
         while(SystemClock.elapsedRealtime()<deadline&&!selected){
             val f=frame()
             if(Regex("ログインしてください|会員登録・ログイン|ログインする").containsMatchIn(f.text))error("member_login_required")
             val height=ui.svc.resources.displayMetrics.heightPixels
             val banner=f.lines.filter{it.top<height*.33&&it.top>height*.07}
-            if(CheckinReceiptPolicy.dartsEntryCandidate(banner.joinToString(" "){it.text})){
-                val e=capture("darts_banner")
-                val line=banner.firstOrNull{it.text.contains("毎日")||it.text.contains("ダーツ")}
-                if(line!=null){
-                    // Pixel revalidation may reject an animating carousel. That is safe to retry before entry.
-                    val fresh=ui.png()
-                    if(CheckinOcr.stable(f.png,fresh,line)){
-                        val reviewing=reserved("darts")
-                        if(!reviewing)check(mutate {store.reserve("darts",run,date)}){"darts_already_reserved"}
-                        if(ui.click(f,line)){selected=true;store.log(run,"DARTS_ENTRY evidence=$e review=$reviewing")}
-                    }
+            val carousel=if(CheckinReceiptPolicy.dartsEntryCandidate(banner.joinToString(" "){it.text}))
+                banner.firstOrNull{it.text.contains("毎日")||it.text.contains("ダーツ")} else null
+            val line=carousel?:CheckinReceiptPolicy.homeDartsEntry(f.lines,height)
+            if(line!=null){
+                val e=capture(if(carousel!=null)"darts_banner" else "darts_home_banner")
+                // Pixel revalidation may reject an animating carousel or a page still scrolling. That is safe to retry before entry.
+                val fresh=ui.png()
+                if(CheckinOcr.stable(f.png,fresh,line)){
+                    val reviewing=reserved("darts")
+                    if(!reviewing)check(mutate {store.reserve("darts",run,date)}){"darts_already_reserved"}
+                    if(ui.click(f,line)){selected=true;store.log(run,"DARTS_ENTRY evidence=$e review=$reviewing scrolls=$scrolls")}
                 }
             }
-            if(!selected)delay(600)
+            if(selected)break
+            if(line==null&&SystemClock.elapsedRealtime()>carouselUntil&&scrolls<CheckinReceiptPolicy.DARTS_HOME_SCROLLS){
+                ui.swipe((height*.62).toInt(),(height*.40).toInt(),450);scrolls++
+            }else delay(600)
         }
         check(selected){"free_darts_carousel_entry_not_stable"}
         var f=awaitFrame("darts_start"){already(it.text)||CheckinReceiptPolicy.boundDartsStartPage(ui.nativeText(),true)};val e=capture("darts_page")
